@@ -47,6 +47,7 @@ val mergeServices = tasks.register("mergeTruffleServices") {
 
 tasks.register<Jar>("bundleJar") {
     archiveClassifier = "bundle"
+    manifest { attributes("Multi-Release" to "true") }   // Truffle 이 META-INF/versions/ 의 버전별 클래스를 쓰므로 반드시 필요하다
     dependsOn(mergeServices)
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(sourceSets.main.get().output)

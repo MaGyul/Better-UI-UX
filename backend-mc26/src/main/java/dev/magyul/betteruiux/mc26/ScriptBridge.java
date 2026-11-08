@@ -24,27 +24,68 @@ final class ScriptBridge {
 
     private ScriptBridge() {}
 
-    /** @return 연결된 호스트(없으면 null). 화면이 닫힐 때 {@link ScriptHost#close()} 를 불러야 한다. */
-    static ScriptHost attach(UiDocument doc, Path userDir, UiScreen.Options options) {
+    /** 화면이 닫히거나 문서가 바뀔 때 부르는 핸들. 런타임이 준비되기 전에 닫아도 안전하다. */
+    static final class Attached {
+        private volatile boolean closed;
+        private ScriptHost host;
+
+        void close() {
+            closed = true;
+            if (host != null) {
+                host.close();
+                host = null;
+            }
+        }
+    }
+
+    private static final java.util.concurrent.ExecutorService LOADER = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "better-uiux-script-loader");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /**
+     * 문서에 스크립트를 연결한다. GraalJS 는 처음 켜는 데 1~2초 걸리므로 <b>백그라운드 스레드</b>에서 만들어 화면은 바로 띄우고,
+     * 준비가 끝나면 렌더 스레드에서 스크립트를 불러와 {@code onInit} 을 부른다(그 전에 누른 스크립트 버튼은 "준비 중" 경고만 낸다).
+     *
+     * @return 핸들(스크립트가 없거나 꺼져 있으면 null)
+     */
+    static Attached attach(UiDocument doc, Path userDir, UiScreen.Options options) {
         if (doc.queryAll("script").isEmpty()) return null;
         if (!options.scripting()) {
             doc.warn("스크립트가 꺼져 있습니다(config.toml 의 [scripting] enabled = true)");
             return null;
         }
-        ScriptRuntime runtime;
-        try {
-            runtime = (ScriptRuntime) Class.forName(RUNTIME_CLASS).getDeclaredConstructor().newInstance();
-        } catch (ReflectiveOperationException | LinkageError e) {
-            doc.warn("스크립트 런타임(script-graal)이 설치되어 있지 않습니다");
-            LOG.warn("[better-uiux] script runtime missing: {}", e.toString());
-            return null;
-        }
+        Attached handle = new Attached();
+        doc.setScriptDispatcher((el, fn) -> doc.warn("스크립트를 준비하는 중입니다… 잠시 뒤에 다시 눌러 주세요"));
+        Minecraft mc = Minecraft.getInstance();
         CommandPolicy policy = options.scriptCommands().isEmpty() ? CommandPolicy.denyAll() : CommandPolicy.allowing(Set.copyOf(options.scriptCommands()));
-        ScriptHost host = new ScriptHost(doc, runtime, policy, ScriptBridge::runCommand);
-        host.setLogSink(line -> LOG.info("[better-uiux][script] {}", line));
-        host.loadScripts(name -> read(userDir, name));
-        host.init();
-        return host;
+        LOADER.execute(() -> {
+            ScriptRuntime runtime;
+            try {
+                runtime = (ScriptRuntime) Class.forName(RUNTIME_CLASS).getDeclaredConstructor().newInstance();
+            } catch (ReflectiveOperationException | LinkageError e) {
+                Throwable cause = e instanceof java.lang.reflect.InvocationTargetException && e.getCause() != null ? e.getCause() : e;
+                boolean missing = cause instanceof ClassNotFoundException || cause instanceof NoClassDefFoundError;
+                LOG.warn("[better-uiux] script runtime unavailable", cause);
+                mc.execute(() -> doc.warn(missing ? "스크립트 런타임(script-graal)이 설치되어 있지 않습니다"
+                        : "스크립트 런타임을 시작하지 못했습니다: " + cause));
+                return;
+            }
+            ScriptRuntime rt = runtime;
+            mc.execute(() -> {
+                if (handle.closed) {                                   // 준비되기 전에 화면이 닫혔다
+                    rt.close();
+                    return;
+                }
+                ScriptHost host = new ScriptHost(doc, rt, policy, ScriptBridge::runCommand);
+                host.setLogSink(line -> LOG.info("[better-uiux][script] {}", line));
+                host.loadScripts(name -> read(userDir, name));
+                host.init();
+                handle.host = host;
+            });
+        });
+        return handle;
     }
 
     /** 플레이어 본인 권한으로 명령어를 실행한다(월드 안에 있을 때만). */

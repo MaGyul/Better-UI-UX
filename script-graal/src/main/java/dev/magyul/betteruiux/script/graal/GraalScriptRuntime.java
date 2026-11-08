@@ -82,7 +82,22 @@ public final class GraalScriptRuntime implements ScriptRuntime {
     private final java.util.List<String[]> sources = new java.util.ArrayList<>();
 
     public GraalScriptRuntime() {
-        create();
+        withLoader(this::create);
+    }
+
+    /**
+     * Truffle 은 언어/구현을 컨텍스트 클래스로더에서 서비스로 찾는다. 모드 로더(Fabric Knot 등) 환경에서는 이 jar 가
+     * 스레드의 기본 클래스로더에게 보이지 않으므로, 우리 클래스를 읽은 로더로 잠시 바꿔 놓고 실행한다.
+     */
+    private static void withLoader(Runnable r) {
+        Thread t = Thread.currentThread();
+        ClassLoader old = t.getContextClassLoader();
+        t.setContextClassLoader(GraalScriptRuntime.class.getClassLoader());
+        try {
+            r.run();
+        } finally {
+            t.setContextClassLoader(old);
+        }
     }
 
     private void create() {
@@ -141,6 +156,17 @@ public final class GraalScriptRuntime implements ScriptRuntime {
 
     private Value run(Job job, String what) throws ScriptException {
         if (closed) throw new ScriptException("스크립트 런타임이 닫혔습니다");
+        Thread thread = Thread.currentThread();
+        ClassLoader old = thread.getContextClassLoader();
+        thread.setContextClassLoader(GraalScriptRuntime.class.getClassLoader());
+        try {
+            return runInLoader(job, what);
+        } finally {
+            thread.setContextClassLoader(old);
+        }
+    }
+
+    private Value runInLoader(Job job, String what) throws ScriptException {
         if (needsRebuild) rebuild();
         context.resetLimits();
         ScheduledFuture<?> timer = WATCHDOG.schedule(() -> {
@@ -171,10 +197,14 @@ public final class GraalScriptRuntime implements ScriptRuntime {
     public synchronized void close() {
         if (closed) return;
         closed = true;
+        ClassLoader old = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(GraalScriptRuntime.class.getClassLoader());
         try {
             context.close(true);
         } catch (RuntimeException ignored) {
             // 이미 닫혔거나 실행 중단 중
+        } finally {
+            Thread.currentThread().setContextClassLoader(old);
         }
     }
 }
