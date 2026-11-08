@@ -254,9 +254,101 @@ public final class EditorController {
     private boolean rightVisible() { return panelsVisible && rightShown() && !dragStarted() && dnd == null; }
 
     /** 접어 두었어도 요소를 선택하고 있는 동안은 잠깐 펼쳐 보인다(선택이 풀리면 다시 접힘). */
-    private boolean rightShown() { return !rightCollapsed || selected >= 0; }
+    private boolean rightShown() { return !rightCollapsed || (selected >= 0 && !tempDismissed); }
 
-    private boolean rightTempShown() { return rightCollapsed && selected >= 0; }
+    private boolean rightTempShown() { return rightCollapsed && selected >= 0 && !tempDismissed; }
+
+    /** 임시로 펼쳐진 패널을 사용자가 탭으로 닫았다(선택이 바뀌거나 풀리면 다시 임시 표시 대상). */
+    private boolean tempDismissed;
+    private int lastSelected = -2;
+
+    // ---- 툴바 숨기기 / 위쪽 가장자리에 마우스를 올려 두면 잠깐 표시 ----
+
+    private static final long PEEK_NANOS = 1_200_000_000L;
+    private boolean toolbarHidden, toolbarPeek;
+    private long topHoverSince = -1;
+    /** 시간 원본(테스트에서 바꿀 수 있다). */
+    java.util.function.LongSupplier clock = System::nanoTime;
+
+    private boolean toolbarVisible() {
+        return panelsVisible && !dragStarted() && (!toolbarHidden || toolbarPeek);
+    }
+
+    private void updateToolbarPeek() {
+        if (!toolbarHidden || dragStarted() || dnd != null) {
+            toolbarPeek = false;
+            topHoverSince = -1;
+            return;
+        }
+        long now = clock.getAsLong();
+        if (toolbarPeek) {
+            if (mouseY >= TOOLBAR_H || mouseY < 0) toolbarPeek = false;      // 마우스가 막대를 벗어나면 다시 숨긴다
+            return;
+        }
+        if (mouseY >= 0 && mouseY <= 2) {
+            if (topHoverSince < 0) topHoverSince = now;
+            if (now - topHoverSince >= PEEK_NANOS) toolbarPeek = true;
+        } else {
+            topHoverSince = -1;
+        }
+    }
+
+    // ---- 저장하지 않은 변경이 있을 때 닫기 확인 ----
+
+    private boolean exitDialog;
+
+    /** 에디터를 닫는다. 저장하지 않은 변경이 있으면 먼저 물어본다. */
+    public void requestExit() {
+        if (!session.isDirty()) {
+            host.requestExit();
+            return;
+        }
+        cancelField();
+        exitDialog = true;
+    }
+
+    private void saveAndExit() {
+        if (save()) {
+            exitDialog = false;
+            host.requestExit();
+        } else {
+            exitDialog = false;               // 저장 실패 메시지를 보여 주고 에디터는 계속 연다
+        }
+    }
+
+    private void paintExitDialog(UiGfx g) {
+        if (!exitDialog) return;
+        Rect full = new Rect(0, 0, viewW, viewH);
+        g.fillRect(0, 0, viewW, viewH, 0xB0000000);
+        regions.add(new Region(full, null));                  // 뒤의 모든 것을 막는다
+        String l1 = "저장하지 않은 변경이 있습니다.", l2 = "저장하고 닫을까요?";
+        String b1 = "저장 후 닫기", b2 = "저장 안 함", b3 = "취소";
+        int bw1 = tm.width(b1) + 8, bw2 = tm.width(b2) + 8, bw3 = tm.width(b3) + 8;
+        int w = Math.max(Math.max(tm.width(l1), tm.width(l2)) + 24, bw1 + bw2 + bw3 + 6 + 24);
+        int h = tm.lineHeight() * 2 + TOOLBAR_H + 26;
+        int x = (viewW - w) / 2, y = (viewH - h) / 2;
+        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
+        g.fillRect(x, y, w, h, 0xFF161820);
+        g.drawText(l1, x + (w - tm.width(l1)) / 2, y + 8, C_TEXT, false);
+        g.drawText(l2, x + (w - tm.width(l2)) / 2, y + 10 + tm.lineHeight(), C_DIM, false);
+        int by = y + h - TOOLBAR_H - 4;
+        int bx = x + (w - (bw1 + bw2 + bw3 + 6)) / 2;
+        bx += button(g, bx, by, b1, true, this::saveAndExit, 0xFF2A6A3A);
+        bx += button(g, bx, by, b2, true, () -> {
+            exitDialog = false;
+            host.requestExit();
+        }, 0xFF7A2A2A);
+        button(g, bx, by, b3, true, () -> exitDialog = false);
+    }
+
+    private void paintHint(UiGfx g, String text, int color) {
+        Rect view = centerView();
+        String shown = fit(text, view.w() - 16);
+        int w = tm.width(shown) + 12, h = tm.lineHeight() + 6;
+        int x = view.x() + (view.w() - w) / 2, y = view.bottom() - h - 4;
+        g.fillRect(x, y, w, h, 0xD0000000);
+        g.drawText(shown, x + 6, y + 3, color, false);
+    }
 
     /** 팬 계산용: 끄는 중이 아닐 때의 "가운데 작업 영역"(패널이 접혀 있으면 그만큼 넓다). */
     private Rect centerView() {
@@ -376,13 +468,12 @@ public final class EditorController {
     private Rect leftTab() { return new Rect(leftCollapsed ? 0 : LEFT_W, tabY(viewH), TAB_W, TAB_H); }
 
     private Rect rightTab() {
-        if (rightTempShown()) return new Rect(-100, -100, 0, 0);   // 임시로 보이는 동안에는 접기 탭을 감춘다
-        return new Rect(rightCollapsed ? viewW - TAB_W : viewW - RIGHT_W - TAB_W, tabY(viewH), TAB_W, TAB_H);
+        return new Rect(rightShown() ? viewW - RIGHT_W - TAB_W : viewW - TAB_W, tabY(viewH), TAB_W, TAB_H);
     }
 
     private boolean overPanel(int x, int y) {
         if (!panelsVisible) return false;
-        if (y < TOOLBAR_H) return true;
+        if (y < TOOLBAR_H && toolbarVisible()) return true;
         if (leftVisible() && x < LEFT_W) return true;
         if (rightVisible() && x >= viewW - RIGHT_W) return true;
         return !dragStarted() && (leftTab().contains(x, y) || rightTab().contains(x, y));
@@ -427,7 +518,7 @@ public final class EditorController {
             return true;
         }
         int cx = x - panX, cy = y - panY;                   // 이후는 문서 좌표
-        boolean underToolbar = panelsVisible && y < TOOLBAR_H;
+        boolean underToolbar = toolbarVisible() && y < TOOLBAR_H;
         LayoutBox sel = selectedBox();
         if (sel != null && sel.parent != null) {
             Handle h = handleAt(sel, cx, cy);
@@ -882,6 +973,11 @@ public final class EditorController {
     }
 
     public boolean keyPressed(EditorKey key, boolean ctrl, boolean shift) {
+        if (exitDialog) {
+            if (key == EditorKey.ESCAPE) exitDialog = false;
+            else if (key == EditorKey.ENTER) saveAndExit();
+            return true;
+        }
         if (editKey != null) return editKeyPressed(key, ctrl, shift);
         if (key == EditorKey.ESCAPE && dnd != null) {
             dnd = null;
@@ -922,7 +1018,7 @@ public final class EditorController {
                 return true;
             }
             case ESCAPE -> {
-                if (selected < 0) host.requestExit();          // 아무것도 선택하지 않았으면 에디터를 닫는다
+                if (selected < 0) requestExit();          // 아무것도 선택하지 않았으면 에디터를 닫는다
                 selected = -1;
                 return true;
             }
@@ -1600,13 +1696,19 @@ public final class EditorController {
         g.popTransform();
         if (leftVisible()) paintLeftPanel(g);
         if (rightVisible()) paintProperties(g);
-        if (panelsVisible) paintToolbar(g);
+        updateToolbarPeek();
+        if (selected != lastSelected) {
+            lastSelected = selected;
+            tempDismissed = false;
+        }
+        if (toolbarVisible()) paintToolbar(g);
         if (panelsVisible && !dragStarted()) paintTabs(g);
         popupRect = null;
         paintPicker(g);
         paintSuggestions(g);
         paintDndFeedback(g);
         paintStatus(g);
+        paintExitDialog(g);
         g.requestCursor(cursorNow());
     }
 
@@ -1739,9 +1841,18 @@ public final class EditorController {
         boolean panned = panX != 0 || panY != 0 || targetPanX != 0 || targetPanY != 0;
         x += button(g, x, y, panned ? "Fit!" : "Fit", panned, this::resetView, C_BTN_HOT);   // 옮겨 둔 상태면 눈에 띄게
         int exitW = tm.width("Exit") + 8;
-        button(g, viewW - exitW - 2, y, "Exit", true, host::requestExit, 0xFF7A2A2A);   // 에디터 닫기(F8 과 같다)
+        int rx = viewW - exitW - 2;
+        button(g, rx, y, "Exit", true, this::requestExit, 0xFF7A2A2A);                 // 에디터 닫기(F8 과 같다)
+        String hideLabel = toolbarHidden ? "Pin" : "Hide";
+        int hideW = tm.width(hideLabel) + 8;
+        rx -= hideW + 2;
+        button(g, rx, y, hideLabel, true, () -> {                                      // 툴바 숨기기: 숨기면 위쪽에 마우스를 올려 두어야 보인다
+            toolbarHidden = !toolbarHidden;
+            toolbarPeek = false;
+            topHoverSince = -1;
+        });
         String title = host.title() + (session.isDirty() ? " *" : "");
-        g.drawText(title, Math.max(x + 6, viewW - exitW - tm.width(title) - 10), 4, C_DIM, false);
+        g.drawText(title, Math.max(x + 6, rx - tm.width(title) - 8), 4, C_DIM, false);
     }
 
     /** 패널 가장자리의 접기/펼치기 탭. */
@@ -1751,21 +1862,22 @@ public final class EditorController {
         g.drawText(leftCollapsed ? ">" : "<", lt.x() + 2, lt.y() + (lt.h() - tm.lineHeight()) / 2, C_TEXT, false);
         regions.add(new Region(lt, () -> leftCollapsed = !leftCollapsed));
         g.fillRect(rt.x(), rt.y(), rt.w(), rt.h(), rt.contains(mouseX, mouseY) ? shade(C_TAB, mouseDown ? -20 : 30) : C_TAB);
-        g.drawText(rightCollapsed ? "<" : ">", rt.x() + 2, rt.y() + (rt.h() - tm.lineHeight()) / 2, C_TEXT, false);
-        regions.add(new Region(rt, () -> rightCollapsed = !rightCollapsed));
+        g.drawText(rightShown() ? ">" : "<", rt.x() + 2, rt.y() + (rt.h() - tm.lineHeight()) / 2, C_TEXT, false);
+        regions.add(new Region(rt, () -> {
+            if (rightTempShown()) tempDismissed = true;      // 임시로 펼쳐진 것은 이번 선택 동안만 닫는다
+            else rightCollapsed = !rightCollapsed;
+        }));
     }
 
     private void paintStatus(UiGfx g) {
         String text = status;
         boolean error = statusError;
-        int x = (leftVisible() ? LEFT_W : 0) + 14, y = viewH - tm.lineHeight() - 5;
         if (text.isEmpty()) {
             if (dnd != null || drag != null || !panelsVisible || !leftVisible()) return;
-            g.drawText("블록을 끌어다 놓으세요 · 요소를 왼쪽 블록 칸으로 끌면 삭제 · 휠/가운데 버튼: 화면 이동", x, y, C_DIM, false);
+            paintHint(g, "블록을 끌어다 놓기 · 끌어서 왼쪽 블록 칸에 놓으면 삭제 · 휠/가운데 버튼으로 화면 이동", 0xFFE0E0EC);
             return;
         }
-        g.fillRect(x - 3, y - 2, tm.width(text) + 6, tm.lineHeight() + 4, 0xE0000000);
-        g.drawText(text, x, y, error ? C_ERR : C_OK, false);
+        paintHint(g, text, error ? C_ERR : C_OK);
     }
 
     // ---- 왼쪽: 블록 팔레트 + 구조 트리 ----

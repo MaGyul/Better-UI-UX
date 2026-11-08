@@ -269,7 +269,8 @@ public final class UiScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (event.key() == InputConstants.KEY_F8) {
-            toggleEditor();
+            if (editor != null) editor.requestExit();   // 저장하지 않은 변경이 있으면 먼저 물어본다
+            else toggleEditor();
             return true;
         }
         if (editor != null) {

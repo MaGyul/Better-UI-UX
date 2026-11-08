@@ -92,10 +92,10 @@ class EditorFeedbackTest {
 
     @Test
     void anElementUnderTheToolbarCanBePickedAndDraggedOut() throws Exception {
-        EditorController e = editor("<screen><panel id=\"a\" x=\"340\" y=\"0\" width=\"55\" height=\"30\" background=\"#FF336699\"/></screen>");
-        click(e, 345, 5);                                          // 상단 바의 빈 곳 = 아래 캔버스를 누른 것
+        EditorController e = editor("<screen><panel id=\"a\" x=\"90\" y=\"0\" width=\"40\" height=\"30\" background=\"#FF336699\"/></screen>");
+        click(e, 105, 5);                                          // 상단 바의 빈 곳 = 아래 캔버스를 누른 것
         assertEquals(1, e.selectedIndex());
-        drag(e, 345, 5, 345, 80);
+        drag(e, 105, 5, 105, 80);
         assertEquals(75, rect(e, "a").y(), "바 밑에서 끌어 내릴 수 있다");
     }
 
@@ -352,5 +352,91 @@ class EditorFeedbackTest {
         clickRow(e, 3);
         paint(e);
         assertTrue(e.caretScreen() != null);
+    }
+
+    // ---- 저장 확인 / 툴바 숨기기 / 임시 패널 탭 ----
+
+    private static Rect textRect(DrawList l, String t) {
+        DrawCommand.DrawText d = l.commands().stream().filter(c -> c instanceof DrawCommand.DrawText x && x.text().equals(t))
+                .map(c -> (DrawCommand.DrawText) c).findFirst().orElseThrow();
+        return new Rect(d.x(), d.y(), 4, 4);
+    }
+
+    @Test
+    void closingWithUnsavedChangesAsksFirst() throws Exception {
+        EditorController e = editor(COLORED);
+        e.select(1);
+        e.keyPressed(EditorKey.RIGHT, false, false);                  // 변경 만들기
+        e.requestExit();
+        assertEquals(0, lastHost.exits);
+        assertTrue(hasText(paint(e), "저장하지 않은 변경이 있습니다."));
+        e.keyPressed(EditorKey.ESCAPE, false, false);                 // 취소
+        assertEquals(0, lastHost.exits);
+        assertFalse(hasText(paint(e), "저장하지 않은 변경이 있습니다."));
+        e.requestExit();
+        Rect no = textRect(paint(e), "저장 안 함");
+        click(e, no.x() + 2, no.y() + 2);
+        assertEquals(1, lastHost.exits);
+    }
+
+    @Test
+    void saveAndCloseSavesThenExits() throws Exception {
+        EditorController e = editor(COLORED);
+        e.select(1);
+        e.keyPressed(EditorKey.RIGHT, false, false);
+        e.requestExit();
+        paint(e);
+        e.keyPressed(EditorKey.ENTER, false, false);
+        assertEquals(1, lastHost.exits);
+        assertFalse(e.isDirty());
+    }
+
+    @Test
+    void hiddenToolbarShowsAfterHoveringTheTopEdgeForAWhile() throws Exception {
+        EditorController e = editor(COLORED);
+        long[] now = {0};
+        e.clock = () -> now[0];
+        Rect hide = textRect(paint(e), "Hide");
+        click(e, hide.x() + 2, hide.y() + 2);
+        e.mouseMoved(300, 120);
+        assertFalse(hasText(paint(e), "Save"), "숨겼다");
+        e.mouseMoved(200, 1);
+        paint(e);
+        now[0] += 500_000_000L;
+        assertFalse(hasText(paint(e), "Save"), "아직 짧게 올려 뒀다");
+        now[0] += 1_000_000_000L;
+        assertTrue(hasText(paint(e), "Save"), "1~2초 올려 두면 나타난다");
+        e.mouseMoved(200, 100);
+        assertFalse(hasText(paint(e), "Save"), "벗어나면 다시 숨는다");
+    }
+
+    @Test
+    void toolbarIsHiddenWhileMovingAnElement() throws Exception {
+        EditorController e = editor(COLORED);
+        e.select(1);
+        paint(e);
+        e.mousePressed(200, 55, 0);
+        e.mouseDragged(210, 70);
+        assertFalse(hasText(paint(e), "Save"));
+        e.mouseReleased(210, 70, 0);
+        assertTrue(hasText(paint(e), "Save"));
+    }
+
+    @Test
+    void theTabOfATemporarilyShownPanelStaysAndDismissesIt() throws Exception {
+        EditorController e = editor(COLORED);
+        e.select(1);
+        int tabY = EditorController.tabY(H) + 5, rightTabX = W - 142 - 10 + 3;
+        click(e, rightTabX, tabY);                                    // 접기
+        e.select(-1);
+        assertFalse(hasText(paint(e), "너비"));
+        e.select(1);
+        assertTrue(hasText(paint(e), "너비"), "선택하면 임시로 보인다");
+        click(e, rightTabX, tabY);                                    // 임시로 보이는 동안에도 탭이 있어 닫을 수 있다
+        assertFalse(hasText(paint(e), "너비"));
+        e.select(-1);
+        paint(e);
+        e.select(1);
+        assertTrue(hasText(paint(e), "너비"), "다시 선택하면 또 임시로 보인다");
     }
 }
