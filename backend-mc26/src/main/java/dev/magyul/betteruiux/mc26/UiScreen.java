@@ -214,7 +214,9 @@ public final class UiScreen extends Screen {
             return true;
         }
         if (editor != null) {
-            editor.keyPressed(McEditorKeys.map(event), event.hasControlDown(), event.hasShiftDown());
+            var mapped = McEditorKeys.map(event);
+            boolean used = editor.keyPressed(mapped, event.hasControlDown(), event.hasShiftDown());
+            if (DEBUG) LOG.info("[better-uiux] editor key={} -> {} used={} editing={}", event.key(), mapped, used, editor.isEditingField());
             return true;   // 편집 중에는 게임 단축키(Esc 로 닫기 등)를 막는다. 나가려면 F8.
         }
         return super.keyPressed(event);
@@ -223,7 +225,8 @@ public final class UiScreen extends Screen {
     @Override
     public boolean charTyped(CharacterEvent event) {
         if (editor != null) {
-            if (event.codepoint() <= 0xFFFF) editor.charTyped((char) event.codepoint());
+            boolean used = event.codepoint() <= 0xFFFF && editor.charTyped((char) event.codepoint());
+            if (DEBUG) LOG.info("[better-uiux] editor char U+{} used={} editing={}", Integer.toHexString(event.codepoint()), used, editor.isEditingField());
             return true;
         }
         return super.charTyped(event);
@@ -231,7 +234,12 @@ public final class UiScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (editor != null) return editor.mousePressed((int) event.x(), (int) event.y(), uiButton(event));
+        if (editor != null) {
+            boolean used = editor.mousePressed((int) event.x(), (int) event.y(), uiButton(event));
+            if (DEBUG) LOG.info("[better-uiux] editor press ({}, {}) btn={} selected={} editing={} status='{}'", event.x(), event.y(),
+                    uiButton(event), editor.selectedIndex(), editor.isEditingField(), editor.status());
+            return used;
+        }
         boolean used = doc.mousePressed((int) event.x(), (int) event.y(), uiButton(event));
         if (DEBUG) LOG.info("[better-uiux] press ({}, {}) mc-button={} -> consumed={}", event.x(), event.y(), event.button(), used);
         return used || super.mouseClicked(event, doubleClick);

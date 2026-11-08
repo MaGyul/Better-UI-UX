@@ -106,7 +106,7 @@ class EditorControllerTest {
     @Test
     void clicksOnPanelsDoNotSelectCanvasElements() {
         ed.select(A);
-        click(10, 100);                         // 아웃라이너 빈 곳
+        click(10, 220);                         // 구조 트리의 빈 곳(행 아래)
         click(RIGHT_X + 5, 200);                // 속성 패널 빈 곳
         assertEquals(A, ed.selectedIndex());
     }
@@ -382,7 +382,7 @@ class EditorControllerTest {
         assertTrue(labels.stream().anyMatch(s -> s.startsWith("screen")));
         assertTrue(labels.stream().anyMatch(s -> s.startsWith("label#l3")));
         // 행 순서: screen, panel#a, column#col, label#l1.. → 다섯 번째 행(l2)을 클릭
-        click(60, 16 + 2 + 4 * 11 + 3);
+        click(60, EditorController.rowsTop() + 4 * 11 + 3);
         assertEquals(L2, ed.selectedIndex());
     }
 

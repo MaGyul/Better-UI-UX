@@ -1,5 +1,6 @@
 package dev.magyul.betteruiux.core.edit;
 
+import dev.magyul.betteruiux.api.DrawList;
 import dev.magyul.betteruiux.api.TextMetrics;
 import dev.magyul.betteruiux.api.UiGfx;
 import dev.magyul.betteruiux.core.doc.UiDocument;
@@ -12,6 +13,9 @@ import dev.magyul.betteruiux.core.layout.LayoutEngine;
 import dev.magyul.betteruiux.core.xml.UiParseException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,15 +26,23 @@ import java.util.function.Function;
  *
  * <p>모든 편집은 "원본 XML 텍스트 패치 → 다시 로드" 이다({@link EditSession}). 그래서 주석/들여쓰기가 보존되고,
  * Undo/Redo 가 텍스트 되돌리기이며, 핫리로드와 같은 경로로 화면이 갱신된다.
- * 드래그 중에는 임시 편집으로 매 프레임 미리보기를 보여주고, 놓을 때 한 번의 Undo 단위로 확정한다.
+ *
+ * <p>스크래치처럼 다룬다: 왼쪽 <b>블록 팔레트</b>에서 요소를 끌어 캔버스나 구조 트리에 놓으면 추가되고,
+ * 이미 있는 요소를 구조 트리 안에서 끌어 옮기거나, <b>팔레트 쪽으로 끌어다 놓으면 삭제</b>된다.
+ * 구조 트리는 접고 펼 수 있다.
  */
 public final class EditorController {
-    // ---- 모양 ----
-    private static final int TOOLBAR_H = 16, LEFT_W = 120, RIGHT_W = 142, ROW_H = 11;
+    // ---- 모양 (테스트가 위치를 계산할 수 있도록 package-private) ----
+    static final int TOOLBAR_H = 16, LEFT_W = 140, RIGHT_W = 142, ROW_H = 11;
+    static final int PALETTE_H = 62, OUTLINER_HEADER_H = 12;
+    static final List<String> PALETTE_TAGS = List.of("label", "button", "panel", "column", "row", "image", "spacer");
+    static final Map<String, String> PALETTE_LABELS = Map.of("label", "라벨", "button", "버튼", "panel", "패널",
+            "column", "세로", "row", "가로", "image", "이미지", "spacer", "여백");
     private static final int HANDLE_R = 3, MIN_SIZE = 4, SNAP_THRESHOLD = 4, DRAG_START = 3, GRID = 8;
     private static final int C_PANEL = 0xE0161820, C_BTN = 0xFF3A3F55, C_BTN_OFF = 0xFF262838, C_SEL = 0xFFFFFF55,
             C_HOVER = 0x9055FFFF, C_GUIDE = 0xFFFF55FF, C_TEXT = 0xFFFFFFFF, C_DIM = 0xFF9090A0, C_ERR = 0xFFFF6060,
-            C_OK = 0xFF80FF80, C_ROW_SEL = 0xFF3A4A80, C_ROW_HOVER = 0xFF2A3050, C_FIELD = 0xFF101018;
+            C_OK = 0xFF80FF80, C_ROW_SEL = 0xFF3A4A80, C_ROW_HOVER = 0xFF2A3050, C_FIELD = 0xFF101018,
+            C_DROP_OK = 0xFF55FF77, C_DROP_BAD = 0xFFFF5555, C_TRASH = 0x70FF3030;
 
     private static final Set<String> ATTR_KEYS = Set.of("id", "class", "onClick", "src", "text");
     private static final Set<String> CONTAINERS = Set.of("screen", "panel", "row", "column", "stack", "fragment");
@@ -39,12 +51,36 @@ public final class EditorController {
 
     private record PropRow(String label, String key, String value, boolean editable) {}
 
-    /** 진행 중인 드래그. 시작 시점의 기하 정보를 모두 담아 두고, 매 프레임 "기준 텍스트"에 처음부터 적용한다. */
+    private record TreeRow(LayoutBox box, int depth, boolean hasKids, boolean collapsed, String key) {}
+
+    /** 놓을 자리. {@code refIndex} 는 그 앞에 넣을 형제의 요소 번호(-1 이면 맨 뒤). */
+    private record Drop(int parentIndex, int refIndex, Rect highlight, Rect line, boolean valid, boolean trash,
+                        boolean onCanvas) {}
+
+    /** 팔레트/트리에서 시작한 끌어놓기. */
+    private static final class Dnd {
+        final boolean fromPalette;
+        final String tag;
+        final int index;
+        final int startX, startY;
+        boolean started;
+
+        Dnd(boolean fromPalette, String tag, int index, int startX, int startY) {
+            this.fromPalette = fromPalette;
+            this.tag = tag;
+            this.index = index;
+            this.startX = startX;
+            this.startY = startY;
+            this.started = fromPalette;     // 팔레트 블록은 누르는 즉시 들린다
+        }
+    }
+
+    /** 캔버스에서 요소를 직접 끄는 중(이동/크기/재정렬). 시작 시점의 기하 정보를 담고 매 프레임 기준 텍스트에 처음부터 적용한다. */
     private static final class Drag {
         Handle handle;
         int startMx, startMy;
         boolean started;
-        int index;                       // 기준 텍스트에서의 요소 번호
+        int index;
         Rect startRect;
         boolean parentFlow, horizontalFlow;
         int parentIndex;
@@ -53,9 +89,9 @@ public final class EditorController {
         Rect parentContent;
         int curX, curY;
         List<Integer> xTargets = List.of(), yTargets = List.of();
-        List<LayoutBox> others = List.of();       // 같은 부모의 다른 자식(재정렬 계산용)
-        final Map<String, Boolean> definedElsewhere = new java.util.HashMap<>();
-        int resultIndex;                 // 미리보기 편집 결과에서의 요소 번호
+        List<LayoutBox> others = List.of();
+        final Map<String, Boolean> definedElsewhere = new HashMap<>();
+        int resultIndex;
     }
 
     private final EditorHost host;
@@ -70,7 +106,10 @@ public final class EditorController {
     private boolean panelsVisible = true;
     private boolean grid;
     private int outlinerScroll;
+    private final Set<String> collapsed = new HashSet<>();
+    private int lastRevealed = -2;
     private Drag drag;
+    private Dnd dnd;
     private List<Geometry.Guide> guides = List.of();
 
     private String editKey;
@@ -187,11 +226,44 @@ public final class EditorController {
                 Math.max(0, parent.w - pad.horizontal()), Math.max(0, parent.h - pad.vertical()));
     }
 
-    private static List<LayoutBox> sourceChildren(LayoutBox parent) {
+    /** 원본에 실제로 있는 자식들(템플릿 확장으로 생긴 요소는 그 자식들을 대신 펼쳐서 포함하지 않는다). */
+    private static List<LayoutBox> displayChildren(LayoutBox parent) {
         List<LayoutBox> out = new ArrayList<>();
-        for (LayoutBox c : parent.children) if (c.node.sourceIndex() >= 0 && c.visible()) out.add(c);
+        for (LayoutBox c : parent.children) {
+            if (c.node.sourceIndex() >= 0) {
+                if (c.visible()) out.add(c);
+            } else {
+                out.addAll(displayChildren(c));
+            }
+        }
         return out;
     }
+
+    /** 원본에 있는 가장 가까운 조상. */
+    private static LayoutBox displayParent(LayoutBox b) {
+        LayoutBox p = b.parent;
+        while (p != null && p.node.sourceIndex() < 0) p = p.parent;
+        return p;
+    }
+
+    private static boolean isInsideOrSelf(LayoutBox box, int movingIndex) {
+        for (LayoutBox b = box; b != null; b = b.parent) if (b.node.sourceIndex() == movingIndex) return true;
+        return false;
+    }
+
+    // ================= 팔레트 / 트리 기하 =================
+
+    private Rect paletteRect() { return new Rect(0, TOOLBAR_H, LEFT_W, PALETTE_H); }
+
+    /** i 번째 팔레트 블록의 사각형(3열). */
+    static Rect paletteBlock(int i) {
+        int w = (LEFT_W - 8 - 4) / 3, h = 13;
+        return new Rect(4 + (i % 3) * (w + 2), TOOLBAR_H + 12 + (i / 3) * (h + 2), w, h);
+    }
+
+    static int rowsTop() { return TOOLBAR_H + PALETTE_H + OUTLINER_HEADER_H + 2; }
+
+    private int visibleRows() { return Math.max(1, (viewH - rowsTop()) / ROW_H); }
 
     // ================= 입력: 마우스 =================
 
@@ -240,6 +312,10 @@ public final class EditorController {
     public boolean mouseDragged(int x, int y) {
         mouseX = x;
         mouseY = y;
+        if (dnd != null) {
+            if (!dnd.started && Math.max(Math.abs(x - dnd.startX), Math.abs(y - dnd.startY)) >= DRAG_START) dnd.started = true;
+            return true;
+        }
         if (drag == null) return false;
         int dx = x - drag.startMx, dy = y - drag.startMy;
         if (!drag.started) {
@@ -254,11 +330,24 @@ public final class EditorController {
     public boolean mouseReleased(int x, int y, int button) {
         mouseX = x;
         mouseY = y;
+        if (dnd != null) {
+            Dnd d = dnd;
+            dnd = null;
+            finishDnd(d, x, y);
+            return true;
+        }
         if (drag == null) return true;
         Drag d = drag;
         drag = null;
         guides = List.of();
         if (d.started) {
+            boolean trash = d.handle == Handle.BODY && panelsVisible && d.index > 0 && paletteRect().contains(x, y);
+            if (trash) {
+                session.cancelTransient();
+                reload();
+                deleteIndex(d.index);
+                return true;
+            }
             session.commitTransient();
             selected = d.resultIndex;
             reload();
@@ -268,7 +357,7 @@ public final class EditorController {
     }
 
     public boolean mouseScrolled(int x, int y, double amount) {
-        if (panelsVisible && x < LEFT_W && y > TOOLBAR_H) {
+        if (panelsVisible && x < LEFT_W && y >= rowsTop() - 2) {
             outlinerScroll = Math.max(0, outlinerScroll - (int) Math.signum(amount) * 3);
             return true;
         }
@@ -305,7 +394,7 @@ public final class EditorController {
         for (String k : List.of("width", "height", "x", "y")) {
             d.definedElsewhere.put(k, b.style.get(k) != null && b.node.attr(k) == null);
         }
-        List<LayoutBox> siblings = new ArrayList<>(parent == null ? List.of() : sourceChildren(parent));
+        List<LayoutBox> siblings = new ArrayList<>(parent == null ? List.of() : displayChildren(parent));
         siblings.remove(b);
         d.others = siblings;
         List<Rect> rects = new ArrayList<>();
@@ -316,7 +405,7 @@ public final class EditorController {
         drag = d;
     }
 
-    // ---- 드래그 적용: 매번 기준 텍스트에서 다시 계산한다 ----
+    // ---- 캔버스 드래그 적용: 매번 기준 텍스트에서 다시 계산한다 ----
 
     private void applyDrag(int mx, int my) {
         Drag d = drag;
@@ -401,6 +490,132 @@ public final class EditorController {
         return best;
     }
 
+    // ================= 끌어놓기(팔레트 → 캔버스/트리, 트리 → 트리/캔버스, 팔레트로 끌면 삭제) =================
+
+    /** 놓으려는 자리를 계산한다. 놓을 수 있는 곳이 없으면 null. {@code movingIndex} 는 옮기는 기존 요소(팔레트 블록이면 -1). */
+    private Drop dropTarget(int x, int y, int movingIndex) {
+        if (panelsVisible && paletteRect().contains(x, y)) {
+            return new Drop(-1, -1, paletteRect(), null, movingIndex > 0, true, false);
+        }
+        if (panelsVisible && x < LEFT_W && y >= rowsTop() - 1) return treeDrop(x, y, movingIndex);
+        if (overPanel(x, y)) return null;
+        return canvasDrop(x, y, movingIndex);
+    }
+
+    private Drop treeDrop(int x, int y, int movingIndex) {
+        List<TreeRow> rows = treeRows();
+        int i = (y - rowsTop() + 1) / ROW_H + outlinerScroll;
+        if (i < 0 || i >= rows.size() || i - outlinerScroll >= visibleRows()) return null;
+        LayoutBox rb = rows.get(i).box();
+        Rect rowRect = new Rect(0, rowsTop() + (i - outlinerScroll) * ROW_H - 1, LEFT_W, ROW_H);
+        double frac = (y - rowRect.y()) / (double) ROW_H;
+        boolean container = CONTAINERS.contains(rb.tag());
+        boolean root = rb.parent == null;
+        LayoutBox parent;
+        int ref;
+        Rect line = null;
+        Rect highlight = rowRect;
+        if (!root && frac < 0.25) {                                   // 이 행 앞
+            parent = displayParent(rb);
+            ref = rb.node.sourceIndex();
+            line = new Rect(0, rowRect.y(), LEFT_W, 2);
+            highlight = null;
+        } else if (!root && (frac > 0.75 || !container)) {            // 이 행 뒤
+            parent = displayParent(rb);
+            List<LayoutBox> sib = displayChildren(parent);
+            int p = sib.indexOf(rb);
+            ref = p + 1 < sib.size() ? sib.get(p + 1).node.sourceIndex() : -1;
+            line = new Rect(0, rowRect.bottom() - 1, LEFT_W, 2);
+            highlight = null;
+        } else {                                                      // 이 요소 안
+            parent = rb;
+            ref = -1;
+        }
+        boolean valid = parent != null && (movingIndex < 0 || !isInsideOrSelf(parent, movingIndex));
+        return new Drop(parent == null ? 0 : parent.node.sourceIndex(), ref, highlight, line, valid, false, false);
+    }
+
+    private Drop canvasDrop(int x, int y, int movingIndex) {
+        LayoutBox b = hitSource(x, y);
+        while (b != null && !(CONTAINERS.contains(b.tag()) && (movingIndex < 0 || !isInsideOrSelf(b, movingIndex)))) b = b.parent;
+        while (b != null && b.node.sourceIndex() < 0) b = b.parent;
+        if (b == null) return null;
+        int parentIndex = b.node.sourceIndex();
+        if (isFlow(b)) {
+            boolean horizontal = b.tag().equals("row");
+            List<LayoutBox> kids = new ArrayList<>(displayChildren(b));
+            if (movingIndex >= 0) kids.removeIf(k -> k.node.sourceIndex() == movingIndex);
+            List<Rect> rects = new ArrayList<>();
+            for (LayoutBox k : kids) rects.add(rectOf(k));
+            int k = Geometry.flowInsertIndex(rects, horizontal, x, y);
+            int ref = k < kids.size() ? kids.get(k).node.sourceIndex() : -1;
+            Rect line = null;
+            if (!kids.isEmpty()) {
+                Rect at = k < kids.size() ? rects.get(k) : rects.get(rects.size() - 1);
+                boolean after = k >= kids.size();
+                if (horizontal) line = new Rect((after ? at.right() : at.x()) - 1, b.y, 2, b.h);
+                else line = new Rect(b.x, (after ? at.bottom() : at.y()) - 1, b.w, 2);
+            }
+            return new Drop(parentIndex, ref, rectOf(b), line, true, false, true);
+        }
+        return new Drop(parentIndex, -1, rectOf(b), null, true, false, true);
+    }
+
+    private void finishDnd(Dnd d, int x, int y) {
+        if (d.fromPalette && !d.started) return;
+        if (d.fromPalette && Math.max(Math.abs(x - d.startX), Math.abs(y - d.startY)) < DRAG_START) {
+            add(d.tag);                       // 끌지 않고 클릭만 하면 선택한 컨테이너에 추가
+            return;
+        }
+        if (!d.fromPalette && !d.started) return;
+        Drop drop = dropTarget(x, y, d.fromPalette ? -1 : d.index);
+        if (drop == null) return;
+        if (drop.trash()) {
+            if (!d.fromPalette) deleteIndex(d.index);
+            return;
+        }
+        if (!drop.valid()) {
+            setStatus("여기에는 놓을 수 없습니다", true);
+            return;
+        }
+        XmlSource src = session.source();
+        Element parentEl = src.element(drop.parentIndex());
+        int pos = drop.refIndex() >= 0
+                ? parentEl.children().indexOf(src.element(drop.refIndex()))
+                : parentEl.children().size();
+        boolean place = drop.onCanvas();
+        try {
+            EditorOps.Added r = d.fromPalette
+                    ? EditorOps.addChild(session.text(), drop.parentIndex(), pos, d.tag)
+                    : EditorOps.move(session.text(), d.index, drop.parentIndex(), pos);
+            String text = place ? placeAt(r.text(), r.index(), drop.parentIndex(), x, y) : r.text();
+            if (applyEdit(s -> text)) selected = r.index();
+        } catch (IllegalArgumentException e) {
+            setStatus("여기에는 놓을 수 없습니다", true);
+        }
+    }
+
+    /**
+     * stack 계열 부모 안에 놓았다면 요소의 가운데가 놓은 지점에 오도록 x/y 오프셋을 정한다.
+     * (row/column 은 배치가 위치를 정하므로 손대지 않는다.)
+     */
+    private String placeAt(String text, int index, int parentIndex, int x, int y) {
+        try {
+            UiDocument tmp = host.load(text);
+            tmp.layout(viewW, viewH);
+            LayoutBox box = boxByIndex(tmp.layout(), index), parent = boxByIndex(tmp.layout(), parentIndex);
+            if (box == null || parent == null || isFlow(parent)) return text;
+            Rect before = rectOf(box);
+            Rect desired = new Rect(x - before.w() / 2, y - before.h() / 2, before.w(), before.h());
+            Map<String, String> props = Geometry.propsForRect(false, box.style.get("anchor"),
+                    Insets.parse(box.style.get("margin"), Insets.ZERO), contentRect(parent), before, desired,
+                    box.style.integer("x", 0), box.style.integer("y", 0));
+            return EditorOps.setProps(text, index, props, p -> false);
+        } catch (UiParseException | IllegalArgumentException e) {
+            return text;
+        }
+    }
+
     // ================= 입력: 키보드 =================
 
     public boolean charTyped(char c) {
@@ -411,6 +626,10 @@ public final class EditorController {
 
     public boolean keyPressed(EditorKey key, boolean ctrl, boolean shift) {
         if (editKey != null) return editKeyPressed(key);
+        if (key == EditorKey.ESCAPE && dnd != null) {
+            dnd = null;
+            return true;
+        }
         if (drag != null && drag.started && key == EditorKey.ESCAPE) {
             session.cancelTransient();
             drag = null;
@@ -521,9 +740,10 @@ public final class EditorController {
         }
     }
 
+    /** 선택한 컨테이너(리프면 그 부모) 맨 뒤에 요소를 추가한다. 팔레트 블록을 끌지 않고 클릭했을 때도 이 경로. */
     public void add(String tag) {
         LayoutBox sel = selectedBox();
-        LayoutBox target = sel == null ? doc.layout() : CONTAINERS.contains(sel.tag()) ? sel : sel.parent;
+        LayoutBox target = sel == null ? doc.layout() : CONTAINERS.contains(sel.tag()) ? sel : displayParent(sel);
         int parentIdx = target == null || target.node.sourceIndex() < 0 ? 0 : target.node.sourceIndex();
         EditorOps.Added r = EditorOps.addChild(session.text(), parentIdx, Integer.MAX_VALUE, tag);
         if (applyEdit(src -> r.text())) selected = r.index();
@@ -535,10 +755,15 @@ public final class EditorController {
         if (applyEdit(src -> r.text())) selected = r.index();
     }
 
-    public void deleteSelected() {
-        if (selected <= 0) return;
-        EditorOps.Added r = EditorOps.delete(session.text(), selected);
-        if (applyEdit(src -> r.text())) selected = r.index();
+    public void deleteSelected() { deleteIndex(selected); }
+
+    private void deleteIndex(int index) {
+        if (index <= 0) return;
+        EditorOps.Added r = EditorOps.delete(session.text(), index);
+        if (applyEdit(src -> r.text())) {
+            selected = r.index();
+            setStatus("삭제됨 (Ctrl+Z 로 되돌릴 수 있어요)", false);
+        }
     }
 
     /** 화살표: stack 계열 부모에서는 x/y 오프셋을 1px(Shift 8px), row/column 에서는 순서를 한 칸 이동. */
@@ -550,7 +775,7 @@ public final class EditorController {
             boolean horizontal = b.parent.tag().equals("row");
             int dir = horizontal ? dx : dy;
             if (dir == 0) return;
-            List<LayoutBox> siblings = new ArrayList<>(sourceChildren(b.parent));
+            List<LayoutBox> siblings = new ArrayList<>(displayChildren(b.parent));
             int p = siblings.indexOf(b);
             siblings.remove(b);
             int k = Math.max(0, Math.min(siblings.size(), p + dir));
@@ -565,14 +790,14 @@ public final class EditorController {
                 return EditorOps.move(src.text(), idx, parentIdx, pos).text();
             });
             // 이동 후 선택 번호는 다시 계산한다(요소 번호는 순서에 따라 바뀐다).
-            List<LayoutBox> after = sourceChildren(boxByIndex(doc.layout(), parentIdx));
+            List<LayoutBox> after = displayChildren(boxByIndex(doc.layout(), parentIdx));
             if (k < after.size()) selected = after.get(k).node.sourceIndex();
             return;
         }
         int curX = b.style.integer("x", 0) + dx * step, curY = b.style.integer("y", 0) + dy * step;
         int idx = selected;
         LayoutBox box = b;
-        Map<String, String> props = new java.util.LinkedHashMap<>();
+        Map<String, String> props = new LinkedHashMap<>();
         if (dx != 0) props.put("x", curX == 0 ? null : Integer.toString(curX));
         if (dy != 0) props.put("y", curY == 0 ? null : Integer.toString(curY));
         applyEdit(src -> EditorOps.setProps(src.text(), idx, props,
@@ -660,23 +885,91 @@ public final class EditorController {
         return new PropRow(key, key, v == null ? "" : v, true);
     }
 
+    // ================= 구조 트리(접기/펼치기) =================
+
+    /** 접힘 상태를 편집으로 요소 번호가 바뀌어도 유지하려고 id 가 있으면 id, 없으면 루트부터의 자식 순번 경로를 키로 쓴다. */
+    private static String keyOf(LayoutBox b) {
+        if (b.id() != null) return "#" + b.id();
+        StringBuilder path = new StringBuilder();
+        for (LayoutBox x = b; displayParent(x) != null; x = displayParent(x)) {
+            path.insert(0, "/" + displayChildren(displayParent(x)).indexOf(x));
+        }
+        return "r" + path;
+    }
+
+    private List<TreeRow> treeRows() {
+        List<TreeRow> out = new ArrayList<>();
+        buildRows(doc.layout(), 0, out);
+        return out;
+    }
+
+    private void buildRows(LayoutBox b, int depth, List<TreeRow> out) {
+        List<LayoutBox> kids = displayChildren(b);
+        String key = keyOf(b);
+        boolean isCollapsed = !kids.isEmpty() && collapsed.contains(key);
+        out.add(new TreeRow(b, depth, !kids.isEmpty(), isCollapsed, key));
+        if (!isCollapsed) for (LayoutBox k : kids) buildRows(k, depth + 1, out);
+    }
+
+    private void toggleCollapsed(String key) {
+        if (!collapsed.remove(key)) collapsed.add(key);
+    }
+
+    private void collapseAll() {
+        for (TreeRow r : treeRows()) {
+            if (r.hasKids() && r.box().parent != null) collapsed.add(r.key());
+        }
+        outlinerScroll = 0;
+    }
+
+    private void expandAll() { collapsed.clear(); }
+
+    /** 선택이 바뀌면(캔버스 클릭 등) 그 요소가 보이도록 조상 행을 펼치고 스크롤한다. */
+    private void revealSelected(List<TreeRow> rows) {
+        LayoutBox sb = selectedBox();
+        if (sb == null) return;
+        boolean changed = false;
+        for (LayoutBox a = displayParent(sb); a != null; a = displayParent(a)) changed |= collapsed.remove(keyOf(a));
+        List<TreeRow> now = changed ? treeRows() : rows;
+        for (int i = 0; i < now.size(); i++) {
+            if (now.get(i).box().node.sourceIndex() == selected) {
+                if (i < outlinerScroll) outlinerScroll = i;
+                else if (i >= outlinerScroll + visibleRows()) outlinerScroll = i - visibleRows() + 1;
+                break;
+            }
+        }
+    }
+
     // ================= 그리기 =================
 
-    private void refreshRegions() { paint(new dev.magyul.betteruiux.api.DrawList()); }
+    private void refreshRegions() { paint(new DrawList()); }
 
     public void paint(UiGfx g) {
         regions.clear();
         paintCanvasOverlay(g);
         if (panelsVisible) {
-            paintOutliner(g);
+            paintLeftPanel(g);
             paintProperties(g);
             paintToolbar(g);
         }
+        paintDndFeedback(g);
         paintStatus(g);
     }
 
+    private static int tagColor(String tag) {
+        return switch (tag) {
+            case "screen", "panel", "row", "column", "stack", "fragment" -> 0xFFD08A2E;
+            case "label" -> 0xFF4C8DDB;
+            case "button" -> 0xFF8A5CD6;
+            case "image" -> 0xFF45A86B;
+            case "spacer" -> 0xFF7A7F8F;
+            default -> 0xFF666B7A;
+        };
+    }
+
     private void paintCanvasOverlay(UiGfx g) {
-        LayoutBox hover = drag == null && !overPanel(mouseX, mouseY) ? hitSource(mouseX, mouseY) : null;
+        boolean dragging = drag != null || dnd != null;
+        LayoutBox hover = !dragging && !overPanel(mouseX, mouseY) ? hitSource(mouseX, mouseY) : null;
         hoverIndex = hover == null ? -1 : hover.node.sourceIndex();
         if (hover != null && hoverIndex != selected) outline(g, rectOf(hover), C_HOVER);
 
@@ -731,11 +1024,6 @@ public final class EditorController {
         x += button(g, x, y, "Undo", session.canUndo(), this::undo);
         x += button(g, x, y, "Redo", session.canRedo(), this::redo);
         x += 4;
-        for (String tag : List.of("label", "button", "panel", "column", "row", "image")) {
-            final String t = tag;
-            x += button(g, x, y, "+" + tag.substring(0, 3), true, () -> add(t));
-        }
-        x += 4;
         x += button(g, x, y, "Dup", selected > 0, this::duplicate);
         x += button(g, x, y, "Del", selected > 0, this::deleteSelected);
         x += button(g, x, y, grid ? "Grid:8" : "Grid:off", true, () -> grid = !grid);
@@ -744,43 +1032,91 @@ public final class EditorController {
     }
 
     private void paintStatus(UiGfx g) {
-        if (status.isEmpty()) return;
+        String text = status;
+        boolean error = statusError;
+        if (text.isEmpty() && dnd == null && drag == null) {
+            text = "블록을 끌어다 놓으세요 · 요소를 왼쪽 블록 칸으로 끌면 삭제";
+            error = false;
+            if (!panelsVisible) return;
+            int x = LEFT_W + 6, y = viewH - tm.lineHeight() - 5;
+            g.drawText(text, x, y, C_DIM, false);
+            return;
+        }
+        if (text.isEmpty()) return;
         int x = panelsVisible ? LEFT_W + 6 : 6, y = viewH - tm.lineHeight() - 5;
-        g.fillRect(x - 3, y - 2, tm.width(status) + 6, tm.lineHeight() + 4, 0xD0000000);
-        g.drawText(status, x, y, statusError ? C_ERR : C_OK, false);
+        g.fillRect(x - 3, y - 2, tm.width(text) + 6, tm.lineHeight() + 4, 0xD0000000);
+        g.drawText(text, x, y, error ? C_ERR : C_OK, false);
     }
 
-    // ---- 아웃라이너 ----
+    // ---- 왼쪽: 블록 팔레트 + 구조 트리 ----
 
-    private void paintOutliner(UiGfx g) {
-        int top = TOOLBAR_H;
-        g.fillRect(0, top, LEFT_W, viewH - top, C_PANEL);
-        regions.add(new Region(new Rect(0, top, LEFT_W, viewH - top), null));
-        List<Object[]> rows = new ArrayList<>();
-        collectRows(doc.layout(), 0, rows);
-        int visible = Math.max(1, (viewH - top - 2) / ROW_H);
+    private void paintLeftPanel(UiGfx g) {
+        g.fillRect(0, TOOLBAR_H, LEFT_W, viewH - TOOLBAR_H, C_PANEL);
+        regions.add(new Region(new Rect(0, TOOLBAR_H, LEFT_W, viewH - TOOLBAR_H), null));
+
+        // 팔레트
+        g.drawText("블록 (끌어다 놓기)", 4, TOOLBAR_H + 2, C_DIM, false);
+        for (int i = 0; i < PALETTE_TAGS.size(); i++) {
+            String tag = PALETTE_TAGS.get(i);
+            Rect r = paletteBlock(i);
+            g.fillRect(r.x(), r.y(), r.w(), r.h(), tagColor(tag));
+            g.fillRect(r.x(), r.bottom() - 1, r.w(), 1, 0x60000000);
+            String label = PALETTE_LABELS.get(tag);
+            g.drawText(label, r.x() + (r.w() - tm.width(label)) / 2, r.y() + (r.h() - tm.lineHeight()) / 2 + 1, C_TEXT, false);
+            regions.add(new Region(r, () -> dnd = new Dnd(true, tag, -1, mouseX, mouseY)));
+        }
+
+        // 구조 트리 머리말
+        int headerY = TOOLBAR_H + PALETTE_H;
+        g.fillRect(0, headerY, LEFT_W, 1, 0x40FFFFFF);
+        g.drawText("구조", 4, headerY + 3, C_DIM, false);
+        Rect expand = new Rect(LEFT_W - 12, headerY + 2, 10, 9), collapse = new Rect(LEFT_W - 24, headerY + 2, 10, 9);
+        g.fillRect(collapse.x(), collapse.y(), collapse.w(), collapse.h(), C_BTN);
+        g.drawText("-", collapse.x() + 3, collapse.y() + 1, C_TEXT, false);
+        g.fillRect(expand.x(), expand.y(), expand.w(), expand.h(), C_BTN);
+        g.drawText("+", expand.x() + 3, expand.y() + 1, C_TEXT, false);
+        regions.add(new Region(collapse, this::collapseAll));
+        regions.add(new Region(expand, this::expandAll));
+
+        // 트리
+        List<TreeRow> rows = treeRows();
+        if (lastRevealed != selected) {
+            lastRevealed = selected;
+            revealSelected(rows);
+            rows = treeRows();
+        }
+        int visible = visibleRows();
         outlinerScroll = Math.max(0, Math.min(outlinerScroll, Math.max(0, rows.size() - visible)));
-        g.pushClip(0, top, LEFT_W, viewH - top);
+        int top = rowsTop();
+        g.pushClip(0, top - 1, LEFT_W, viewH - top + 1);
         for (int i = outlinerScroll; i < rows.size() && i < outlinerScroll + visible; i++) {
-            LayoutBox b = (LayoutBox) rows.get(i)[0];
-            int depth = (Integer) rows.get(i)[1];
-            int y = top + 2 + (i - outlinerScroll) * ROW_H;
+            TreeRow row = rows.get(i);
+            LayoutBox b = row.box();
+            int y = top + (i - outlinerScroll) * ROW_H;
             int idx = b.node.sourceIndex();
             boolean sel = idx == selected;
+            boolean hot = mouseX >= 0 && mouseX < LEFT_W && mouseY >= y - 1 && mouseY < y - 1 + ROW_H && dnd == null;
             if (sel) g.fillRect(0, y - 1, LEFT_W, ROW_H, C_ROW_SEL);
-            else if (idx == hoverIndex || (mouseX >= 0 && mouseX < LEFT_W && mouseY >= y - 1 && mouseY < y - 1 + ROW_H)) {
-                g.fillRect(0, y - 1, LEFT_W, ROW_H, C_ROW_HOVER);
+            else if (hot || idx == hoverIndex) g.fillRect(0, y - 1, LEFT_W, ROW_H, C_ROW_HOVER);
+            int x = 3 + row.depth() * 8;
+            if (row.hasKids()) {
+                g.fillRect(x, y + 1, 7, 7, 0xFF2A2D3E);
+                g.drawText(row.collapsed() ? "+" : "-", x + 1, y, C_TEXT, false);
             }
-            g.drawText(rowLabel(b), 4 + depth * 6, y, sel ? C_SEL : C_TEXT, false);
-            regions.add(new Region(new Rect(0, y - 1, LEFT_W, ROW_H), () -> select(idx)));
+            int chip = x + 9;
+            g.fillRect(chip, y + 1, 3, 7, tagColor(b.tag()));
+            g.drawText(fit(rowLabel(b), LEFT_W - chip - 8), chip + 6, y, sel ? C_SEL : C_TEXT, false);
+            Rect rowRect = new Rect(0, y - 1, LEFT_W, ROW_H);
+            regions.add(new Region(rowRect, () -> {
+                select(idx);
+                dnd = new Dnd(false, "", idx, mouseX, mouseY);
+            }));
+            if (row.hasKids()) {
+                final String key = row.key();
+                regions.add(new Region(new Rect(x - 1, y - 1, 10, ROW_H), () -> toggleCollapsed(key)));
+            }
         }
         g.popClip();
-    }
-
-    private static void collectRows(LayoutBox b, int depth, List<Object[]> out) {
-        boolean shown = b.node.sourceIndex() >= 0;
-        if (shown) out.add(new Object[] {b, depth});
-        for (LayoutBox c : b.children) collectRows(c, shown ? depth + 1 : depth, out);
     }
 
     private static String rowLabel(LayoutBox b) {
@@ -795,7 +1131,51 @@ public final class EditorController {
         return sb.toString();
     }
 
-    // ---- 속성 패널 ----
+    // ---- 끌어놓는 중의 표시(놓을 자리, 따라다니는 블록, 휴지통) ----
+
+    private void paintDndFeedback(UiGfx g) {
+        boolean canvasMove = drag != null && drag.started && drag.handle == Handle.BODY && drag.index > 0;
+        boolean treeMove = dnd != null && !dnd.fromPalette && dnd.started;
+        boolean palette = dnd != null && dnd.fromPalette;
+        if (!canvasMove && !treeMove && !palette) return;
+
+        int moving = canvasMove ? drag.index : treeMove ? dnd.index : -1;
+        Drop drop = canvasMove ? null : dropTarget(mouseX, mouseY, moving);
+        boolean overTrash = panelsVisible && paletteRect().contains(mouseX, mouseY);
+        if (canvasMove && overTrash) drop = new Drop(-1, -1, paletteRect(), null, true, true, false);
+
+        if (drop != null) {
+            if (drop.trash()) {
+                if (drop.valid() && (canvasMove || treeMove)) {
+                    Rect p = paletteRect();
+                    g.fillRect(p.x(), p.y(), p.w(), p.h(), C_TRASH);
+                    String msg = "여기에 놓으면 삭제";
+                    g.drawText(msg, p.x() + (p.w() - tm.width(msg)) / 2, p.y() + p.h() / 2 - 4, C_TEXT, true);
+                }
+            } else {
+                int color = drop.valid() ? C_DROP_OK : C_DROP_BAD;
+                if (drop.highlight() != null) outline(g, drop.highlight(), color);
+                if (drop.line() != null) g.fillRect(drop.line().x(), drop.line().y(), drop.line().w(), drop.line().h(), color);
+            }
+        }
+
+        // 마우스를 따라다니는 블록
+        String tag = palette ? dnd.tag : tagOfIndex(moving);
+        String label = palette ? PALETTE_LABELS.getOrDefault(tag, tag) : tag;
+        if (!canvasMove) {
+            int w = tm.width(label) + 10, h = 13, x = mouseX + 6, y = mouseY + 6;
+            g.fillRect(x, y, w, h, (tagColor(tag) & 0x00FFFFFF) | 0xD0000000);
+            outline(g, new Rect(x, y, w, h), 0xFFFFFFFF);
+            g.drawText(label, x + 5, y + (h - tm.lineHeight()) / 2 + 1, C_TEXT, false);
+        }
+    }
+
+    private String tagOfIndex(int index) {
+        LayoutBox b = index < 0 ? null : boxByIndex(doc.layout(), index);
+        return b == null ? "" : b.tag();
+    }
+
+    // ---- 오른쪽: 속성 패널 ----
 
     private void paintProperties(UiGfx g) {
         int x0 = viewW - RIGHT_W, top = TOOLBAR_H;
