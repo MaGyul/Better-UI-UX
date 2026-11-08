@@ -59,7 +59,7 @@ public final class LayoutEngine {
 
     /** 레이아웃 대상이 아닌 메타 요소(스타일 정의 등). */
     private static boolean isMeta(String tag) {
-        return tag.equals("style") || tag.equals("link") || tag.equals("template");
+        return tag.equals("style") || tag.equals("link") || tag.equals("template") || tag.equals("script");
     }
 
     private LayoutBox buildStructure(UiNode node, LayoutBox parent) {

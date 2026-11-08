@@ -261,6 +261,14 @@ public final class UiDocument {
 
     private void addRuntimeWarning(String w) { runtimeWarnings.add(w); }
 
+    /** 실행 중 생긴 경고를 문서 경고 목록(오류 오버레이)에 추가한다. */
+    public void warn(String message) { addRuntimeWarning(message); }
+
+    private java.util.function.BiConsumer<UiElement, String> scriptDispatcher;
+
+    /** {@code onClick="script:fn"} 처럼 {@code script:} 로 시작하는 액션을 받을 곳(스크립트 호스트가 등록한다). */
+    public void setScriptDispatcher(java.util.function.BiConsumer<UiElement, String> d) { this.scriptDispatcher = d; }
+
     // ---- 바인딩: 텍스트의 {이름} 을 값으로 치환 ----
 
     /** {@code {이름}} 에 쓸 값을 공급한다. 값이 바뀌면 다음 프레임에 자동으로 다시 레이아웃된다. */
@@ -728,6 +736,11 @@ public final class UiDocument {
     }
 
     void fireAction(UiElement el, String action) {
+        if (action.startsWith("script:")) {
+            if (scriptDispatcher != null) scriptDispatcher.accept(el, action.substring(7).trim());
+            else addRuntimeWarning("스크립트가 꺼져 있습니다: '" + action + "'");
+            return;
+        }
         if (UiActions.dispatch(new UiActions.Context(this, el, action))) return;
         LayoutBox box = boxes.get(el.node());
         if (actionHandler != null) actionHandler.onAction(action, box);
