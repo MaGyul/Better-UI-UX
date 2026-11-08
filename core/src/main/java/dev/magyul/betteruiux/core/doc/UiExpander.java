@@ -95,13 +95,20 @@ public final class UiExpander {
                 warnings.add("include '" + src + "' 를 찾을 수 없습니다");
                 return null;
             }
-            return UiParser.parse(xml.get());
+            UiNode parsed = UiParser.parse(xml.get());
+            clearSourceIndex(parsed);   // 다른 파일에서 온 노드는 메인 문서의 위치 지도와 무관하다
+            return parsed;
         } catch (UiParseException e) {
             warnings.add("include '" + src + "' XML 오류 (줄 " + e.line() + ")");
         } catch (IOException e) {
             warnings.add("include '" + src + "' 읽기 실패: " + e.getMessage());
         }
         return null;
+    }
+
+    private static void clearSourceIndex(UiNode n) {
+        n.setSourceIndex(-1);
+        for (UiNode c : n.children()) clearSourceIndex(c);
     }
 
     /** 불러온 문서의 루트가 fragment/screen 이면 자식들만, 아니면 루트 자체를 담은 임시 컨테이너. */

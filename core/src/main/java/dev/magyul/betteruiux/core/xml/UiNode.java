@@ -16,6 +16,7 @@ public final class UiNode {
     private UiNode parent;
     private String text = "";
     private Object userData;
+    private int sourceIndex = -1;
 
     public UiNode(String tag) { this.tag = tag; }
 
@@ -38,6 +39,14 @@ public final class UiNode {
     public Object userData() { return userData; }
 
     public void setUserData(Object userData) { this.userData = userData; }
+
+    /**
+     * 원본 XML 에서 이 요소가 몇 번째(전위 순회, 0부터)인지. 확장(include/template)으로 생긴 노드나 코드로 만든 노드는 -1.
+     * 에디터가 노드를 원본 텍스트 위치에 연결하는 데 쓴다.
+     */
+    public int sourceIndex() { return sourceIndex; }
+
+    public void setSourceIndex(int i) { this.sourceIndex = i; }
 
     public void append(UiNode child) { insert(children.size(), child); }
 
