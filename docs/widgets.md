@@ -43,6 +43,7 @@ doc.on("#volume", UiEvent.Type.CHANGE, ev -> System.out.println(ev.target().attr
 doc.query("#name").setAttr("value", "Steve");   // 글자 입력 칸 값 바꾸기
 doc.focus(doc.query("#name"));                  // 포커스 주기
 doc.setClipboardHandler(get, set);              // 백엔드가 연결(게임 클립보드)
+doc.setVariable("accent", "#FF55FF55");         // CSS 변수(var(--accent)) 바꾸기
 ```
 
 ## 아직 없는 것

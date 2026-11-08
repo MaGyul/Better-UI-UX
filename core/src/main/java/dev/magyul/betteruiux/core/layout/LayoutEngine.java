@@ -81,7 +81,7 @@ public final class LayoutEngine {
         if (b.tag().equals("tabs") && b.widget instanceof BuiltinWidgets.Tabs tabs) {   // 선택된 탭만 보인다
             int active = tabs.active(), i = 0;
             for (LayoutBox c : b.children) {
-                if (c.tag().equals("tab") && i++ != active) c.style.put("visible", "false");
+                if (c.tag().equals("tab") && i++ != active) c.inactive = true;
             }
         }
     }

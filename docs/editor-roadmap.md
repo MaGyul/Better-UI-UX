@@ -77,3 +77,8 @@ M3 에디터를 만들면서 쌓인 피드백과 코드 상태를 바탕으로, 
 4. **마무리**: `EditorController` 분리, 골든 스냅샷 테스트, 현지화
 
 가장 먼저 손대면 효과가 큰 것은 **속성 종류별 편집기 + 패널 스크롤**(지금 가장 자주 마주치는 불편)과 **NeoForge/Vulkan 검증**(아직 확인되지 않은 위험)이다.
+
+## 7. 계획에 추가된 것
+
+- **스크립트(JavaScript / GraalVM)**: 요소 수정, CSS 변수 조작, 마인크래프트 명령어 실행만 가능하고 Java 와는 JSON IPC 로만 통신한다.
+  자세한 설계와 단계는 [scripting-plan.md](scripting-plan.md). (CSS 변수 Java API `setVariable` 은 이미 구현됨)

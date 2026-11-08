@@ -64,4 +64,7 @@ public interface UiWidget {
     default boolean popupPressed(UiElement el, int x, int y) { return false; }
 
     default void closePopup() { }
+
+    /** 팝업이 열려 있는 동안의 키(↑/↓ 로 고르기, Enter 선택, Esc 닫기). 처리했으면 true. */
+    default boolean popupKey(UiElement el, UiKey key) { return false; }
 }

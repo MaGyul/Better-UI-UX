@@ -119,7 +119,7 @@ public final class BuiltinWidgets {
             int by = y + (h - BOX) / 2;
             int border = !en ? C_DIM : f.hovered() ? C_BORDER_HOT : style("border-color", C_BORDER);
             g.fillRect(x, by, BOX, BOX, border);
-            g.fillRect(x + 1, by + 1, BOX - 2, BOX - 2, style("background-color", C_BG));
+            g.fillRect(x + 1, by + 1, BOX - 2, BOX - 2, style("background", C_BG));
             if (on) {
                 int c = en ? style("check-color", C_ACCENT) : C_DIM;
                 if (radio) g.fillRect(x + 3, by + 3, BOX - 6, BOX - 6, c);
@@ -141,7 +141,7 @@ public final class BuiltinWidgets {
 
         @Override
         public boolean keyPressed(UiElement e, UiKey key, boolean ctrl, boolean shift) {
-            if (key != UiKey.ENTER) return false;
+            if (key != UiKey.ENTER && key != UiKey.SPACE) return false;
             toggle();
             return true;
         }
@@ -200,7 +200,7 @@ public final class BuiltinWidgets {
             double range = max() - min();
             double ratio = range <= 0 ? 0 : (value() - min()) / range;
             g.fillRect(x, y, w, h, !en ? C_DIM : f.hovered() || dragging ? C_BORDER_HOT : style("border-color", C_BORDER));
-            g.fillRect(x + 1, y + 1, w - 2, h - 2, style("background-color", C_BG));
+            g.fillRect(x + 1, y + 1, w - 2, h - 2, style("background", C_BG));
             int fillW = (int) Math.round((w - 2) * ratio);
             g.fillRect(x + 1, y + 1, fillW, h - 2, en ? style("fill-color", C_FILL) : 0xFF444455);
             int tx = x + 1 + Math.max(0, Math.min(w - 5, fillW - 2));
@@ -281,7 +281,7 @@ public final class BuiltinWidgets {
             double min = num("min", 0), max = Math.max(min + 1e-9, num("max", 100)), v = Math.max(min, Math.min(max, num("value", min)));
             double ratio = (v - min) / (max - min);
             g.fillRect(x, y, w, h, style("border-color", C_BORDER));
-            g.fillRect(x + 1, y + 1, w - 2, h - 2, style("background-color", C_BG));
+            g.fillRect(x + 1, y + 1, w - 2, h - 2, style("background", C_BG));
             g.fillRect(x + 1, y + 1, (int) Math.round((w - 2) * ratio), h - 2, style("bar-color", C_ACCENT));
             String label = attr("text", "");
             if (!label.isEmpty()) g.drawText(label, x + (w - tm.width(label)) / 2, y + (h - tm.lineHeight()) / 2 + 1, C_TEXT, true);
@@ -332,7 +332,7 @@ public final class BuiltinWidgets {
             sync();
             boolean foc = focused(), en = enabled();
             g.fillRect(x, y, w, h, foc ? C_BORDER_HOT : f.hovered() && en ? 0xFFC0C4D8 : style("border-color", C_BORDER));
-            g.fillRect(x + 1, y + 1, w - 2, h - 2, en ? 0xFF000000 : 0xFF1A1A22);
+            g.fillRect(x + 1, y + 1, w - 2, h - 2, en ? style("background", 0xFF000000) : 0xFF1A1A22);
             String s = model.text();
             int maxW = w - 8, cur = model.cursor();
             viewStart = Math.min(viewStart, cur);
@@ -559,6 +559,22 @@ public final class BuiltinWidgets {
             return r;
         }
 
+        /** 머리글 안의 x(요소 왼쪽 기준)에 있는 탭 번호, 없으면 -1. */
+        public int tabAt(int relX) {
+            List<UiElement> tabs = tabs();
+            for (int i = 0; i < tabs.size(); i++) {
+                int[] s = slot(i);
+                if (relX >= s[0] && relX < s[0] + s[1]) return i;
+            }
+            return -1;
+        }
+
+        /** 보이는 탭을 정한다(에디터가 선택한 요소가 있는 탭을 보여 줄 때). */
+        public void setActive(int i) {
+            active = Math.max(0, i);
+            doc.markDirty();
+        }
+
         /** 지금 보이는 탭 번호(범위 안으로 보정). */
         public int active() {
             int n = tabs().size();
@@ -623,7 +639,7 @@ public final class BuiltinWidgets {
 
     public static final class Select extends Base {
         private boolean open;
-        private int hoverRow = -1;
+        private int hoverRow = -1, keyRow = -1;
 
         Select(UiElement el, UiDocument doc, TextMetrics tm) { super(el, doc, tm); }
 
@@ -652,7 +668,7 @@ public final class BuiltinWidgets {
         public void paint(UiGfx g, int x, int y, int w, int h, Frame f) {
             boolean en = enabled();
             g.fillRect(x, y, w, h, !en ? C_DIM : f.hovered() || open ? C_BORDER_HOT : style("border-color", C_BORDER));
-            g.fillRect(x + 1, y + 1, w - 2, h - 2, style("background-color", 0xFF202230));
+            g.fillRect(x + 1, y + 1, w - 2, h - 2, style("background", 0xFF202230));
             String v = attr("value", "");
             g.drawText(v.isEmpty() ? attr("placeholder", "") : v, x + 5, y + (h - tm.lineHeight()) / 2 + 1, v.isEmpty() || !en ? C_DIM : style("color", C_TEXT), false);
             g.drawText(open ? "^" : "v", x + w - 10, y + (h - tm.lineHeight()) / 2 + 1, C_DIM, false);
@@ -681,7 +697,7 @@ public final class BuiltinWidgets {
                 int ry = r[1] + 1 + i * rowH();
                 boolean hot = f.mouseX() >= r[0] && f.mouseX() < r[0] + r[2] && f.mouseY() >= ry && f.mouseY() < ry + rowH();
                 if (hot) hoverRow = i;
-                if (hot) g.fillRect(r[0], ry, r[2], rowH(), 0xFF3A4A80);
+                if (hot || i == keyRow) g.fillRect(r[0], ry, r[2], rowH(), 0xFF3A4A80);
                 else if (opts.get(i).equals(attr("value", ""))) g.fillRect(r[0], ry, r[2], rowH(), 0xFF262A40);
                 g.drawText(opts.get(i), r[0] + 5, ry + 3, C_TEXT, false);
             }
@@ -699,6 +715,27 @@ public final class BuiltinWidgets {
 
         @Override public void closePopup() { open = false; }
 
+        @Override
+        public boolean popupKey(UiElement e, UiKey key) {
+            List<String> opts = options();
+            if (opts.isEmpty()) {
+                open = false;
+                return true;
+            }
+            int cur = keyRow >= 0 ? keyRow : Math.max(0, opts.indexOf(attr("value", "")));
+            switch (key) {
+                case UP -> keyRow = Math.max(0, cur - 1);
+                case DOWN -> keyRow = Math.min(opts.size() - 1, cur + 1);
+                case ENTER, SPACE -> {
+                    choose(opts.get(cur));
+                    open = false;
+                }
+                case ESCAPE -> open = false;
+                default -> { return true; }
+            }
+            return true;
+        }
+
         private void choose(String v) {
             if (!v.equals(el.attr("value"))) {
                 el.setAttr("value", v);
@@ -710,6 +747,7 @@ public final class BuiltinWidgets {
         public boolean mousePressed(UiElement e, int x, int y, int button) {
             if (button != 0 || !enabled()) return false;
             open = true;
+            keyRow = -1;
             doc.openPopup(el);
             return true;
         }
@@ -722,8 +760,9 @@ public final class BuiltinWidgets {
             switch (key) {
                 case UP -> choose(opts.get(Math.max(0, cur <= 0 ? 0 : cur - 1)));
                 case DOWN -> choose(opts.get(Math.min(opts.size() - 1, cur + 1)));
-                case ENTER -> {
+                case ENTER, SPACE -> {
                     open = true;
+                    keyRow = Math.max(0, cur);
                     doc.openPopup(el);
                 }
                 default -> { return false; }

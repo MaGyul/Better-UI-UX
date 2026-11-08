@@ -11,6 +11,7 @@ final class McUiKeys {
     static UiKey map(KeyEvent e) {
         int k = e.key();
         if (k == InputConstants.KEY_RETURN || k == InputConstants.KEY_NUMPADENTER) return UiKey.ENTER;
+        if (k == InputConstants.KEY_SPACE) return UiKey.SPACE;
         if (k == InputConstants.KEY_ESCAPE) return UiKey.ESCAPE;
         if (k == InputConstants.KEY_BACKSPACE) return UiKey.BACKSPACE;
         if (k == InputConstants.KEY_DELETE) return UiKey.DELETE;

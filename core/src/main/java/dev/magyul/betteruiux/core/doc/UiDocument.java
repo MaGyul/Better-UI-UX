@@ -202,6 +202,23 @@ public final class UiDocument {
 
     int viewHeight() { return viewH; }
 
+    // ---- CSS 변수 ----
+
+    /**
+     * 문서 전체에서 쓰는 CSS 변수({@code --accent} 같은 이름, 접두사 {@code --} 는 생략해도 된다)를 바꾼다.
+     * 스타일시트의 {@code var(--accent)} 를 쓰는 모든 요소에 다음 프레임부터 반영된다. {@code value} 가 null 이면 지운다.
+     */
+    public void setVariable(String name, String value) {
+        element(root).setStyle(varName(name), value);
+    }
+
+    /** 루트에 지정된 CSS 변수 값(없으면 null). 레이아웃 전이면 null. */
+    public String variable(String name) {
+        return layout == null ? null : layout.style.get(varName(name));
+    }
+
+    private static String varName(String name) { return name.startsWith("--") ? name : "--" + name; }
+
     // ---- 기본 접근자 ----
 
     public UiNode root() { return root; }
@@ -621,7 +638,11 @@ public final class UiDocument {
     public boolean keyPressed(UiKey key, boolean ctrl, boolean shift) {
         if (layout == null) return false;
         if (popupNode != null) {
-            if (key == UiKey.ESCAPE) closePopupNow();
+            LayoutBox pb = boxes.get(popupNode);
+            boolean used = pb != null && pb.widget != null && pb.widget.popupKey(element(popupNode), key);
+            if (!used && key == UiKey.ESCAPE) closePopupNow();
+            if (pb == null || pb.widget == null || !pb.widget.popupOpen()) popupNode = null;
+            applyDirty();
             return true;
         }
         LayoutBox fb = focusNode == null ? null : boxes.get(focusNode);

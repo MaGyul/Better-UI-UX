@@ -321,4 +321,55 @@ class BuiltinWidgetsTest {
         assertTrue(hasText(paint(d, 30, 30), "Hello tip"));
         assertFalse(hasText(paint(d, 300, 200), "Hello tip"), "벗어나면 사라진다");
     }
+
+    @Test
+    void spaceTogglesAFocusedCheckbox() throws Exception {
+        UiDocument d = doc("<checkbox id=\"c\" x=\"20\" y=\"20\" text=\"S\"/><button id=\"b\" x=\"100\" y=\"100\" text=\"b\"/>");
+        d.keyPressed(UiKey.TAB, false, false);
+        assertEquals(d.query("#c"), d.focusedElement());
+        assertTrue(d.keyPressed(UiKey.SPACE, false, false));
+        assertEquals("true", d.query("#c").attr("checked"));
+        d.keyPressed(UiKey.SPACE, false, false);
+        assertNull(d.query("#c").attr("checked"));
+    }
+
+    @Test
+    void selectOpensWithEnterAndArrowsPickWithKeyboard() throws Exception {
+        UiDocument d = doc("<select id=\"s\" x=\"20\" y=\"20\" width=\"80\" options=\"red,green,blue\" value=\"red\" onChange=\"changed\"/>");
+        d.keyPressed(UiKey.TAB, false, false);
+        assertTrue(d.keyPressed(UiKey.ENTER, false, false));
+        assertTrue(hasText(paint(d, -1, -1), "blue"), "Enter 로 열린다");
+        d.keyPressed(UiKey.DOWN, false, false);
+        d.keyPressed(UiKey.DOWN, false, false);
+        d.keyPressed(UiKey.ENTER, false, false);
+        assertEquals("blue", d.query("#s").attr("value"));
+        assertFalse(hasText(paint(d, -1, -1), "green"), "고르면 닫힌다");
+        d.keyPressed(UiKey.SPACE, false, false);                     // 다시 열고 Esc 로 닫기
+        assertTrue(hasText(paint(d, -1, -1), "green"));
+        d.keyPressed(UiKey.ESCAPE, false, false);
+        assertFalse(hasText(paint(d, -1, -1), "green"));
+    }
+
+    @Test
+    void widgetBackgroundColorsFollowTheBackgroundStyle() throws Exception {
+        for (String tag : new String[] {"slider", "progress", "textfield", "select", "checkbox"}) {
+            UiDocument d = doc("<" + tag + " id=\"w\" x=\"20\" y=\"20\" width=\"80\" height=\"14\" text=\"t\" background=\"#FF123456\"/>");
+            DrawList l = paint(d, -1, -1);
+            assertTrue(l.commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect f && f.argb() == 0xFF123456), tag);
+        }
+    }
+
+    @Test
+    void cssVariablesCanBeChangedFromJava() throws Exception {
+        UiDocument d = UiDocument.parse("<screen><style>panel { background: var(--accent, #FF000000) }</style>"
+                + "<panel id=\"p\" width=\"10\" height=\"10\"/></screen>", new FixedMetrics());
+        d.layout(100, 100);
+        assertTrue(paint(d, -1, -1).commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect f && f.argb() == 0xFF000000 && f.w() == 10));
+        d.setVariable("accent", "#FF00FF00");
+        assertTrue(paint(d, -1, -1).commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect f && f.argb() == 0xFF00FF00 && f.w() == 10));
+        assertEquals("#FF00FF00", d.variable("--accent"));
+        d.setVariable("--accent", null);
+        paint(d, -1, -1);
+        assertNull(d.variable("accent"));
+    }
 }

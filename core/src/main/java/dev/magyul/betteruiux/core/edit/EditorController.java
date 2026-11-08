@@ -4,6 +4,7 @@ import dev.magyul.betteruiux.api.Cursor;
 import dev.magyul.betteruiux.api.DrawList;
 import dev.magyul.betteruiux.api.TextMetrics;
 import dev.magyul.betteruiux.api.UiGfx;
+import dev.magyul.betteruiux.core.doc.BuiltinWidgets;
 import dev.magyul.betteruiux.core.doc.UiDocument;
 import dev.magyul.betteruiux.core.edit.Geometry.Handle;
 import dev.magyul.betteruiux.core.edit.Geometry.Rect;
@@ -538,6 +539,7 @@ public final class EditorController {
             UiDocument d = host.load(session.text());
             d.setAnimationsEnabled(false);
             d.layout(viewW, viewH);
+            if (applyTabs(d)) d.layout(viewW, viewH);
             doc = d;
             int count = XmlSource.parse(session.text()).all().size();
             if (selected >= count) selected = -1;
@@ -545,6 +547,45 @@ public final class EditorController {
         } catch (UiParseException e) {
             setStatus("XML 오류 (줄 " + e.line() + "): " + e.getMessage() + " — 되돌렸어요", true);
             return false;
+        }
+    }
+
+    // ---- 탭: 편집으로 문서가 다시 만들어져도 보고 있던 탭을 유지한다 ----
+
+    private final Map<Integer, Integer> tabActive = new HashMap<>();
+
+    private boolean applyTabs(UiDocument d) {
+        boolean any = false;
+        for (Map.Entry<Integer, Integer> e : tabActive.entrySet()) {
+            LayoutBox b = boxByIndex(d.layout(), e.getKey());
+            if (b != null && b.widget instanceof BuiltinWidgets.Tabs t) {
+                t.setActive(e.getValue());
+                any = true;
+            }
+        }
+        return any;
+    }
+
+    private static int tabIndex(LayoutBox tabs, LayoutBox tab) {
+        int i = 0;
+        for (LayoutBox c : tabs.children) {
+            if (c == tab) return i;
+            if (c.tag().equals("tab")) i++;
+        }
+        return 0;
+    }
+
+    /** 선택한 요소가 보이지 않는 탭 안에 있으면 그 탭으로 전환한다(구조 트리에서 고른 경우). */
+    private void revealSelectedTab() {
+        LayoutBox b = selectedBox();
+        for (LayoutBox x = b; x != null; x = x.parent) {
+            if (x.inactive && x.parent != null && x.parent.widget instanceof BuiltinWidgets.Tabs t) {
+                int i = tabIndex(x.parent, x);
+                tabActive.put(x.parent.node.sourceIndex(), i);
+                t.setActive(i);
+                doc.layout(viewW, viewH);
+                return;
+            }
         }
     }
 
@@ -604,7 +645,7 @@ public final class EditorController {
         List<LayoutBox> out = new ArrayList<>();
         for (LayoutBox c : parent.children) {
             if (c.node.sourceIndex() >= 0) {
-                if (c.visible()) out.add(c);
+                if (c.visible() || c.inactive) out.add(c);
             } else {
                 out.addAll(displayChildren(c));
             }
@@ -723,6 +764,16 @@ public final class EditorController {
             }
         }
         LayoutBox hit = hitSource(cx, cy);
+        if (hit != null && hit.widget instanceof BuiltinWidgets.Tabs t && cy < hit.y + t.headerHeight()) {   // 탭 머리글: 탭 전환
+            int i = t.tabAt(cx - hit.x);
+            if (i >= 0) {
+                tabActive.put(hit.node.sourceIndex(), i);
+                t.setActive(i);
+                doc.layout(viewW, viewH);
+                selected = hit.node.sourceIndex();
+                return true;
+            }
+        }
         if (underToolbar && (hit == null || hit.parent == null)) return true;   // 툴바의 빈 곳을 눌렀을 뿐이면 배경(루트)을 고르지 않는다
         if (hit != null) {
             selected = hit.node.sourceIndex();
@@ -813,6 +864,10 @@ public final class EditorController {
 
     /** 휠: 왼쪽 구조 트리 위에서는 목록 스크롤, 캔버스에서는 화면 이동. */
     public boolean mouseScrolled(int x, int y, double amount) {
+        if (helpOpen) {
+            helpScroll = Math.max(0, helpScroll - (int) Math.signum(amount) * 2);
+            return true;
+        }
         if (xmlOpen) {
             xmlScroll = Math.max(0, xmlScroll - (int) Math.signum(amount) * 3);
             return true;
@@ -2012,6 +2067,7 @@ public final class EditorController {
 
     public void paint(UiGfx g) {
         regions.clear();
+        revealSelectedTab();
         realMouseX = mouseX;
         realMouseY = mouseY;
         if (exitDialog) {                                    // 메시지 박스 뒤의 모든 것(요소 윤곽, 버튼, 패널)에 호버가 전해지지 않게 한다
@@ -2647,21 +2703,52 @@ public final class EditorController {
         "[ 기타 ]  F1 또는 ? 이 도움말 · F8 / Exit 에디터 닫기",
     };
 
+    private int helpScroll;
+
+    /** 도움말 줄을 상자 너비에 맞춰 줄바꿈한다(이어지는 줄은 들여쓴다). */
+    private List<String> wrapHelp(int maxW) {
+        List<String> out = new ArrayList<>();
+        for (String line : HELP) {
+            StringBuilder cur = new StringBuilder();
+            boolean first = true;
+            for (int i = 0; i < line.length(); i++) {
+                cur.append(line.charAt(i));
+                if (tm.width(cur.toString()) > maxW && cur.length() > 1) {
+                    cur.setLength(cur.length() - 1);
+                    out.add(first ? cur.toString() : "  " + cur);
+                    cur.setLength(0);
+                    cur.append(line.charAt(i));
+                    first = false;
+                }
+            }
+            if (cur.length() > 0) out.add(first ? cur.toString() : "  " + cur);
+        }
+        return out;
+    }
+
     private void paintHelp(UiGfx g) {
         if (!helpOpen) return;
         regions.add(new Region(new Rect(0, 0, viewW, viewH), () -> helpOpen = false));
         g.fillRect(0, 0, viewW, viewH, 0xB0000000);
-        int w = Math.min(viewW - 16, 330);
+        int w = Math.min(viewW - 16, 380);
         int lh = tm.lineHeight() + 3;
-        int h = HELP.length * lh + 26;
+        List<String> lines = wrapHelp(w - 14);
+        int rows = Math.max(1, Math.min(lines.size(), (viewH - 16 - 26) / lh));
+        int h = rows * lh + 26;
+        helpScroll = Math.max(0, Math.min(helpScroll, lines.size() - rows));
         int x = (viewW - w) / 2, y = Math.max(4, (viewH - h) / 2);
         g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
         g.fillRect(x, y, w, h, 0xFF161820);
-        g.drawText("에디터 도움말  (아무 곳이나 누르면 닫힘)", x + 6, y + 5, C_SEL, false);
-        for (int i = 0; i < HELP.length; i++) {
-            g.pushClip(x + 4, y, w - 8, h);
-            g.drawText(HELP[i], x + 6, y + 18 + i * lh, C_TEXT, false);
-            g.popClip();
+        String title = "에디터 도움말  (아무 곳이나 누르면 닫힘" + (lines.size() > rows ? " · 휠로 스크롤" : "") + ")";
+        g.drawText(title, x + 6, y + 5, C_SEL, false);
+        g.pushClip(x + 4, y + 16, w - 8, h - 18);
+        for (int i = 0; i < rows; i++) g.drawText(lines.get(helpScroll + i), x + 6, y + 18 + i * lh, C_TEXT, false);
+        g.popClip();
+        if (lines.size() > rows) {                                   // 스크롤 막대
+            int trackH = h - 20, thumbH = Math.max(8, trackH * rows / lines.size());
+            int thumbY = y + 16 + (trackH - thumbH) * helpScroll / Math.max(1, lines.size() - rows);
+            g.fillRect(x + w - 4, y + 16, 2, trackH, 0x30FFFFFF);
+            g.fillRect(x + w - 4, thumbY, 2, thumbH, 0xA0FFFFFF);
         }
     }
 
