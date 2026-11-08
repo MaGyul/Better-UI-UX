@@ -82,3 +82,15 @@ M3 에디터를 만들면서 쌓인 피드백과 코드 상태를 바탕으로, 
 
 - **스크립트(JavaScript / GraalVM)**: 요소 수정, CSS 변수 조작, 마인크래프트 명령어 실행만 가능하고 Java 와는 JSON IPC 로만 통신한다.
   자세한 설계와 단계는 [scripting-plan.md](scripting-plan.md). (CSS 변수 Java API `setVariable` 은 이미 구현됨)
+
+## 8. 진행 상태 (2026-11-09)
+
+완료: P0 전체, 새 태그 12종, 정렬/순서/XML 보기/상태 미리보기/저장 충돌/툴팁, **다중 선택**, **구조 트리 검색**, 툴바 오버플로, 아이템 선택 상자.
+확인 완료: Fabric + NeoForge, OpenGL + Vulkan, 한글 IME. `feat/m3-editor` 는 `develop` 에 병합됨(이후 작업은 `feat/m3.5-editor-tools`).
+
+### 코드 구조 / 테스트 (2026-11-09)
+
+- `EditorController` 에서 `Region`, `EditorColors`, `PropertyModel`(속성 행 모델), `HelpOverlay`, `XmlViewOverlay`, `ItemPickerOverlay` 를 분리했다
+  (3,395 → 3,071줄). 입력(마우스/키), 끌기, 끌어놓기, 트리, 툴바는 아직 한 파일에 있다.
+- **골든(스냅샷) 테스트**: `GoldenSnapshotsTest` 가 데모/위젯 화면과 에디터 화면의 드로우 리스트를 `core/src/test/resources/golden/*.txt` 와 비교한다.
+  의도한 모양 변경이면 `./gradlew :core:test -Pgolden.update=true` 로 다시 만들고 diff 를 검토해 커밋한다.

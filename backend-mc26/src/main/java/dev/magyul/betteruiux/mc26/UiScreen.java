@@ -313,6 +313,7 @@ public final class UiScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (editor != null) {
+            editor.setModifiers(event.hasControlDown(), event.hasShiftDown());   // Ctrl/Shift+클릭으로 여러 개 선택
             boolean used = editor.mousePressed((int) event.x(), (int) event.y(), uiButton(event));
             if (DEBUG) LOG.info("[better-uiux] editor press ({}, {}) btn={} selected={} editing={} status='{}'", event.x(), event.y(),
                     uiButton(event), editor.selectedIndex(), editor.isEditingField(), editor.status());
