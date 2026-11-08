@@ -37,6 +37,12 @@ public final class BetterUiuxNeoForgeClient {
                                         .executes(ctx -> {
                                             UiApi.open(StringArgumentType.getString(ctx, "id"));
                                             return 1;
+                                        })))
+                        .then(Commands.literal("edit")
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .executes(ctx -> {
+                                            UiApi.edit(StringArgumentType.getString(ctx, "id"));
+                                            return 1;
                                         })))));
     }
 }

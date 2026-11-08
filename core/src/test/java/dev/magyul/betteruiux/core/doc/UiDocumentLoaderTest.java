@@ -115,4 +115,22 @@ class UiDocumentLoaderTest {
             assertFalse(w.pollChanged(0));                             // 한 번 소비하면 다시 false
         }
     }
+
+    @Test
+    void loadTextBuildsADocumentWithoutTouchingTheFileAndAtomicWriteReplacesFiles() throws Exception {
+        Files.writeString(dir.resolve("s.uicss"), ".a { color: red }");
+        UiDocument d = UiDocumentLoader.loadText(dir,
+                "<screen><link href='s.uicss'/><label id='x' class='a' text='t'/></screen>", new FixedMetrics());
+        d.layout(100, 100);
+        assertEquals("red", d.findById("x").style.get("color"), "텍스트로 만들어도 link 스타일시트를 읽는다");
+
+        Path f = dir.resolve("sub").resolve("out.xml");
+        AtomicFiles.write(f, "<screen/>");
+        assertEquals("<screen/>", Files.readString(f));
+        AtomicFiles.write(f, "<screen><label/></screen>");
+        assertEquals("<screen><label/></screen>", Files.readString(f), "기존 파일을 덮어쓴다");
+        try (var files = Files.list(f.getParent())) {
+            assertEquals(1, files.count(), "임시 파일이 남지 않는다");
+        }
+    }
 }

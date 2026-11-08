@@ -19,18 +19,23 @@ public final class UiOpener {
 
     private UiOpener() {}
 
-    /** 개발용: JVM 속성 -Dbetteruiux.autoopen=&lt;id&gt; 가 있으면 해당 화면을 연다. */
+    /** 개발용: JVM 속성 -Dbetteruiux.autoopen=&lt;id&gt; 가 있으면 해당 화면을 연다(-Dbetteruiux.autoedit=true 면 에디터까지). */
     public static void autoOpenIfRequested(Path baseDir) {
         String id = System.getProperty("betteruiux.autoopen");
-        if (id != null && !id.isBlank()) open(id, baseDir);
+        if (id != null && !id.isBlank()) open(id, baseDir, Boolean.getBoolean("betteruiux.autoedit"));
     }
 
     /** @param baseDir {@code <gameDir>/config/better-uiux} (설정 파일 {@code config.toml}, UI 폴더 {@code ui/}) */
-    public static void open(String id, Path baseDir) {
+    public static void open(String id, Path baseDir) { open(id, baseDir, false); }
+
+    /** @param editor true 면 화면이 열리자마자 인게임 에디터를 켠다(설정에서 에디터가 꺼져 있으면 안내만 한다). */
+    public static void open(String id, Path baseDir, boolean editor) {
         Minecraft mc = Minecraft.getInstance();
         mc.execute(() -> {
             Path userDir = baseDir.resolve("ui");
-            boolean hotReload = UiConfig.load(baseDir.resolve("config.toml")).bool("hotReload.enabled", true);
+            UiConfig config = UiConfig.load(baseDir.resolve("config.toml"));
+            UiScreen.Options options = new UiScreen.Options(
+                    config.bool("hotReload.enabled", true), config.bool("editor.enabled", false), editor);
             McTextMetrics metrics = new McTextMetrics(mc.font);
             if (!UiSources.validId(id)) {
                 say(mc, "잘못된 UI id: " + id);
@@ -39,14 +44,14 @@ public final class UiOpener {
             try {
                 UiDocument doc = UiDocumentLoader.load(userDir, id, metrics);
                 UiApi.fireOpened(id, doc);
-                mc.gui.setScreen(new UiScreen(Component.literal(id), id, userDir, metrics, doc, null, hotReload));
+                mc.gui.setScreen(new UiScreen(Component.literal(id), id, userDir, metrics, doc, null, options));
             } catch (NoSuchFileException e) {
                 say(mc, "UI '" + id + "' 를 찾을 수 없습니다 (config/better-uiux/ui/" + id + ".xml)");
             } catch (UiParseException e) {
                 // 문법 오류여도 화면은 열어 오류 띠를 보여준다. 파일을 고쳐 저장하면 핫리로드로 바로 나타난다.
                 String msg = "XML 오류 (줄 " + e.line() + "): " + e.getMessage();
                 LOG.warn("[better-uiux] '{}': {}", id, msg);
-                mc.gui.setScreen(new UiScreen(Component.literal(id), id, userDir, metrics, null, msg, hotReload));
+                mc.gui.setScreen(new UiScreen(Component.literal(id), id, userDir, metrics, null, msg, options));
             } catch (IOException e) {
                 say(mc, "UI '" + id + "' 읽기 실패: " + e.getMessage());
             }
