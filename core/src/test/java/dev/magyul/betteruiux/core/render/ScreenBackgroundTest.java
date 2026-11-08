@@ -30,7 +30,7 @@ class ScreenBackgroundTest {
         List<DrawCommand> c = background("<screen use='block:minecraft:dirt,blur'/>");
         assertEquals(2, c.size());
         assertEquals(new DrawCommand.DrawTexture("minecraft:textures/block/dirt.png",
-                0, 0, 320, 240, 0, 0, 320, 240, 32, 32, 0xFF404040), c.get(0));
+                0, 0, 320, 240, 0, 0, 320, 240, 32, 32, 0xFF808080), c.get(0));
         assertEquals(new DrawCommand.BlurBackground(), c.get(1));
     }
 

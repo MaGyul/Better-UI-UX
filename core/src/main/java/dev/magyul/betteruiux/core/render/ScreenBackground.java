@@ -13,7 +13,7 @@ import java.util.List;
  *   <li>{@code none} — 아무것도 그리지 않음(단독으로만 사용)</li>
  * </ul>
  * 예: {@code use="block:minecraft:dirt,blur"} 는 흙 타일을 그린 뒤 그 위에 블러를 적용한다.
- * {@code use} 가 없으면 {@code blur}. 블록 타일 크기/색조는 {@code block-size}(기본 32), {@code block-tint}(기본 #FF404040).
+ * {@code use} 가 없으면 {@code blur}. 블록 타일 크기/색조는 {@code block-size}(기본 32), {@code block-tint}(기본 #FF808080).
  */
 public final class ScreenBackground {
     public sealed interface Layer {
@@ -29,7 +29,7 @@ public final class ScreenBackground {
     public static final int DIM_TOP = 0xC0101010;
     public static final int DIM_BOTTOM = 0xD0101010;
     public static final int DEFAULT_BLOCK_SIZE = 32;
-    public static final int DEFAULT_BLOCK_TINT = 0xFF404040;
+    public static final int DEFAULT_BLOCK_TINT = 0xFF808080;
 
     private final List<Layer> layers;
     private final boolean none;
