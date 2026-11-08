@@ -328,6 +328,20 @@ class EditorWidgetsTest {
         s.mousePressed(250, 65, 0);
         for (int i = 1; i <= 5; i++) s.mouseDragged(250 - i * 20, 65);
         s.mouseReleased(150, 65, 0);
-        assertTrue(s.document().query("#s").width() < 100, "scroll 은 내용이 넘쳐도 되므로 줄어든다");
+        assertTrue(s.document().query("#s").width() >= 6, "scroll 도 너비는 내용보다 작아지지 않는다: " + s.document().query("#s").width());
+        EditorController t = editor("<screen><scroll id=\"s\" x=\"150\" y=\"40\" width=\"100\" height=\"100\"><label text=\"AAAAAAAAAA\" height=\"60\"/>"
+                + "<label text=\"B\" height=\"60\"/></scroll></screen>");
+        t.select(1);
+        paint(t);
+        t.mouseMoved(200, 140);
+        t.mousePressed(200, 140, 0);                                      // 아래 가운데 손잡이
+        for (int i = 1; i <= 5; i++) t.mouseDragged(200, 140 - i * 20);
+        t.mouseReleased(200, 40, 0);
+        assertTrue(t.document().query("#s").height() < 100, "높이는 내용(120)보다 작게 줄어든다(스크롤): " + t.document().query("#s").height());
+        t.mouseMoved(250, 90);
+        t.mousePressed(250, 90, 0);                                       // 오른쪽 가운데 손잡이
+        for (int i = 1; i <= 5; i++) t.mouseDragged(250 - i * 40, 90);
+        t.mouseReleased(50, 90, 0);
+        assertTrue(t.document().query("#s").width() >= 60, "너비는 내용(글자 10자=60)보다 작아지지 않는다: " + t.document().query("#s").width());
     }
 }

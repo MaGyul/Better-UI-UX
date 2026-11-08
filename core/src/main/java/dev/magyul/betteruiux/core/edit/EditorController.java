@@ -683,7 +683,9 @@ public final class EditorController {
                 || parent.tag().equals("scroll") || parent.tag().equals("grid"));
     }
 
-    /** 내용보다 작게 줄일 수 없는 컨테이너(row/column/grid). scroll 은 내용이 넘쳐도 스크롤되므로 제외. */
+    private static boolean isScroll(LayoutBox b) { return b != null && b.tag().equals("scroll"); }
+
+    /** 내용보다 작게 줄일 수 없는 컨테이너(row/column/grid). scroll 은 너비만 제한하므로 {@link #isScroll} 로 따로 다룬다. */
     private static boolean isSizedFlow(LayoutBox b) {
         return b != null && (b.tag().equals("row") || b.tag().equals("column") || b.tag().equals("grid"));
     }
@@ -1005,10 +1007,10 @@ public final class EditorController {
         d.parentContent = parent == null ? new Rect(0, 0, viewW, viewH) : contentRect(parent);
         d.curX = b.style.integer("x", 0);
         d.curY = b.style.integer("y", 0);
-        if (isSizedFlow(b)) {                               // row/column: 내용보다 작게 줄일 수 없다
+        if (isSizedFlow(b) || isScroll(b)) {                // row/column/grid: 내용보다 작게 줄일 수 없다(scroll 은 너비만)
             int[] mn = doc.minimumSize(b);
             d.minW = Math.max(MIN_SIZE, mn[0]);
-            d.minH = Math.max(MIN_SIZE, mn[1]);
+            d.minH = isScroll(b) ? MIN_SIZE : Math.max(MIN_SIZE, mn[1]);
         }
         for (String k : List.of("width", "height", "x", "y", "anchor")) {
             d.definedElsewhere.put(k, b.style.get(k) != null && b.node.attr(k) == null);
@@ -1642,11 +1644,11 @@ public final class EditorController {
             if (b == null) return t;
             boolean changed = false;
             for (LayoutBox a = displayParent(b); a != null && !changed; a = displayParent(a)) {
-                if (!isSizedFlow(a)) continue;
+                if (!isSizedFlow(a) && !isScroll(a)) continue;
                 int[] mn = tmp.minimumSize(a);
                 Map<String, String> props = new LinkedHashMap<>();
                 if (explicitPx(a.style.get("width")) != null && a.w < mn[0]) props.put("width", Integer.toString(mn[0]));
-                if (explicitPx(a.style.get("height")) != null && a.h < mn[1]) props.put("height", Integer.toString(mn[1]));
+                if (!isScroll(a) && explicitPx(a.style.get("height")) != null && a.h < mn[1]) props.put("height", Integer.toString(mn[1]));
                 if (props.isEmpty()) continue;
                 final LayoutBox box = a;
                 t = EditorOps.setProps(t, a.node.sourceIndex(), props, p -> box.style.get(p) != null && box.node.attr(p) == null);
@@ -1816,7 +1818,8 @@ public final class EditorController {
 
     /** row/column 의 너비/높이를 내용(자식들)보다 작게 지정하면 내용 크기로 맞춘다. */
     private String clampFlowSize(LayoutBox box, String key, String value) {
-        if (value == null || !isSizedFlow(box) || !(key.equals("width") || key.equals("height"))) return value;
+        if (value == null || !(isSizedFlow(box) || isScroll(box)) || !(key.equals("width") || key.equals("height"))) return value;
+        if (isScroll(box) && key.equals("height")) return value;                  // scroll 은 높이를 줄여도 된다(스크롤되므로)
         Integer px = explicitPx(value);
         if (px == null) return value;
         int[] mn = doc.minimumSize(box);
