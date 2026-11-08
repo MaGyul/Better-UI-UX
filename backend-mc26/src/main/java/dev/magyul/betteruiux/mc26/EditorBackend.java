@@ -44,6 +44,14 @@ final class EditorBackend {
 
             @Override public String title() { return id + ".xml"; }
 
+            /** 채팅창과 같은 시스템 클립보드(Ctrl+C/X/V). */
+            @Override public String clipboard() { return Minecraft.getInstance().keyboardHandler.getClipboard(); }
+
+            @Override public void setClipboard(String text) { Minecraft.getInstance().keyboardHandler.setClipboard(text); }
+
+            /** 게임 화면에서는 선택한 요소로 화면이 부드럽게 미끄러진다. */
+            @Override public boolean panAnimation() { return true; }
+
             /**
              * 26.x 는 SDL 로 입력을 받는다. SDL 은 "텍스트 입력 시작" 을 호출해야 글자(와 IME 조합)를 보내 주므로,
              * 기본 텍스트 위젯이 포커스를 받을 때 하는 것과 똑같이 TextInputManager 를 켜고 끈다.

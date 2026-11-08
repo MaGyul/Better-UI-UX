@@ -57,7 +57,8 @@ public final class EditorController {
     private static final int C_PANEL = 0xF2161820, C_BTN = 0xFF3A3F55, C_BTN_OFF = 0xFF262838, C_SEL = 0xFFFFFF55,
             C_HOVER = 0x9055FFFF, C_GUIDE = 0xFFFF55FF, C_TEXT = 0xFFFFFFFF, C_DIM = 0xFF9090A0, C_ERR = 0xFFFF6060,
             C_OK = 0xFF80FF80, C_ROW_SEL = 0xFF3A4A80, C_ROW_HOVER = 0xFF2A3050, C_FIELD = 0xFF101018,
-            C_DROP_OK = 0xFF55FF77, C_DROP_BAD = 0xFFFF5555, C_TRASH = 0x70FF3030, C_TAB = 0xFF2E3350;
+            C_DROP_OK = 0xFF55FF77, C_DROP_BAD = 0xFFFF5555, C_TRASH = 0x70FF3030, C_TAB = 0xFF2E3350,
+            SCREEN_OUTSIDE = 0x80000000, SCREEN_FRAME = 0xFF55AAFF, C_BTN_HOT = 0xFF7A6A20, C_SELECTION = 0xFF3A62B0;
 
     private static final Set<String> ATTR_KEYS = Set.of("id", "class", "onClick", "src", "text");
     private static final Set<String> CONTAINERS = Set.of("screen", "panel", "row", "column", "stack", "fragment");
@@ -124,8 +125,11 @@ public final class EditorController {
     private int outlinerScroll;
     private final Set<String> collapsed = new HashSet<>();
     private int lastRevealed = -2;
-    private int lastPanned = -2;
-    private int panX, panY;
+    /** 현재 화면 이동 위치(그리기/히트 테스트에 쓴다)와 목표 위치(부드러운 이동 중이면 현재가 목표를 따라간다). */
+    private int panX, panY, targetPanX, targetPanY;
+    /** 선택한 요소를 가운데로 옮겨 달라는 요청(구조 트리에서 고른 경우 등). 캔버스에서 직접 누른 요소는 이미 보이므로 옮기지 않는다. */
+    private boolean revealRequested;
+    private final boolean animatePan;
     private boolean panning;
     private int panAnchorX, panAnchorY;
     private Drag drag;
@@ -135,6 +139,13 @@ public final class EditorController {
     private String editKey;
     private final StringBuilder editBuffer = new StringBuilder();
     private int editCursor;
+    /** 선택 범위의 반대쪽 끝(커서와 같으면 선택 없음). */
+    private int editAnchor;
+    /** 칸 안에서 글자가 그려지기 시작하는 문자 번호와 x 위치(마우스로 커서를 찍을 때 쓴다). */
+    private int editViewStart, editTextX;
+    private boolean fieldDragging;
+    private long lastFieldClickNanos;
+    private int lastFieldClickIndex = -1;
     private Rect editRect;
 
     private String status = "";
@@ -143,6 +154,7 @@ public final class EditorController {
 
     public EditorController(EditorHost host, TextMetrics tm, String text, int viewW, int viewH) throws UiParseException {
         this.host = host;
+        this.animatePan = host.panAnimation();
         this.tm = tm;
         this.session = new EditSession(text);
         this.viewW = viewW;
@@ -175,8 +187,10 @@ public final class EditorController {
         doc.layout(w, h);
     }
 
+    /** 구조 트리 등에서 요소를 고른다. 요소가 가려져 있으면 가운데로 화면을 옮긴다. */
     public void select(int index) {
         selected = index;
+        revealRequested = true;
         commitFieldQuietly();
     }
 
@@ -348,6 +362,10 @@ public final class EditorController {
         refreshRegions();
         if (editKey != null && (editRect == null || !editRect.contains(x, y))) commitField();
         refreshRegions();
+        if (editKey != null && editRect != null && editRect.contains(x, y)) {   // 편집 중인 칸 안: 커서 찍기/드래그 선택/더블클릭
+            onFieldPress(x);
+            return true;
+        }
         for (int i = regions.size() - 1; i >= 0; i--) {
             Region r = regions.get(i);
             if (r.rect().contains(x, y)) {
@@ -382,8 +400,11 @@ public final class EditorController {
         mouseX = x;
         mouseY = y;
         if (panning) {
-            panX = x - panAnchorX;
-            panY = y - panAnchorY;
+            setPanNow(x - panAnchorX, y - panAnchorY);
+            return true;
+        }
+        if (fieldDragging) {
+            editCursor = indexAt(x);
             return true;
         }
         if (dnd != null) {
@@ -407,6 +428,10 @@ public final class EditorController {
         mouseY = y;
         if (panning) {
             panning = false;
+            return true;
+        }
+        if (fieldDragging) {
+            fieldDragging = false;
             return true;
         }
         if (dnd != null) {
@@ -442,14 +467,34 @@ public final class EditorController {
             return true;
         }
         if (overPanel(x, y)) return false;
-        panY += (int) Math.signum(amount) * WHEEL_STEP;
+        setPanNow(panX, panY + (int) Math.signum(amount) * WHEEL_STEP);
         return true;
     }
 
     /** 화면 이동을 처음 위치로 되돌린다. */
-    public void resetView() {
-        panX = 0;
-        panY = 0;
+    public void resetView() { setPanNow(0, 0); }
+
+    /** 화면 이동 위치를 즉시 정한다(휠, 가운데 버튼 드래그, 되돌리기). */
+    private void setPanNow(int x, int y) {
+        panX = targetPanX = x;
+        panY = targetPanY = y;
+    }
+
+    /** 부드러운 이동 중이면 현재 위치를 목표 쪽으로 한 걸음 옮긴다. */
+    private void stepPan() {
+        if (!animatePan) {
+            panX = targetPanX;
+            panY = targetPanY;
+            return;
+        }
+        panX = ease(panX, targetPanX);
+        panY = ease(panY, targetPanY);
+    }
+
+    private static int ease(int current, int target) {
+        int diff = target - current;
+        if (Math.abs(diff) <= 1) return target;
+        return current + (int) Math.round(diff * 0.3);
     }
 
     private Handle handleAt(LayoutBox b, int x, int y) {
@@ -675,12 +720,20 @@ public final class EditorController {
         int pos = drop.refIndex() >= 0
                 ? parentEl.children().indexOf(src.element(drop.refIndex()))
                 : parentEl.children().size();
-        boolean place = drop.onCanvas();
         try {
             EditorOps.Added r = d.fromPalette
                     ? EditorOps.addChild(session.text(), drop.parentIndex(), pos, d.tag)
                     : EditorOps.move(session.text(), d.index, drop.parentIndex(), pos);
-            String text = place ? placeAt(r.text(), r.index(), drop.parentIndex(), x - panX, y - panY) : r.text();
+            String text;
+            if (drop.onCanvas()) {
+                text = placeAt(r.text(), r.index(), drop.parentIndex(), x - panX, y - panY);      // 놓은 지점에
+            } else if (d.fromPalette) {
+                int[] c = visibleCenterDoc();                                                    // 트리에 놓은 새 요소는 지금 보는 화면 한가운데에
+                text = placeAt(r.text(), r.index(), drop.parentIndex(), c[0], c[1]);
+            } else {
+                text = r.text();
+                revealRequested = true;                                                          // 옮겨진 기존 요소는 가려졌다면 화면으로 불러온다
+            }
             if (applyEdit(s -> text)) selected = r.index();
         } catch (IllegalArgumentException e) {
             setStatus("여기에는 놓을 수 없습니다", true);
@@ -712,12 +765,12 @@ public final class EditorController {
 
     public boolean charTyped(char c) {
         if (editKey == null || c < 32 || c == 127) return false;
-        editBuffer.insert(editCursor++, c);
+        insertText(String.valueOf(c));
         return true;
     }
 
     public boolean keyPressed(EditorKey key, boolean ctrl, boolean shift) {
-        if (editKey != null) return editKeyPressed(key);
+        if (editKey != null) return editKeyPressed(key, ctrl, shift);
         if (key == EditorKey.ESCAPE && dnd != null) {
             dnd = null;
             return true;
@@ -788,23 +841,138 @@ public final class EditorController {
         }
     }
 
-    private boolean editKeyPressed(EditorKey key) {
+    /**
+     * 칸 편집 중의 키. 채팅창과 같은 조합을 지원한다:
+     * Shift+방향/Home/End = 선택 확장, Ctrl+방향 = 단어 이동, Ctrl+Backspace/Delete = 단어 삭제,
+     * Ctrl+A/C/X/V = 전체 선택/복사/잘라내기/붙여넣기.
+     */
+    private boolean editKeyPressed(EditorKey key, boolean ctrl, boolean shift) {
+        int len = editBuffer.length();
         switch (key) {
             case ENTER -> commitField();
             case ESCAPE -> cancelField();
             case BACKSPACE -> {
-                if (editCursor > 0) editBuffer.deleteCharAt(--editCursor);
+                if (hasSelection()) deleteSelection();
+                else if (editCursor > 0) deleteRange(ctrl ? wordLeft(editCursor) : editCursor - 1, editCursor);
             }
             case DELETE -> {
-                if (editCursor < editBuffer.length()) editBuffer.deleteCharAt(editCursor);
+                if (hasSelection()) deleteSelection();
+                else if (editCursor < len) deleteRange(editCursor, ctrl ? wordRight(editCursor) : editCursor + 1);
             }
-            case LEFT -> editCursor = Math.max(0, editCursor - 1);
-            case RIGHT -> editCursor = Math.min(editBuffer.length(), editCursor + 1);
-            case HOME -> editCursor = 0;
-            case END -> editCursor = editBuffer.length();
+            case LEFT -> {
+                if (!shift && hasSelection() && !ctrl) editCursor = selectionStart();
+                else editCursor = Math.max(0, ctrl ? wordLeft(editCursor) : editCursor - 1);
+                if (!shift) editAnchor = editCursor;
+            }
+            case RIGHT -> {
+                if (!shift && hasSelection() && !ctrl) editCursor = selectionEnd();
+                else editCursor = Math.min(len, ctrl ? wordRight(editCursor) : editCursor + 1);
+                if (!shift) editAnchor = editCursor;
+            }
+            case HOME -> {
+                editCursor = 0;
+                if (!shift) editAnchor = editCursor;
+            }
+            case END -> {
+                editCursor = len;
+                if (!shift) editAnchor = editCursor;
+            }
+            case A -> {
+                if (ctrl) {
+                    editAnchor = 0;
+                    editCursor = len;
+                }
+            }
+            case C -> {
+                if (ctrl && hasSelection()) host.setClipboard(selectedText());
+            }
+            case X -> {
+                if (ctrl && hasSelection()) {
+                    host.setClipboard(selectedText());
+                    deleteSelection();
+                }
+            }
+            case V -> {
+                if (ctrl) insertText(host.clipboard());
+            }
             default -> { }
         }
         return true;
+    }
+
+    // ---- 칸 안의 텍스트 선택/편집 도우미 ----
+
+    private boolean hasSelection() { return editAnchor != editCursor; }
+
+    private int selectionStart() { return Math.min(editAnchor, editCursor); }
+
+    private int selectionEnd() { return Math.max(editAnchor, editCursor); }
+
+    private String selectedText() { return editBuffer.substring(selectionStart(), selectionEnd()); }
+
+    private void deleteSelection() { deleteRange(selectionStart(), selectionEnd()); }
+
+    private void deleteRange(int from, int to) {
+        int a = Math.max(0, Math.min(from, to)), b = Math.min(editBuffer.length(), Math.max(from, to));
+        editBuffer.delete(a, b);
+        editCursor = editAnchor = a;
+    }
+
+    /** 선택 범위가 있으면 바꾸고, 없으면 커서 자리에 넣는다. 줄바꿈/제어 문자는 공백 하나로 바꾼다(한 줄 칸이므로). */
+    private void insertText(String s) {
+        String clean = s.replaceAll("[\\r\\n\\t]+", " ").replaceAll("\\p{Cntrl}", "");
+        if (clean.isEmpty()) return;
+        if (hasSelection()) deleteSelection();
+        editBuffer.insert(editCursor, clean);
+        editCursor += clean.length();
+        editAnchor = editCursor;
+    }
+
+    private int wordLeft(int pos) {
+        int i = Math.min(pos, editBuffer.length());
+        while (i > 0 && Character.isWhitespace(editBuffer.charAt(i - 1))) i--;
+        while (i > 0 && !Character.isWhitespace(editBuffer.charAt(i - 1))) i--;
+        return i;
+    }
+
+    private int wordRight(int pos) {
+        int n = editBuffer.length(), i = Math.max(0, pos);
+        while (i < n && !Character.isWhitespace(editBuffer.charAt(i))) i++;
+        while (i < n && Character.isWhitespace(editBuffer.charAt(i))) i++;
+        return i;
+    }
+
+    /** 화면 x 좌표에 가장 가까운 글자 사이 위치(칸 안에서 현재 보이는 구간 기준). */
+    private int indexAt(int x) {
+        int rel = x - editTextX;
+        String s = editBuffer.toString();
+        int best = editViewStart, prev = 0;
+        for (int i = editViewStart + 1; i <= s.length(); i++) {
+            int w = tm.width(s.substring(editViewStart, i));
+            if (rel < w) return (rel - prev < w - rel) ? i - 1 : i;
+            prev = w;
+            best = i;
+        }
+        return best;
+    }
+
+    /** 편집 중인 칸을 눌렀을 때: 커서 찍기, 더블클릭이면 그 단어 선택. 누른 채 끌면 선택 범위가 늘어난다. */
+    private void onFieldPress(int x) {
+        int idx = indexAt(x);
+        long now = System.nanoTime();
+        boolean doubleClick = now - lastFieldClickNanos < 350_000_000L && Math.abs(idx - lastFieldClickIndex) <= 1;
+        lastFieldClickNanos = now;
+        lastFieldClickIndex = idx;
+        if (doubleClick) {
+            int s = Math.min(idx, editBuffer.length()), e = s;
+            while (s > 0 && !Character.isWhitespace(editBuffer.charAt(s - 1))) s--;
+            while (e < editBuffer.length() && !Character.isWhitespace(editBuffer.charAt(e))) e++;
+            editAnchor = s;
+            editCursor = e;
+            return;
+        }
+        editAnchor = editCursor = idx;
+        fieldDragging = true;
     }
 
     // ================= 명령 =================
@@ -842,7 +1010,15 @@ public final class EditorController {
         LayoutBox target = sel == null ? doc.layout() : CONTAINERS.contains(sel.tag()) ? sel : displayParent(sel);
         int parentIdx = target == null || target.node.sourceIndex() < 0 ? 0 : target.node.sourceIndex();
         EditorOps.Added r = EditorOps.addChild(session.text(), parentIdx, Integer.MAX_VALUE, tag);
-        if (applyEdit(src -> r.text())) selected = r.index();
+        int[] c = visibleCenterDoc();                      // 새 요소는 지금 보고 있는 화면 한가운데에 놓는다(패널에 가려진 구석이 아니라)
+        String text = placeAt(r.text(), r.index(), parentIdx, c[0], c[1]);
+        if (applyEdit(src -> text)) selected = r.index();
+    }
+
+    /** 지금 보이는 작업 영역의 한가운데(문서 좌표). */
+    private int[] visibleCenterDoc() {
+        Rect v = centerView();
+        return new int[] {v.centerX() - panX, v.centerY() - panY};
     }
 
     public void duplicate() {
@@ -907,6 +1083,7 @@ public final class EditorController {
         editKey = key;
         editBuffer.setLength(0);
         editBuffer.append(value);
+        editAnchor = 0;                         // 칸을 누르면 전체가 선택된다: 바로 입력하면 값이 바뀌고, 방향키/Home/End 로 이어 쓸 수 있다
         editCursor = editBuffer.length();
         editRect = fieldRect;
         // 게임이 SDL 이면 글자 입력(IME 포함)을 따로 켜 줘야 한다. 켜지 않으면 키 이벤트만 오고 글자는 들어오지 않는다.
@@ -917,6 +1094,7 @@ public final class EditorController {
         boolean wasEditing = editKey != null;
         editKey = null;
         editRect = null;
+        fieldDragging = false;
         if (wasEditing) host.textInput(false, 0, 0, 0, 0);
     }
 
@@ -1045,22 +1223,22 @@ public final class EditorController {
     // ================= 화면 이동(팬) =================
 
     /**
-     * 선택이 바뀌었을 때, 선택한 요소가 양옆 패널에 가려지거나 화면 밖이면 가운데 작업 영역 중앙으로 보이게 옮긴다.
-     * 작업 영역보다 큰 요소(배경 패널, 루트)는 옮기지 않는다. 끄는 중에는 화면이 움직이지 않는다.
+     * 구조 트리에서 고르는 등 "찾아 달라"는 요청이 있을 때만, 선택한 요소가 양옆 패널에 가려지거나 화면 밖이면 가운데 작업 영역
+     * 중앙으로 보이게 옮긴다(캔버스에서 직접 누른 요소는 이미 눈앞에 있으므로 화면을 흔들지 않는다).
+     * 작업 영역보다 큰 요소(배경 패널, 루트)는 옮기지 않는다. 끄는 중에는 요청을 보류했다가 놓은 뒤에 처리한다.
      */
     private void autoPan() {
-        if (lastPanned == selected) return;
-        lastPanned = selected;
-        if (drag != null || dnd != null) return;
+        if (!revealRequested || drag != null || dnd != null) return;
+        revealRequested = false;
         LayoutBox sb = selectedBox();
         if (sb == null) return;
         Rect v = centerView();
-        Rect r = rectOf(sb).translate(panX, panY);
+        Rect r = rectOf(sb).translate(targetPanX, targetPanY);
         if (r.w() > v.w() || r.h() > v.h()) return;
         boolean inside = r.x() >= v.x() && r.right() <= v.right() && r.y() >= v.y() && r.bottom() <= v.bottom();
         if (inside) return;
-        panX += v.centerX() - r.centerX();
-        panY += v.centerY() - r.centerY();
+        targetPanX += v.centerX() - r.centerX();
+        targetPanY += v.centerY() - r.centerY();
     }
 
     // ================= 그리기 =================
@@ -1077,6 +1255,7 @@ public final class EditorController {
     public void paint(UiGfx g) {
         regions.clear();
         autoPan();
+        stepPan();
         g.pushTransform(panX, panY, 1f, 0f, 0f, 0f);
         paintCanvasOverlay(g);
         g.popTransform();
@@ -1101,6 +1280,7 @@ public final class EditorController {
 
     /** 문서 좌표계(팬 변환 안)에서 그리는 캔버스 위 표시: 호버/선택 윤곽, 손잡이, 정렬선. */
     private void paintCanvasOverlay(UiGfx g) {
+        paintScreenFrame(g);
         boolean dragging = drag != null || dnd != null || panning;
         LayoutBox hover = !dragging && !overPanel(mouseX, mouseY) ? hitSource(mouseX - panX, mouseY - panY) : null;
         hoverIndex = hover == null ? -1 : hover.node.sourceIndex();
@@ -1130,6 +1310,20 @@ public final class EditorController {
         }
     }
 
+    /**
+     * 화면을 옮겨 둔 상태에서는 "실제 게임 화면의 경계"가 어디인지 알 수 있게, 경계 밖을 어둡게 하고 파란 테두리를 그린다.
+     * (옮기지 않았을 때는 경계가 창 가장자리와 같으므로 아무것도 그리지 않는다.)
+     */
+    private void paintScreenFrame(UiGfx g) {
+        if (panX == 0 && panY == 0) return;
+        int far = 4000;
+        g.fillRect(-far, -far, 2 * far + viewW, far, SCREEN_OUTSIDE);                    // 위
+        g.fillRect(-far, viewH, 2 * far + viewW, far, SCREEN_OUTSIDE);                   // 아래
+        g.fillRect(-far, 0, far, viewH, SCREEN_OUTSIDE);                                 // 왼쪽
+        g.fillRect(viewW, 0, far, viewH, SCREEN_OUTSIDE);                                // 오른쪽
+        outline(g, new Rect(0, 0, viewW, viewH), SCREEN_FRAME);
+    }
+
     private static void outline(UiGfx g, Rect r, int color) {
         g.fillRect(r.x(), r.y(), r.w(), 1, color);
         g.fillRect(r.x(), r.bottom() - 1, r.w(), 1, color);
@@ -1138,8 +1332,12 @@ public final class EditorController {
     }
 
     private int button(UiGfx g, int x, int y, String label, boolean enabled, Runnable action) {
+        return button(g, x, y, label, enabled, action, C_BTN);
+    }
+
+    private int button(UiGfx g, int x, int y, String label, boolean enabled, Runnable action, int bg) {
         int w = tm.width(label) + 8, h = TOOLBAR_H - 4;
-        g.fillRect(x, y, w, h, enabled ? C_BTN : C_BTN_OFF);
+        g.fillRect(x, y, w, h, enabled ? bg : C_BTN_OFF);
         g.drawText(label, x + 4, y + (h - tm.lineHeight()) / 2 + 1, enabled ? C_TEXT : C_DIM, false);
         regions.add(new Region(new Rect(x, y, w, h), enabled ? action : null));
         return w + 2;
@@ -1157,7 +1355,8 @@ public final class EditorController {
         x += button(g, x, y, "Del", selected > 0, this::deleteSelected);
         x += 4;
         x += button(g, x, y, grid ? "Grid:8" : "Grid:off", true, () -> grid = !grid);
-        x += button(g, x, y, "Fit", panX != 0 || panY != 0, this::resetView);
+        boolean panned = panX != 0 || panY != 0 || targetPanX != 0 || targetPanY != 0;
+        x += button(g, x, y, panned ? "Fit!" : "Fit", panned, this::resetView, C_BTN_HOT);   // 옮겨 둔 상태면 눈에 띄게
         String title = host.title() + (session.isDirty() ? " *" : "");
         g.drawText(title, Math.max(x + 6, viewW - tm.width(title) - 4), 4, C_DIM, false);
     }
@@ -1369,8 +1568,17 @@ public final class EditorController {
         int end = s.length();
         while (end > editCursor && tm.width(s.substring(start, end)) > maxW) end--;
         String shown = s.substring(start, end);
-        g.drawText(shown, field.x() + 3, field.y() + 2, C_TEXT, false);
-        int cx = field.x() + 3 + tm.width(s.substring(start, editCursor));
+        editViewStart = start;                    // 마우스로 커서를 찍을 때 같은 기준을 쓴다
+        editTextX = field.x() + 3;
+        if (hasSelection()) {                     // 선택 범위 배경
+            int a = Math.max(start, selectionStart()), b = Math.min(end, selectionEnd());
+            if (b > a) {
+                int x1 = editTextX + tm.width(s.substring(start, a)), x2 = editTextX + tm.width(s.substring(start, b));
+                g.fillRect(x1, field.y() + 1, x2 - x1, field.h() - 2, C_SELECTION);
+            }
+        }
+        g.drawText(shown, editTextX, field.y() + 2, C_TEXT, false);
+        int cx = editTextX + tm.width(s.substring(start, editCursor));
         g.fillRect(cx, field.y() + 1, 1, field.h() - 2, C_SEL);
     }
 

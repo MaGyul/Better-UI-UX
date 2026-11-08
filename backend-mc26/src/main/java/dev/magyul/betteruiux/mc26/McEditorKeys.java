@@ -24,6 +24,10 @@ final class McEditorKeys {
         if (k == InputConstants.KEY_HOME) return EditorKey.HOME;
         if (k == InputConstants.KEY_END) return EditorKey.END;
         if (k == InputConstants.KEY_TAB) return EditorKey.TAB;
+        if (k == InputConstants.KEY_A) return EditorKey.A;
+        if (k == InputConstants.KEY_C) return EditorKey.C;
+        if (k == InputConstants.KEY_V) return EditorKey.V;
+        if (k == InputConstants.KEY_X) return EditorKey.X;
         if (k == InputConstants.KEY_Z) return EditorKey.Z;
         if (k == InputConstants.KEY_Y) return EditorKey.Y;
         if (k == InputConstants.KEY_S) return EditorKey.S;

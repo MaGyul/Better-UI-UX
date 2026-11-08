@@ -4,6 +4,6 @@ package dev.magyul.betteruiux.core.edit;
 public enum EditorKey {
     ENTER, ESCAPE, BACKSPACE, DELETE, LEFT, RIGHT, UP, DOWN, HOME, END, TAB,
     /** Ctrl 과 함께 쓰는 단축키용 글자. */
-    Z, Y, S, D,
+    A, C, V, X, Z, Y, S, D,
     OTHER
 }

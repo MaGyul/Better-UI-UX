@@ -27,4 +27,13 @@ public interface EditorHost {
      * @param active (x,y,w,h) 입력 칸의 화면 위치(조합 중인 글자 창을 띄울 위치). active 가 false 면 무시.
      */
     default void textInput(boolean active, int x, int y, int w, int h) { }
+
+    /** 시스템 클립보드 읽기(Ctrl+V). 지원하지 않으면 빈 문자열. */
+    default String clipboard() { return ""; }
+
+    /** 시스템 클립보드 쓰기(Ctrl+C / Ctrl+X). */
+    default void setClipboard(String text) { }
+
+    /** true 면 선택한 요소를 가운데로 옮길 때 화면이 부드럽게 미끄러진다(게임 화면용). 테스트는 즉시 이동. */
+    default boolean panAnimation() { return false; }
 }
