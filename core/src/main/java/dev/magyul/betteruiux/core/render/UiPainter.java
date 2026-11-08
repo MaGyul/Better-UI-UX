@@ -20,6 +20,9 @@ public final class UiPainter {
 
         default boolean pressed(LayoutBox b) { return false; }
 
+        /** 키보드 포커스가 있는 박스(Tab 으로 고른 버튼 등). */
+        default boolean focused(LayoutBox b) { return false; }
+
         /** 이 박스를 그릴 때 쓸 스타일(호버/눌림 오버레이, 전환·애니메이션 적용 후). */
         default StyleMap style(LayoutBox b) { return b.effective(hovered(b), pressed(b)); }
 
@@ -62,6 +65,11 @@ public final class UiPainter {
         boolean transformed = tx != 0f || ty != 0f || scale != 1f || rotate != 0f;
         if (transformed) g.pushTransform(tx, ty, scale, rotate, b.x + b.w / 2f, b.y + b.h / 2f);
 
+        if (b.tag().equals("dialog")) {                      // 대화상자 뒤를 화면 전체에 걸쳐 어둡게
+            LayoutBox r = b;
+            while (r.parent != null) r = r.parent;
+            fill(g, r.x, r.y, r.w, r.h, s.color("backdrop", 0x90000000), opacity);
+        }
         boolean button = b.tag().equals("button");
         // 버튼 기본색: 스타일시트/속성에 background 가 있으면 그것이 우선, 없으면 상태별 기본색
         int defaultBg = 0;
@@ -82,19 +90,37 @@ public final class UiPainter {
             fill(g, b.x + b.w - borderW, b.y + borderW, borderW, b.h - 2 * borderW, bc, opacity);
         }
 
+        if (button && state.focused(b)) {                    // Tab 으로 고른 버튼 표시
+            int fc = 0xFFFFFF55;
+            fill(g, b.x - 1, b.y - 1, b.w + 2, 1, fc, opacity);
+            fill(g, b.x - 1, b.y + b.h, b.w + 2, 1, fc, opacity);
+            fill(g, b.x - 1, b.y, 1, b.h, fc, opacity);
+            fill(g, b.x + b.w, b.y, 1, b.h, fc, opacity);
+        }
         switch (b.tag()) {
             case "label", "button" -> paintText(b, s, g, opacity, button && !b.enabled());
             case "image" -> paintImage(b, s, g, opacity);
+            case "item" -> {
+                String item = s.get("item");
+                if (item != null && !item.isBlank()) {
+                    // 상자 크기에 맞춰 키우고 가운데에 놓는다(아이콘 기본 크기 16)
+                    float iconScale = Math.max(0.1f, Math.min(b.w, b.h) / 16f);
+                    boolean scaled = Math.abs(iconScale - 1f) > 0.01f;
+                    if (scaled) g.pushTransform((b.w - 16 * iconScale) / 2f, (b.h - 16 * iconScale) / 2f, iconScale, 0f, b.x, b.y);
+                    g.drawItem(item.trim(), b.x, b.y, Math.max(1, s.integer("count", 1)));
+                    if (scaled) g.popTransform();
+                }
+            }
             default -> { }
         }
-        if (b.widget != null) {
-            b.widget.paint(g, b.x, b.y, b.w, b.h, new UiWidget.Frame(
-                    state.mouseX(), state.mouseY(), hovered, state.nowMillis(), state.element(b)));
-        }
+        UiWidget.Frame frame = b.widget == null ? null : new UiWidget.Frame(
+                state.mouseX(), state.mouseY(), hovered, state.nowMillis(), state.element(b));
+        if (b.widget != null) b.widget.paint(g, b.x, b.y, b.w, b.h, frame);
 
-        boolean clip = "hidden".equals(s.get("overflow"));
+        boolean clip = "hidden".equals(s.get("overflow")) || b.tag().equals("scroll");
         if (clip) g.pushClip(b.x, b.y, b.w, b.h);
         for (LayoutBox c : b.children) paintBox(c, g, state, opacity);
+        if (b.widget != null) b.widget.paintOver(g, b.x, b.y, b.w, b.h, frame);
         if (clip) g.popClip();
 
         if (transformed) g.popTransform();

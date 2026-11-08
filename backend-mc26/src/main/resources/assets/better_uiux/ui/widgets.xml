@@ -1,0 +1,47 @@
+<screen use="blur,dim">
+  <style>
+    .card { background: #E0181A24; border: 1; border-color: #FF3A3F55; padding: 8; }
+    .title { color: #FFFFFF55; }
+  </style>
+
+  <panel class="card" anchor="center" width="260" height="190">
+    <column gap="4" width="fill" height="fill">
+      <label class="title" text="내장 입력 위젯 데모" />
+      <separator />
+      <tabs width="fill" height="fill">
+        <tab title="입력">
+          <column gap="4" width="fill">
+            <checkbox id="sound" text="소리 켜기" checked="true" onChange="report" tooltip="체크박스: 클릭하거나 Enter/Space" />
+            <row gap="8">
+              <radio id="r1" group="mode" text="쉬움" checked="true" onChange="report" />
+              <radio id="r2" group="mode" text="보통" onChange="report" />
+              <radio id="r3" group="mode" text="어려움" onChange="report" />
+            </row>
+            <slider id="volume" width="fill" min="0" max="100" step="5" value="40" text="볼륨" onChange="report" />
+            <textfield id="name" width="fill" placeholder="이름을 입력..." maxlength="16" onChange="report" onSubmit="report" />
+            <select id="color" width="120" options="빨강,초록,파랑" value="초록" onChange="report" />
+            <progress id="hp" width="fill" value="70" max="100" text="HP 70/100" />
+          </column>
+        </tab>
+        <tab title="목록">
+          <scroll width="fill" height="fill" gap="2">
+            <label text="스크롤 목록 (휠 / 막대 드래그)" />
+            <label text="항목 1" /><label text="항목 2" /><label text="항목 3" /><label text="항목 4" />
+            <label text="항목 5" /><label text="항목 6" /><label text="항목 7" /><label text="항목 8" />
+            <label text="항목 9" /><label text="항목 10" /><label text="항목 11" /><label text="항목 12" />
+          </scroll>
+        </tab>
+        <tab title="격자">
+          <grid columns="4" gap="4">
+            <item item="minecraft:diamond" count="3" tooltip="다이아몬드" />
+            <item item="minecraft:iron_ingot" count="16" />
+            <item item="minecraft:golden_apple" />
+            <item item="minecraft:stick" count="64" />
+            <button text="A" /><button text="B" /><button text="C" /><button text="D" />
+          </grid>
+        </tab>
+      </tabs>
+      <button text="닫기" onClick="close" />
+    </column>
+  </panel>
+</screen>

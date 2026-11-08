@@ -21,10 +21,12 @@ public final class UiParser {
             XMLStreamReader r = f.createXMLStreamReader(new StringReader(xml));
             Deque<UiNode> stack = new ArrayDeque<>();
             UiNode root = null;
+            int counter = 0;
             while (r.hasNext()) {
                 switch (r.next()) {
                     case XMLStreamConstants.START_ELEMENT -> {
                         UiNode n = new UiNode(r.getLocalName());
+                        n.setSourceIndex(counter++);
                         for (int i = 0; i < r.getAttributeCount(); i++) {
                             n.attributes().put(r.getAttributeLocalName(i), r.getAttributeValue(i));
                         }

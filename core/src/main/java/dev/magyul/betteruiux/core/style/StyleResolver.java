@@ -26,7 +26,7 @@ public final class StyleResolver {
 
     private record Applied(Stylesheet.Declaration decl, int specificity, int ordinal) {}
 
-    private static final Set<String> INHERITED = Set.of("color", "shadow", "text-align");
+    private static final Set<String> INHERITED = Set.of("color", "shadow", "text-align", "cursor");
     private static final Map<String, String> ALIASES = Map.of("background-color", "background");
     private static final int MAX_VAR_DEPTH = 8;
 
@@ -54,6 +54,7 @@ public final class StyleResolver {
                 if (INHERITED.contains(e.getKey()) || e.getKey().startsWith("--")) base.put(e.getKey(), e.getValue());
             }
         }
+        applyTagDefaults(box, base);
         for (Map.Entry<String, String> e : box.node.attributes().entrySet()) {
             if (!e.getKey().equals("style")) put(base, e.getKey().toLowerCase(), e.getValue());
         }
@@ -86,6 +87,30 @@ public final class StyleResolver {
             overlays.put(e.getKey(), overlay);
         }
         box.overlays = overlays;
+    }
+
+    /** 내장 태그의 기본 모양(속성/스타일시트가 있으면 그것이 이긴다). */
+    private static void applyTagDefaults(LayoutBox box, StyleMap base) {
+        switch (box.tag()) {
+            case "separator" -> {
+                boolean vertical = box.parent != null && box.parent.tag().equals("row");
+                base.put("width", vertical ? "1" : "fill");
+                base.put("height", vertical ? "fill" : "1");
+                base.put("background", "#66FFFFFF");
+            }
+            case "tab" -> {                                  // 탭 내용은 탭 영역 전체를 쓴다
+                base.put("width", "fill");
+                base.put("height", "fill");
+            }
+            case "dialog" -> {
+                base.put("anchor", "center");
+                base.put("background", "#F0161820");
+                base.put("border", "1");
+                base.put("border-color", "#FF8A8FA8");
+                base.put("padding", "8");
+            }
+            default -> { }
+        }
     }
 
     private static void apply(StyleMap target, List<Applied> list) {

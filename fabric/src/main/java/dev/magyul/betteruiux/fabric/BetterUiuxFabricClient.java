@@ -34,6 +34,12 @@ public final class BetterUiuxFabricClient implements ClientModInitializer {
                                         .executes(ctx -> {
                                             UiApi.open(StringArgumentType.getString(ctx, "id"));
                                             return 1;
+                                        })))
+                        .then(ClientCommands.literal("edit")
+                                .then(ClientCommands.argument("id", StringArgumentType.word())
+                                        .executes(ctx -> {
+                                            UiApi.edit(StringArgumentType.getString(ctx, "id"));
+                                            return 1;
                                         })))));
     }
 }

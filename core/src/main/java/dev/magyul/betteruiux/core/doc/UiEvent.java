@@ -2,7 +2,7 @@ package dev.magyul.betteruiux.core.doc;
 
 /** 요소에 발생한 입력 이벤트. 대상(target)에서 부모 방향으로 버블링한다. */
 public final class UiEvent {
-    public enum Type { CLICK, PRESS, RELEASE, HOVER_ENTER, HOVER_LEAVE }
+    public enum Type { CLICK, PRESS, RELEASE, HOVER_ENTER, HOVER_LEAVE, CHANGE }
 
     /** 이벤트 핸들러. */
     @FunctionalInterface

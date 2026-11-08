@@ -149,7 +149,8 @@ class UiAnimationIntegrationTest {
         List<DrawCommand> c = paint(d, 0, -1, -1);
         assertEquals(new DrawCommand.PushTransform(5, 0, 2, 90, 10, 5), c.get(0));
         assertTrue(c.get(1) instanceof DrawCommand.FillRect, "자식도 변환 안에서 그려진다");
-        assertEquals(new DrawCommand.PopTransform(), c.get(c.size() - 1));
+        assertEquals(new DrawCommand.PopTransform(), c.get(c.size() - 2), "마지막은 포인터 모양 요청(RequestCursor), 그 앞이 변환 해제");
+        assertTrue(c.get(c.size() - 1) instanceof DrawCommand.RequestCursor);
         assertFalse(paint(d, 0, -1, -1).isEmpty());
     }
 

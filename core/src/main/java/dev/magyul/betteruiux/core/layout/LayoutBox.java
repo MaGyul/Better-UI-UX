@@ -31,7 +31,10 @@ public final class LayoutBox {
 
     public boolean contains(int px, int py) { return px >= x && px < x + w && py >= y && py < y + h; }
 
-    public boolean visible() { return style.bool("visible", true) && !"none".equals(style.get("display")); }
+    /** 선택되지 않은 탭의 내용(보이지 않지만 에디터의 구조 트리에는 나온다). */
+    public boolean inactive;
+
+    public boolean visible() { return !inactive && style.bool("visible", true) && !"none".equals(style.get("display")); }
 
     public boolean enabled() { return style.bool("enabled", true); }
 

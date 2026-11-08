@@ -26,6 +26,13 @@ final class BackendBuiltins {
             }
         });
 
+        // 입력 위젯(checkbox/slider/textfield/select...)의 onChange 데모: 바뀐 값을 채팅에 알려 준다.
+        UiActions.register("report", ctx -> {
+            var el = ctx.source();
+            String value = el.attr("value") != null ? el.attr("value") : el.attr("checked") != null ? "checked" : "unchecked";
+            UiOpener.say(net.minecraft.client.Minecraft.getInstance(), "[" + (el.id() == null ? el.tag() : el.id()) + "] " + value);
+        });
+
         // demo 화면이 열릴 때마다(핫리로드 포함) 텍스트의 {clicks} 에 값을 공급한다.
         UiApi.onDocumentOpened((id, doc) -> {
             if (id.equals("demo")) doc.bind("clicks", () -> clicks);

@@ -46,6 +46,12 @@ public final class UiApi {
         UiOpener.open(id, baseDir);
     }
 
+    /** 화면을 연 뒤 인게임 에디터를 켠다. 설정({@code editor.enabled})에서 에디터가 꺼져 있으면 안내 메시지만 보여준다. */
+    public static void edit(String id) {
+        requireInit();
+        UiOpener.open(id, baseDir, true);
+    }
+
     public static void registerAction(String id, Consumer<UiActions.Context> handler) { UiActions.register(id, handler); }
 
     public static void registerWidget(String tag, Function<UiElement, UiWidget> factory) { UiWidgets.register(tag, factory); }

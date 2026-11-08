@@ -26,7 +26,15 @@ public final class UiDocumentLoader {
     public static UiDocument load(Path userDir, String id, TextMetrics text) throws IOException, UiParseException {
         Optional<String> xml = UiSources.load(userDir, id);
         if (xml.isEmpty()) throw new NoSuchFileException(id + ".xml");
-        UiNode root = UiParser.parse(xml.get());
+        return loadText(userDir, xml.get(), text);
+    }
+
+    /**
+     * XML 텍스트로 문서를 만든다(id 로 파일을 찾는 {@link #load} 와 같은 과정). 인게임 에디터가 편집 중인 텍스트를
+     * 파일 저장 없이 곧바로 문서로 만들 때 쓴다. {@code userDir} 는 include/스타일시트를 찾는 곳.
+     */
+    public static UiDocument loadText(Path userDir, String xml, TextMetrics text) throws IOException, UiParseException {
+        UiNode root = UiParser.parse(xml);
 
         List<Stylesheet> sheets = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
