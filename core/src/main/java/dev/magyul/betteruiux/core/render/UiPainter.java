@@ -32,7 +32,9 @@ public final class UiPainter {
 
     private void paintBox(LayoutBox b, UiGfx g, PaintState state) {
         if (!b.visible()) return;
-        StyleMap s = b.style;
+        boolean hovered = state.hovered(b), pressed = state.pressed(b);
+        // 스타일시트의 :hover/:active 규칙이 반영된 그리기용 스타일 (레이아웃은 상태와 무관한 b.style 사용)
+        StyleMap s = b.effective(hovered, pressed);
         float opacity = 1f;
         if (s.has("opacity")) {
             try {
@@ -43,13 +45,15 @@ public final class UiPainter {
         }
 
         boolean button = b.tag().equals("button");
-        int bg = s.color("background", button ? 0xFF555555 : 0);
+        // 버튼 기본색: 스타일시트/속성에 background 가 있으면 그것이 우선, 없으면 상태별 기본색
+        int defaultBg = 0;
         if (button) {
-            if (!b.enabled()) bg = s.color("disabled-background", 0xFF333333);
-            else if (state.pressed(b)) bg = s.color("pressed-background", 0xFF333333);
-            else if (state.hovered(b)) bg = s.color("hover-background", 0xFF777777);
+            if (!b.enabled()) defaultBg = s.color("disabled-background", 0xFF333333);
+            else if (pressed) defaultBg = s.color("pressed-background", 0xFF333333);
+            else if (hovered) defaultBg = s.color("hover-background", 0xFF777777);
+            else defaultBg = 0xFF555555;
         }
-        fill(g, b.x, b.y, b.w, b.h, bg, opacity);
+        fill(g, b.x, b.y, b.w, b.h, s.color("background", defaultBg), opacity);
 
         int borderW = s.integer("border", button ? 1 : 0);
         if (borderW > 0) {
@@ -61,8 +65,8 @@ public final class UiPainter {
         }
 
         switch (b.tag()) {
-            case "label", "button" -> paintText(b, g, opacity, button && !b.enabled());
-            case "image" -> paintImage(b, g, opacity);
+            case "label", "button" -> paintText(b, s, g, opacity, button && !b.enabled());
+            case "image" -> paintImage(b, s, g, opacity);
             default -> { }
         }
 
@@ -72,8 +76,7 @@ public final class UiPainter {
         if (clip) g.popClip();
     }
 
-    private void paintText(LayoutBox b, UiGfx g, float opacity, boolean dim) {
-        StyleMap s = b.style;
+    private void paintText(LayoutBox b, StyleMap s, UiGfx g, float opacity, boolean dim) {
         String t = LayoutEngine.textOf(b);
         if (t.isEmpty()) return;
         boolean button = b.tag().equals("button");
@@ -96,8 +99,7 @@ public final class UiPainter {
         }
     }
 
-    private void paintImage(LayoutBox b, UiGfx g, float opacity) {
-        StyleMap s = b.style;
+    private void paintImage(LayoutBox b, StyleMap s, UiGfx g, float opacity) {
         String src = s.get("src");
         if (src == null || src.isBlank()) return;
         float u = 0, v = 0;

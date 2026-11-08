@@ -15,6 +15,7 @@ public final class UiParser {
     public static UiNode parse(String xml) throws UiParseException {
         XMLInputFactory f = XMLInputFactory.newFactory();
         f.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+        f.setProperty(XMLInputFactory.IS_COALESCING, true); // CDATA(<style> 안의 CSS 등)를 일반 텍스트와 합친다
         f.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
         try {
             XMLStreamReader r = f.createXMLStreamReader(new StringReader(xml));

@@ -4,6 +4,8 @@ package dev.magyul.betteruiux.api;
 public sealed interface DrawCommand {
     record FillRect(int x, int y, int w, int h, int argb) implements DrawCommand {}
 
+    record FillGradient(int x, int y, int w, int h, int topArgb, int bottomArgb) implements DrawCommand {}
+
     record DrawTexture(String texture, int x, int y, int w, int h,
                        float u, float v, int regionW, int regionH, int texW, int texH, int argb) implements DrawCommand {}
 
@@ -12,4 +14,6 @@ public sealed interface DrawCommand {
     record PushClip(int x, int y, int w, int h) implements DrawCommand {}
 
     record PopClip() implements DrawCommand {}
+
+    record BlurBackground() implements DrawCommand {}
 }

@@ -1,0 +1,21 @@
+/* demo.xml 의 스타일. config/better-uiux/ui/demo.uicss 를 만들면 이 파일을 덮어쓰고, 저장 즉시 화면에 반영된다. */
+:root {
+  --accent: #FFFF55;
+  --panel: #E0202030;
+  --border: #FF8888FF;
+}
+
+panel.card {
+  background: var(--panel);
+  border: 1;
+  border-color: var(--border);
+  padding: 8;
+}
+
+.title { color: var(--accent); }
+.muted { color: #808080; }
+
+button { background: #FF505070; }
+button:hover { background: #FF7070A0; }
+button:active { background: #FF303050; }
+button.danger:hover { background: #FFA04040; }

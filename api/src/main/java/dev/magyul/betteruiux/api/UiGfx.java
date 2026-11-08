@@ -8,6 +8,9 @@ package dev.magyul.betteruiux.api;
 public interface UiGfx {
     void fillRect(int x, int y, int w, int h, int argb);
 
+    /** 위→아래 세로 그라데이션 사각형. */
+    void fillGradient(int x, int y, int w, int h, int topArgb, int bottomArgb);
+
     /** texture 는 "namespace:path" 형태 식별자. (u,v,regionW,regionH)는 텍스처(texW x texH) 안의 영역. */
     void drawTexture(String texture, int x, int y, int w, int h,
                      float u, float v, int regionW, int regionH, int texW, int texH, int argb);
@@ -18,4 +21,10 @@ public interface UiGfx {
     void pushClip(int x, int y, int w, int h);
 
     void popClip();
+
+    /**
+     * 지금까지 그려진 것(월드, 앞서 그린 배경 레이어 등)을 블러 처리한다. 이후에 그리는 것은 블러되지 않는다.
+     * 게임의 "메뉴 배경 블러" 옵션이 꺼져 있으면 아무 일도 하지 않을 수 있다.
+     */
+    void blurBackground();
 }

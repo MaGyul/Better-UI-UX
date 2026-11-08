@@ -4,13 +4,18 @@ import dev.magyul.betteruiux.api.TextMetrics;
 import dev.magyul.betteruiux.api.UiGfx;
 import dev.magyul.betteruiux.core.layout.LayoutBox;
 import dev.magyul.betteruiux.core.layout.LayoutEngine;
+import dev.magyul.betteruiux.core.render.ScreenBackground;
 import dev.magyul.betteruiux.core.render.UiPainter;
+import dev.magyul.betteruiux.core.style.StyleResolver;
+import dev.magyul.betteruiux.core.style.Stylesheet;
 import dev.magyul.betteruiux.core.xml.UiNode;
 import dev.magyul.betteruiux.core.xml.UiParseException;
 import dev.magyul.betteruiux.core.xml.UiParser;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * 파싱 + 레이아웃 + 그리기 + 입력(호버/클릭)을 묶은 문서 하나. 마인크래프트 비의존.
+ * 파싱 + 스타일 + 레이아웃 + 그리기 + 입력(호버/클릭)을 묶은 문서 하나. 마인크래프트 비의존.
  * 백엔드의 Screen/HUD 는 이 객체를 감싸 입력을 전달하고 {@link #paint}를 호출한다.
  */
 public final class UiDocument {
@@ -23,9 +28,11 @@ public final class UiDocument {
     private final UiNode root;
     private final LayoutEngine layoutEngine;
     private final UiPainter painter;
+    private final List<String> warnings;
     private LayoutBox layout;
-    private int viewW, viewH;
     private LayoutBox hovered, pressed;
+    private int viewW, viewH;
+    private ScreenBackground background = ScreenBackground.defaults();
     private ActionHandler actionHandler = (a, s) -> { };
 
     private final UiPainter.PaintState state = new UiPainter.PaintState() {
@@ -34,19 +41,48 @@ public final class UiDocument {
         @Override public boolean pressed(LayoutBox b) { return b == pressed && b == hovered; }
     };
 
-    public UiDocument(UiNode root, TextMetrics text) {
+    public UiDocument(UiNode root, TextMetrics text, List<Stylesheet> sheets, List<String> warnings) {
         this.root = root;
-        this.layoutEngine = new LayoutEngine(text);
+        this.layoutEngine = new LayoutEngine(text, new StyleResolver(sheets));
         this.painter = new UiPainter(text);
+        this.warnings = List.copyOf(warnings);
     }
 
+    public UiDocument(UiNode root, TextMetrics text) {
+        this(root, text, inlineSheets(root), List.of());
+    }
+
+    /** 문서 안의 {@code <style>} 블록만 읽는다(외부 {@code <link>} 까지 읽으려면 {@link UiDocumentLoader}). */
     public static UiDocument parse(String xml, TextMetrics text) throws UiParseException {
         return new UiDocument(UiParser.parse(xml), text);
+    }
+
+    static List<Stylesheet> inlineSheets(UiNode root) {
+        List<Stylesheet> sheets = new ArrayList<>();
+        collectStyleBlocks(root, sheets);
+        return sheets;
+    }
+
+    private static void collectStyleBlocks(UiNode n, List<Stylesheet> out) {
+        if (n.tag().equals("style")) out.add(Stylesheet.parse(n.text()));
+        for (UiNode c : n.children()) collectStyleBlocks(c, out);
     }
 
     public UiNode root() { return root; }
 
     public LayoutBox layout() { return layout; }
+
+    /** 로드/스타일 파싱 중 생긴 경고(문서는 정상 표시됨). */
+    public List<String> warnings() {
+        List<String> bg = background.warnings();
+        if (bg.isEmpty()) return warnings;
+        List<String> all = new ArrayList<>(warnings);
+        all.addAll(bg);
+        return all;
+    }
+
+    /** 루트의 {@code use} 로 정해진 배경 레이어. {@link #layout} 이후 유효. */
+    public ScreenBackground background() { return background; }
 
     public void setActionHandler(ActionHandler h) { this.actionHandler = h == null ? (a, s) -> { } : h; }
 
@@ -55,8 +91,20 @@ public final class UiDocument {
         this.viewW = viewW;
         this.viewH = viewH;
         this.layout = layoutEngine.layout(root, viewW, viewH);
+        this.background = ScreenBackground.parse(layout.style.get("use"));
         this.hovered = null;
         this.pressed = null;
+    }
+
+    /**
+     * 화면 배경(blur / dim / block:&lt;id&gt;)을 {@code use} 에 적힌 순서대로 그린다.
+     * 문서 내용({@link #paint})보다 먼저, 게임의 배경 단계에서 호출해야 한다.
+     */
+    public void paintBackground(UiGfx gfx) {
+        if (layout == null) return;
+        background.paint(gfx, viewW, viewH,
+                layout.style.integer("block-size", ScreenBackground.DEFAULT_BLOCK_SIZE),
+                layout.style.color("block-tint", ScreenBackground.DEFAULT_BLOCK_TINT));
     }
 
     public void paint(UiGfx gfx, int mouseX, int mouseY) {
@@ -97,7 +145,11 @@ public final class UiDocument {
         return null;
     }
 
-    /** @return 입력을 소비했으면 true (버튼 위 좌클릭). */
+    /**
+     * 마우스 버튼 번호는 DOM 관례를 따른다: 0=좌, 1=가운데, 2=우. 백엔드가 게임의 번호를 이 체계로 변환해서 넘긴다.
+     *
+     * @return 입력을 소비했으면 true (버튼 위 좌클릭).
+     */
     public boolean mousePressed(int x, int y, int button) {
         if (button != 0) return false;
         pressed = hitButton(x, y);

@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.mc26;
 
 import dev.magyul.betteruiux.api.UiGfx;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -29,6 +30,11 @@ public final class McGfx implements UiGfx {
     }
 
     @Override
+    public void fillGradient(int x, int y, int w, int h, int topArgb, int bottomArgb) {
+        g.fillGradient(x, y, x + w, y + h, topArgb, bottomArgb);
+    }
+
+    @Override
     public void drawTexture(String texture, int x, int y, int w, int h,
                             float u, float v, int regionW, int regionH, int texW, int texH, int argb) {
         Identifier id;
@@ -54,5 +60,18 @@ public final class McGfx implements UiGfx {
     @Override
     public void popClip() {
         g.disableScissor();
+    }
+
+    /**
+     * 앞서 그린 레이어까지 블러한다. 26.x 의 블러는 "이전 stratum(레이어)" 전체에 적용되므로,
+     * 이 호출 직전까지 그린 배경(예: block 타일)이 블러 대상이 되도록 먼저 stratum 을 나눈다.
+     * 게임의 "메뉴 배경 블러" 옵션이 0 이면 vanilla 와 같이 블러하지 않는다.
+     */
+    @Override
+    public void blurBackground() {
+        g.nextStratum();
+        if (Minecraft.getInstance().options.getMenuBackgroundBlurriness() >= 1.0F) {
+            g.blurBeforeThisStratum();
+        }
     }
 }
