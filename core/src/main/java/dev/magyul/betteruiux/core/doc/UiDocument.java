@@ -45,7 +45,9 @@ public final class UiDocument {
     private final TextMetrics textMetrics;
     private final List<Stylesheet> sheets;
     private final List<String> warnings;
-    private final Set<String> runtimeWarnings = new LinkedHashSet<>();
+    /** 실행 중 생긴 경고와 마지막으로 발생한 시각(ms). 일정 시간이 지나면 사라진다(같은 경고가 또 나면 다시 보인다). */
+    private final Map<String, Long> runtimeWarnings = new LinkedHashMap<>();
+    private static final long WARNING_TTL_MS = 6000;
     private final UiPainter painter;
     private LayoutEngine layoutEngine;
     private StyleResolver resolver;
@@ -231,7 +233,9 @@ public final class UiDocument {
     public List<String> warnings() {
         List<String> all = new ArrayList<>(warnings);
         all.addAll(background.warnings());
-        all.addAll(runtimeWarnings);
+        long now = clock.nowMillis();
+        runtimeWarnings.values().removeIf(t -> now - t > WARNING_TTL_MS);
+        all.addAll(runtimeWarnings.keySet());
         return all;
     }
 
@@ -259,7 +263,15 @@ public final class UiDocument {
 
     void markDirty() { dirty = true; }
 
-    private void addRuntimeWarning(String w) { runtimeWarnings.add(w); }
+    private void addRuntimeWarning(String w) { runtimeWarnings.put(w, clock.nowMillis()); }
+
+    /** 실행 중 생긴 경고를 문서 경고 목록(오류 오버레이)에 추가한다. */
+    public void warn(String message) { addRuntimeWarning(message); }
+
+    private java.util.function.BiConsumer<UiElement, String> scriptDispatcher;
+
+    /** {@code onClick="script:fn"} 처럼 {@code script:} 로 시작하는 액션을 받을 곳(스크립트 호스트가 등록한다). */
+    public void setScriptDispatcher(java.util.function.BiConsumer<UiElement, String> d) { this.scriptDispatcher = d; }
 
     // ---- 바인딩: 텍스트의 {이름} 을 값으로 치환 ----
 
@@ -728,6 +740,11 @@ public final class UiDocument {
     }
 
     void fireAction(UiElement el, String action) {
+        if (action.startsWith("script:")) {
+            if (scriptDispatcher != null) scriptDispatcher.accept(el, action.substring(7).trim());
+            else addRuntimeWarning("스크립트가 꺼져 있습니다: '" + action + "'");
+            return;
+        }
         if (UiActions.dispatch(new UiActions.Context(this, el, action))) return;
         LayoutBox box = boxes.get(el.node());
         if (actionHandler != null) actionHandler.onAction(action, box);

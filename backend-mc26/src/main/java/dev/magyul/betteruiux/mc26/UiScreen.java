@@ -40,7 +40,7 @@ public final class UiScreen extends Screen {
     private static final boolean DEBUG = Boolean.getBoolean("betteruiux.debug");
 
     /** @param startInEditor 화면이 열리자마자 에디터를 켠다({@code /uiux edit}) */
-    public record Options(boolean hotReload, boolean editorEnabled, boolean startInEditor) {}
+    public record Options(boolean hotReload, boolean editorEnabled, boolean startInEditor, boolean scripting, java.util.List<String> scriptCommands) {}
 
     private final String id;
     private final Path userDir;
@@ -75,8 +75,12 @@ public final class UiScreen extends Screen {
 
     private UiDocument activeDoc() { return editor != null ? editor.document() : doc; }
 
+    private dev.magyul.betteruiux.core.script.ScriptHost scriptHost;
+
     private void bind(UiDocument d) {
         d.setOnClose(this::onClose);
+        if (scriptHost != null) scriptHost.close();                       // 문서가 바뀌면(핫리로드 등) 스크립트도 새로 시작한다
+        scriptHost = ScriptBridge.attach(d, userDir, options);
         // 글자 입력 칸(textfield): 채팅창과 같은 시스템 클립보드, SDL 글자 입력(IME 포함) 켜기/끄기
         d.setClipboardHandler(() -> net.minecraft.client.Minecraft.getInstance().keyboardHandler.getClipboard(),
                 s -> net.minecraft.client.Minecraft.getInstance().keyboardHandler.setClipboard(s));
@@ -125,6 +129,10 @@ public final class UiScreen extends Screen {
     @Override
     public void removed() {
         super.removed();
+        if (scriptHost != null) {
+            scriptHost.close();
+            scriptHost = null;
+        }
         if (watcher != null) {
             watcher.close();
             watcher = null;
