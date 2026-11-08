@@ -94,3 +94,8 @@ M3 에디터를 만들면서 쌓인 피드백과 코드 상태를 바탕으로, 
   (3,395 → 3,071줄). 입력(마우스/키), 끌기, 끌어놓기, 트리, 툴바는 아직 한 파일에 있다.
 - **골든(스냅샷) 테스트**: `GoldenSnapshotsTest` 가 데모/위젯 화면과 에디터 화면의 드로우 리스트를 `core/src/test/resources/golden/*.txt` 와 비교한다.
   의도한 모양 변경이면 `./gradlew :core:test -Pgolden.update=true` 로 다시 만들고 diff 를 검토해 커밋한다.
+
+## 9. 진행 상태 (2026-11-09, M4)
+
+M4 완료: HUD(`<hud>` + 읽기 전용 데이터 소스), 외부 이미지(png/jpg/bmp/gif), 영상(H.264 mp4, 소리 없음). Fabric/NeoForge 모두 확인.
+사용법은 [hud-and-images.md](hud-and-images.md). 다음: M4.5 서버 동기화 — 설계는 [server-sync-plan.md](server-sync-plan.md).
