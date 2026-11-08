@@ -27,14 +27,22 @@ tasks.test { useJUnitPlatform() }
 val truffleServices = "META-INF/services/com.oracle.truffle.api.provider.TruffleLanguageProvider"
 val bundleExtra = layout.buildDirectory.dir("bundle-extra")
 
+// 묶음에는 외부 라이브러리(GraalJS)만 넣는다. 우리 프로젝트(core/api)는 Better UI/UX 본 모드가 이미 갖고 있으므로 넣으면
+// 오래된 사본이 클래스로더에서 본 모드를 가려 NoSuchMethodError 가 난다.
+val externalJars = configurations.runtimeClasspath.map { cp ->
+    cp.incoming.artifactView {
+        componentFilter { id -> id is org.gradle.api.artifacts.component.ModuleComponentIdentifier }
+    }.files.filter { it.name.endsWith(".jar") }
+}
+
 val mergeServices = tasks.register("mergeTruffleServices") {
-    val jars = configurations.runtimeClasspath
+    val jars = externalJars
     inputs.files(jars)
     outputs.dir(bundleExtra)
     doLast {
         // 이 서비스 파일만 두 jar(js-language, regex)에 있어서 합쳐야 한다.
         val lines = linkedSetOf<String>()
-        jars.get().filter { it.name.endsWith(".jar") }.forEach { jar ->
+        jars.get().forEach { jar ->
             zipTree(jar).matching { include(truffleServices) }.files.forEach { f ->
                 f.readLines().map { it.trim() }.filter { it.isNotEmpty() }.forEach { lines += it }
             }
@@ -55,7 +63,7 @@ tasks.register<Jar>("bundleJar") {
     from(layout.projectDirectory.dir("bundle-meta")) {
         filesMatching(listOf("fabric.mod.json", "META-INF/neoforge.mods.toml")) { expand("version" to project.version.toString()) }
     }
-    from(configurations.runtimeClasspath.map { cp -> cp.filter { it.name.endsWith(".jar") }.map { zipTree(it) } }) {
+    from(externalJars.map { jars -> jars.map { zipTree(it) } }) {
         exclude("META-INF/MANIFEST.MF", "module-info.class", "META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA", truffleServices)
     }
 }
