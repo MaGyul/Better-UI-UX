@@ -69,7 +69,22 @@ final class EditorBackend {
 
             /** 채팅창과 같은 시스템 클립보드(Ctrl+C/X/V). */
             @Override public java.util.List<String> suggestions(String key) {
-                return key.equals("onClick") ? dev.magyul.betteruiux.core.doc.UiActions.registeredIds() : java.util.List.of();
+                return switch (key) {
+                    case "onClick", "onChange", "onSubmit" -> dev.magyul.betteruiux.core.doc.UiActions.registeredIds();
+                    case "item" -> net.minecraft.core.registries.BuiltInRegistries.ITEM.keySet().stream()
+                            .map(Object::toString).sorted().toList();
+                    default -> java.util.List.of();
+                };
+            }
+
+            /** 저장 파일이 에디터 밖에서 바뀌었는지 확인하는 데 쓴다(없으면 null). */
+            @Override public String diskText() {
+                try {
+                    Path f = userDir.resolve(id + ".xml");
+                    return java.nio.file.Files.exists(f) ? java.nio.file.Files.readString(f) : null;
+                } catch (IOException e) {
+                    return null;
+                }
             }
 
             @Override public String clipboard() { return Minecraft.getInstance().keyboardHandler.getClipboard(); }

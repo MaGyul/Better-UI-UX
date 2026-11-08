@@ -46,6 +46,9 @@ public interface EditorHost {
     /** 에디터 사용자 설정이 바뀌었을 때 저장한다. */
     default void savePrefs(java.util.Map<String, String> prefs) { }
 
+    /** 디스크에 있는 현재 파일 내용(없으면 null). 저장할 때 에디터 밖에서 바뀌었는지 확인하는 데 쓴다. */
+    default String diskText() { return null; }
+
     /** 에디터를 닫아 달라는 요청(툴바의 Exit 버튼, 아무것도 선택하지 않고 Esc). */
     default void requestExit() { }
 

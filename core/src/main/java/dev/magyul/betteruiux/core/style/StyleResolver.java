@@ -98,6 +98,10 @@ public final class StyleResolver {
                 base.put("height", vertical ? "fill" : "1");
                 base.put("background", "#66FFFFFF");
             }
+            case "tab" -> {                                  // 탭 내용은 탭 영역 전체를 쓴다
+                base.put("width", "fill");
+                base.put("height", "fill");
+            }
             case "dialog" -> {
                 base.put("anchor", "center");
                 base.put("background", "#F0161820");

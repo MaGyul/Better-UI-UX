@@ -66,6 +66,27 @@ public final class UiDocument {
         void textInput(boolean active, int x, int y, int w, int h);
     }
 
+    private UiNode forcedNode;
+    private boolean forcedHover, forcedActive;
+
+    /**
+     * 요소의 :hover / :active 모양을 강제로 보여 준다(에디터의 상태 미리보기). {@code sourceIndex} 가 음수이거나 둘 다 false 면 해제.
+     */
+    public void forcePseudo(int sourceIndex, boolean hover, boolean active) {
+        forcedHover = hover;
+        forcedActive = active;
+        forcedNode = sourceIndex < 0 || !(hover || active) ? null : findBySource(root, sourceIndex);
+    }
+
+    private static UiNode findBySource(UiNode n, int index) {
+        if (n.sourceIndex() == index) return n;
+        for (UiNode c : n.children()) {
+            UiNode r = findBySource(c, index);
+            if (r != null) return r;
+        }
+        return null;
+    }
+
     private UiNode focusNode;       // 키보드 포커스를 가진 위젯
     private LayoutBox pressWidget;  // 마우스를 누른 위젯(드래그/뗌을 받는다)
     private UiNode popupNode;       // 팝업(드롭다운)이 열린 위젯
@@ -89,10 +110,14 @@ public final class UiDocument {
     private Runnable onClose = () -> { };
 
     private final UiPainter.PaintState state = new UiPainter.PaintState() {
-        @Override public boolean hovered(LayoutBox b) { return hoverNode != null && b.node.isAncestorOf(hoverNode); }
+        @Override public boolean hovered(LayoutBox b) {
+            UiNode h = forcedNode != null && (forcedHover || forcedActive) ? forcedNode : hoverNode;
+            return h != null && b.node.isAncestorOf(h);
+        }
 
         @Override public boolean pressed(LayoutBox b) {
-            return pressNode != null && b.node.isAncestorOf(pressNode) && hovered(b);
+            UiNode p = forcedNode != null && forcedActive ? forcedNode : pressNode;
+            return p != null && b.node.isAncestorOf(p) && hovered(b);
         }
 
         @Override public StyleMap style(LayoutBox b) {

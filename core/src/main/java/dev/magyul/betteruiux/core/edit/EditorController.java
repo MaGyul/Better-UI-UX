@@ -239,9 +239,12 @@ public final class EditorController {
         rightCollapsed = "true".equalsIgnoreCase(prefs.get("rightCollapsed"));
         toolbarHidden = "true".equalsIgnoreCase(prefs.get("toolbarHidden"));
         lastPrefs = currentPrefs();
+        diskBase = host.diskText();
     }
 
     private java.util.Map<String, String> lastPrefs = java.util.Map.of();
+    private String diskBase;
+    private boolean overwriteArmed;
 
     private java.util.Map<String, String> currentPrefs() {
         return java.util.Map.of("leftCollapsed", Boolean.toString(leftCollapsed),
@@ -810,6 +813,10 @@ public final class EditorController {
 
     /** 휠: 왼쪽 구조 트리 위에서는 목록 스크롤, 캔버스에서는 화면 이동. */
     public boolean mouseScrolled(int x, int y, double amount) {
+        if (xmlOpen) {
+            xmlScroll = Math.max(0, xmlScroll - (int) Math.signum(amount) * 3);
+            return true;
+        }
         if (leftVisible() && x < LEFT_W && y >= rowsTop() - 2) {
             outlinerScroll = Math.max(0, outlinerScroll - (int) Math.signum(amount) * 3);
             return true;
@@ -1162,6 +1169,10 @@ public final class EditorController {
             helpOpen = !helpOpen;
             return true;
         }
+        if (editKey == null && !exitDialog && !helpOpen && !xmlOpen && (c == '[' || c == ']')) {
+            reorder(c == ']' ? 1 : -1);                         // [ ] : 같은 부모 안에서 순서 이동(뒤로/앞으로)
+            return true;
+        }
         if (editKey == null || c < 32 || c == 127) return false;
         insertText(String.valueOf(c));
         if (COLOR_KEYS.contains(editKey)) previewField();
@@ -1176,6 +1187,10 @@ public final class EditorController {
         }
         if (helpOpen) {
             if (key == EditorKey.ESCAPE || key == EditorKey.F1) helpOpen = false;
+            return true;
+        }
+        if (xmlOpen) {
+            if (key == EditorKey.ESCAPE) xmlOpen = false;
             return true;
         }
         if (menuNear != null) {
@@ -1442,8 +1457,16 @@ public final class EditorController {
 
     public boolean save() {
         commitFieldQuietly();
+        String disk = host.diskText();
+        if (!overwriteArmed && !java.util.Objects.equals(disk, diskBase)) {       // 에디터 밖에서 파일이 바뀌었다
+            overwriteArmed = true;
+            setStatus("파일이 에디터 밖에서 바뀌었어요 — 한 번 더 저장하면 덮어씁니다", true);
+            return false;
+        }
         try {
             host.save(session.text());
+            diskBase = host.diskText();
+            overwriteArmed = false;
             session.markSaved();
             setStatus("저장됨: " + host.title(), false);
             return true;
@@ -1981,6 +2004,7 @@ public final class EditorController {
 
     /** 편집 중인 문서를 현재 화면 이동 위치에 맞춰 그린다. (호버/클릭 효과는 끈다.) */
     public void paintDocument(UiGfx g) {
+        doc.forcePseudo(selected, previewState == 1, previewState == 2);   // 상태 미리보기(선택한 요소만)
         g.pushTransform(panX, panY, 1f, 0f, 0f, 0f);
         doc.paint(g, -1, -1);
         g.popTransform();
@@ -2021,7 +2045,10 @@ public final class EditorController {
             mouseX = realMouseX;
             mouseY = realMouseY;
         }
+        paintToolTip(g);
+        tipNow = null;
         paintMenu(g);
+        paintXmlView(g);
         paintHelp(g);
         paintExitDialog(g);
         paintStatus(g);
@@ -2136,12 +2163,43 @@ public final class EditorController {
     private int button(UiGfx g, int x, int y, String label, boolean enabled, Runnable action, int bg) {
         int w = tm.width(label) + 8, h = TOOLBAR_H - 4;
         boolean over = enabled && mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
+        if (over) tipNow = tipFor(label);
         boolean pressed = over && mouseDown;
         g.fillRect(x, y, w, h, !enabled ? C_BTN_OFF : pressed ? shade(bg, -28) : over ? shade(bg, 32) : bg);
         if (over) outline(g, new Rect(x, y, w, h), pressed ? C_SEL : 0x80FFFFFF);
         g.drawText(label, x + 4, y + (h - tm.lineHeight()) / 2 + 1, enabled ? C_TEXT : C_DIM, false);
         regions.add(new Region(new Rect(x, y, w, h), enabled ? action : null));
         return w + 2;
+    }
+
+    private static final Map<String, String> TIPS = Map.ofEntries(
+            Map.entry("Save", "저장 (Ctrl+S)"), Map.entry("Undo", "실행 취소 (Ctrl+Z)"), Map.entry("Redo", "다시 실행 (Ctrl+Y)"),
+            Map.entry("Dup", "선택한 요소 복제 (Ctrl+D)"), Map.entry("Del", "선택한 요소 삭제 (Delete)"),
+            Map.entry("Wrap", "선택을 컨테이너로 감싸기 / 풀기 (Ctrl+G)"), Map.entry("Align", "부모 안에서 정렬(기준점 지정)"),
+            Map.entry("View", "XML 보기, 상태 미리보기, 도움말"), Map.entry("Grid", "8px 격자에 맞추기 켜고 끄기"),
+            Map.entry("Anchor", "끌어 놓을 때 기준점(anchor) 자동 지정 켜고 끄기"), Map.entry("Fit", "화면 이동을 처음 위치로"),
+            Map.entry("Hide", "툴바 숨기기 (맨 위에 마우스를 올리면 나타남)"), Map.entry("Pin", "툴바를 항상 보이게"),
+            Map.entry("Exit", "에디터 닫기 (F8)"), Map.entry("?", "도움말 (F1)"));
+
+    private String tipNow, tipPrev;
+    private long tipSince;
+
+    private static String tipFor(String label) {
+        for (Map.Entry<String, String> e : TIPS.entrySet()) if (label.startsWith(e.getKey())) return e.getValue();
+        return null;
+    }
+
+    private void paintToolTip(UiGfx g) {
+        if (!java.util.Objects.equals(tipNow, tipPrev)) {
+            tipPrev = tipNow;
+            tipSince = clock.getAsLong();
+        }
+        if (tipNow == null || clock.getAsLong() - tipSince < 450_000_000L || exitDialog) return;
+        int w = tm.width(tipNow) + 8, h = tm.lineHeight() + 6;
+        int x = Math.max(2, Math.min(mouseX, viewW - w - 2)), y = TOOLBAR_H + 4;
+        g.fillRect(x - 1, y - 1, w + 2, h + 2, 0xF0300070);
+        g.fillRect(x, y, w, h, 0xF0100010);
+        g.drawText(tipNow, x + 4, y + 3, C_TEXT, false);
     }
 
     private void paintToolbar(UiGfx g) {
@@ -2160,9 +2218,19 @@ public final class EditorController {
                     if (item.startsWith("풀기")) unwrapSelected();
                     else wrapSelected(item);
                 }));
+        Rect alignRect = new Rect(x, y, tm.width("Align") + 8, TOOLBAR_H - 4);
+        x += button(g, x, y, "Align", selected > 0, () -> openMenu(alignRect, ALIGN_ITEMS, this::alignSelected));
         x += 4;
         x += button(g, x, y, grid ? "Grid:8" : "Grid:off", true, () -> grid = !grid);
         x += button(g, x, y, autoAnchor ? "Anchor:auto" : "Anchor:keep", true, () -> autoAnchor = !autoAnchor);
+        Rect viewRect = new Rect(x, y, tm.width("View") + 8, TOOLBAR_H - 4);
+        x += button(g, x, y, "View", true, () -> openMenu(viewRect, List.of("XML 보기", "상태 미리보기: 없음", "상태 미리보기: hover", "상태 미리보기: active", "도움말"), item -> {
+            if (item.startsWith("XML")) xmlOpen = true;
+            else if (item.contains("없음")) previewState = 0;
+            else if (item.contains("hover")) previewState = 1;
+            else if (item.contains("active")) previewState = 2;
+            else helpOpen = true;
+        }));
         boolean panned = panX != 0 || panY != 0 || targetPanX != 0 || targetPanY != 0;
         x += button(g, x, y, panned ? "Fit!" : "Fit", panned, this::resetView, C_BTN_HOT);   // 옮겨 둔 상태면 눈에 띄게
         int exitW = tm.width("Exit") + 8;
@@ -2571,6 +2639,7 @@ public final class EditorController {
         "[ 이동·크기 ]  끌어서 이동 · 손잡이로 크기 · 방향키 1px / Shift+방향키 8px",
         "[ 복제·복사 ]  Ctrl+D 복제 · Ctrl+C / Ctrl+X / Ctrl+V 복사·잘라내기·붙여넣기",
         "[ 구조 ]  Ctrl+G 컨테이너로 감싸기(Wrap) · Ctrl+Shift+G 풀기(Unwrap) · Delete 삭제",
+        "[ 순서 ]  [ 뒤로 / ] 앞으로(같은 부모 안) · Align 으로 부모 안에서 정렬",
         "[ 실행 취소 ]  Ctrl+Z / Ctrl+Y · 저장 Ctrl+S",
         "[ 속성 ]  값 클릭 후 입력(Enter 확정 · Esc 취소) · -/+ 로 숫자 조절 · 목록·체크 칸은 클릭",
         "[ 화면 ]  휠/가운데 버튼으로 화면 이동 · Home/Fit 원위치 · Tab 패널 숨기기",
@@ -2599,6 +2668,8 @@ public final class EditorController {
     // ---- 복사 / 붙여넣기 / 감싸기 ----
 
     private String elementClip = "";
+    /** 선택한 요소의 상태 미리보기: 0 없음, 1 :hover, 2 :active. */
+    private int previewState;
 
     private void copyElement(boolean cut) {
         if (selected <= 0) return;
@@ -2635,6 +2706,84 @@ public final class EditorController {
         int[] c = visibleCenterDoc();
         String text = growToFit(placeAt(r.text(), r.index(), parentIdx, c[0], c[1]), r.index());
         if (applyEdit(src -> text)) selected = r.index();
+    }
+
+    private static final List<String> ALIGN_ITEMS = List.of("top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right");
+
+    /** 선택한 요소를 부모 안에서 정렬한다: 자유 배치 부모에서는 기준점을 지정하고 오프셋을 지우고, row/column 안에서는 교차축 정렬(align-self). */
+    public void alignSelected(String anchor) {
+        LayoutBox b = selectedBox();
+        if (b == null || b.parent == null || selected <= 0) return;
+        LayoutBox parent = displayParent(b);
+        if (parent == null) return;
+        Map<String, String> props = new LinkedHashMap<>();
+        if (isFlow(parent)) {
+            boolean horizontal = parent.tag().equals("row");            // row 는 위/아래, column 은 왼쪽/오른쪽이 교차축
+            String start = horizontal ? "top" : "left", end = horizontal ? "bottom" : "right";
+            props.put("align-self", anchor.contains(start) ? "start" : anchor.contains(end) ? "end" : "center");
+        } else {
+            props.put("anchor", anchor.equals("top-left") ? null : anchor);
+            props.put("x", null);
+            props.put("y", null);
+        }
+        int idx = selected;
+        LayoutBox box = b;
+        applyEdit(src -> EditorOps.setProps(src.text(), idx, props, p -> box.style.get(p) != null && box.node.attr(p) == null));
+    }
+
+    /** 같은 부모 안에서 순서를 한 칸 옮긴다(dir -1 = 앞/뒤로 보내기: 먼저 그려지는 쪽, +1 = 위로). */
+    public void reorder(int dir) {
+        LayoutBox b = selectedBox();
+        if (b == null || selected <= 0) return;
+        LayoutBox parent = displayParent(b);
+        if (parent == null) return;
+        List<LayoutBox> siblings = displayChildren(parent);
+        int p = siblings.indexOf(b), k = p + dir;
+        if (p < 0 || k < 0 || k >= siblings.size()) return;
+        int parentIdx = parent.node.sourceIndex(), idx = selected, otherIdx = siblings.get(k).node.sourceIndex();
+        String text = session.text();
+        XmlSource src = XmlSource.parse(text);
+        Element parentEl = src.element(parentIdx);
+        int otherPos = parentEl.children().indexOf(src.element(otherIdx));
+        EditorOps.Added r = EditorOps.move(text, idx, parentIdx, dir > 0 ? otherPos + 1 : otherPos);
+        if (applyEdit(s -> r.text())) selected = r.index();
+    }
+
+    // ---- XML 보기(읽기 전용) ----
+
+    private boolean xmlOpen;
+    private int xmlScroll;
+
+    private void paintXmlView(UiGfx g) {
+        if (!xmlOpen) return;
+        regions.add(new Region(new Rect(0, 0, viewW, viewH), () -> xmlOpen = false));
+        g.fillRect(0, 0, viewW, viewH, 0xC0000000);
+        int w = Math.min(viewW - 16, 420), lh = tm.lineHeight() + 1;
+        int y0 = TOOLBAR_H + 4, h = viewH - y0 - 10, x = (viewW - w) / 2;
+        g.fillRect(x - 1, y0 - 1, w + 2, h + 2, C_SEL);
+        g.fillRect(x, y0, w, h, 0xFF101018);
+        String[] lines = session.text().split("\n", -1);
+        int rows = Math.max(1, (h - 16) / lh);
+        xmlScroll = Math.max(0, Math.min(xmlScroll, Math.max(0, lines.length - rows)));
+        int selStart = -1, selEnd = -1;
+        if (selected >= 0) {
+            XmlSource s = session.source();
+            Element el = s.element(selected);
+            if (el != null) {
+                selStart = session.text().substring(0, el.start()).split("\n", -1).length - 1;
+                selEnd = session.text().substring(0, el.end()).split("\n", -1).length - 1;
+            }
+        }
+        g.drawText("XML (읽기 전용 · 휠로 스크롤 · 아무 곳이나 누르면 닫힘)", x + 4, y0 + 3, C_DIM, false);
+        g.pushClip(x, y0 + 14, w, h - 14);
+        for (int i = 0; i < rows && xmlScroll + i < lines.length; i++) {
+            int ln = xmlScroll + i;
+            int ly = y0 + 15 + i * lh;
+            if (ln >= selStart && ln <= selEnd) g.fillRect(x + 1, ly - 1, w - 2, lh, 0xFF26304F);
+            g.drawText(String.format("%3d", ln + 1), x + 3, ly, C_DIM, false);
+            g.drawText(lines[ln].replace("\t", "  "), x + 26, ly, C_TEXT, false);
+        }
+        g.popClip();
     }
 
     /** 선택한 요소를 컨테이너(row/column/panel/stack)로 감싼다. */
