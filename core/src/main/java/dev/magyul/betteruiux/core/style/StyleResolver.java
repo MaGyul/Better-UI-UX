@@ -1,5 +1,6 @@
 package dev.magyul.betteruiux.core.style;
 
+import dev.magyul.betteruiux.core.anim.Keyframes;
 import dev.magyul.betteruiux.core.layout.LayoutBox;
 import dev.magyul.betteruiux.core.layout.StyleMap;
 import java.util.ArrayList;
@@ -30,13 +31,18 @@ public final class StyleResolver {
     private static final int MAX_VAR_DEPTH = 8;
 
     private final List<Entry> entries = new ArrayList<>();
+    private final Map<String, Keyframes> keyframes = new HashMap<>();
 
     public StyleResolver(List<Stylesheet> sheets) {
         int ordinal = 0;
         for (Stylesheet sheet : sheets) {
+            keyframes.putAll(sheet.keyframes());   // 같은 이름이면 나중 시트가 이긴다
             for (Stylesheet.Rule r : sheet.rules()) entries.add(new Entry(r.selector(), r.declarations(), ordinal++));
         }
     }
+
+    /** 이름으로 {@code @keyframes} 를 찾는다(없으면 null). */
+    public Keyframes keyframes(String name) { return keyframes.get(name); }
 
     /** 부모가 먼저 해석돼 있어야 한다(위에서 아래로 호출). */
     public void resolve(LayoutBox box) {

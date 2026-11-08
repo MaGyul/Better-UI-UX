@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.core.style;
 
 import dev.magyul.betteruiux.core.layout.LayoutBox;
+import dev.magyul.betteruiux.core.xml.UiNode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -158,39 +159,71 @@ public final class Selector {
     }
 
     // ---- 매칭 (동적 의사 클래스는 무시하고 구조/속성만 비교) ----
+    // UiNode 기준이라 레이아웃 전에도(예: Java API 의 query) 사용할 수 있다.
 
-    public boolean matches(LayoutBox box) { return matchFrom(steps.size() - 1, box); }
+    public boolean matches(LayoutBox box) { return matches(box.node); }
 
-    private boolean matchFrom(int idx, LayoutBox box) {
-        if (!compoundMatches(steps.get(idx).compound(), box)) return false;
+    public boolean matches(UiNode node) { return matchFrom(steps.size() - 1, node); }
+
+    private boolean matchFrom(int idx, UiNode node) {
+        if (!compoundMatches(steps.get(idx).compound(), node)) return false;
         if (idx == 0) return true;
-        LayoutBox parent = box.parent;
+        UiNode parent = node.parent();
         if (steps.get(idx).directChild()) return parent != null && matchFrom(idx - 1, parent);
-        for (LayoutBox a = parent; a != null; a = a.parent) {
+        for (UiNode a = parent; a != null; a = a.parent()) {
             if (matchFrom(idx - 1, a)) return true;
         }
         return false;
     }
 
-    private static boolean compoundMatches(Compound c, LayoutBox b) {
-        if (c.tag() != null && !c.tag().equals(b.tag())) return false;
-        if (c.id() != null && !c.id().equals(b.node.attr("id"))) return false;
+    /** 레이아웃 대상이 아닌 메타 요소(형제 순서 계산에서 제외). */
+    private static boolean isMeta(UiNode n) {
+        return n.tag().equals("style") || n.tag().equals("link") || n.tag().equals("template");
+    }
+
+    private static boolean isFirstChild(UiNode n) {
+        UiNode p = n.parent();
+        if (p == null) return true;
+        for (UiNode c : p.children()) {
+            if (isMeta(c)) continue;
+            return c == n;
+        }
+        return false;
+    }
+
+    private static boolean isLastChild(UiNode n) {
+        UiNode p = n.parent();
+        if (p == null) return true;
+        List<UiNode> kids = p.children();
+        for (int i = kids.size() - 1; i >= 0; i--) {
+            if (isMeta(kids.get(i))) continue;
+            return kids.get(i) == n;
+        }
+        return false;
+    }
+
+    private static boolean enabledAttr(UiNode n) {
+        String v = n.attributes().getOrDefault("enabled", "true");
+        return v.equalsIgnoreCase("true") || v.equals("1");
+    }
+
+    private static boolean compoundMatches(Compound c, UiNode n) {
+        if (c.tag() != null && !c.tag().equals(n.tag())) return false;
+        if (c.id() != null && !c.id().equals(n.attr("id"))) return false;
         if (!c.classes().isEmpty()) {
-            String cls = b.node.attr("class");
+            String cls = n.attr("class");
             if (cls == null) return false;
-            List<String> have = List.of(cls.trim().split("\\s+"));
+            List<String> have = List.of(cls.trim().split("\s+"));
             for (String want : c.classes()) if (!have.contains(want)) return false;
         }
-        for (AttrSel a : c.attrs()) if (!attrMatches(a, b.node.attr(a.name()))) return false;
+        for (AttrSel a : c.attrs()) if (!attrMatches(a, n.attr(a.name()))) return false;
         for (String p : c.pseudos()) {
             boolean ok = switch (p) {
-                case "first-child" -> b.index == 0;
-                case "last-child" -> b.parent != null && b.index == b.parent.children.size() - 1;
-                case "root" -> b.parent == null;
-                case "disabled" -> !b.node.attributes().getOrDefault("enabled", "true").equalsIgnoreCase("true")
-                        && !b.node.attributes().getOrDefault("enabled", "true").equals("1");
-                case "enabled" -> b.node.attributes().getOrDefault("enabled", "true").equalsIgnoreCase("true")
-                        || b.node.attributes().getOrDefault("enabled", "true").equals("1");
+                case "first-child" -> isFirstChild(n);
+                case "last-child" -> isLastChild(n);
+                case "root" -> n.parent() == null;
+                case "disabled" -> !enabledAttr(n);
+                case "enabled" -> enabledAttr(n);
                 default -> true; // hover/active 는 StyleResolver 가 상태별 오버레이로 처리
             };
             if (!ok) return false;
@@ -203,7 +236,7 @@ public final class Selector {
         return switch (a.op()) {
             case "" -> true;
             case "=" -> actual.equals(a.value());
-            case "~=" -> List.of(actual.trim().split("\\s+")).contains(a.value());
+            case "~=" -> List.of(actual.trim().split("\s+")).contains(a.value());
             case "^=" -> actual.startsWith(a.value());
             case "$=" -> actual.endsWith(a.value());
             case "*=" -> actual.contains(a.value());

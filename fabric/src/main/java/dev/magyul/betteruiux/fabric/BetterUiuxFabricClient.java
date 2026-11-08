@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.fabric;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
+import dev.magyul.betteruiux.mc26.UiApi;
 import dev.magyul.betteruiux.mc26.UiOpener;
 import java.nio.file.Path;
 import net.fabricmc.api.ClientModInitializer;
@@ -17,6 +18,7 @@ public final class BetterUiuxFabricClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         Path baseDir = FabricLoader.getInstance().getConfigDir().resolve("better-uiux");
+        UiApi.init(baseDir);
         // 개발용 자동 열기: 타이틀 화면이 뜬 뒤 한 번만 연다(시작 시점에 열면 타이틀 화면이 덮어쓴다).
         boolean[] opened = {false};
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -30,7 +32,7 @@ public final class BetterUiuxFabricClient implements ClientModInitializer {
                         .then(ClientCommands.literal("open")
                                 .then(ClientCommands.argument("id", StringArgumentType.word())
                                         .executes(ctx -> {
-                                            UiOpener.open(StringArgumentType.getString(ctx, "id"), baseDir);
+                                            UiApi.open(StringArgumentType.getString(ctx, "id"));
                                             return 1;
                                         })))));
     }

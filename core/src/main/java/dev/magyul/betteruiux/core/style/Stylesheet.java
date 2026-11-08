@@ -1,11 +1,14 @@
 package dev.magyul.betteruiux.core.style;
 
+import dev.magyul.betteruiux.core.anim.Keyframes;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * CSS 유사 스타일시트. 지원: {@code selector, selector { prop: value; }}, 주석 {@code /* *}{@code /}, {@code !important},
- * 변수({@code --name}, {@code var()}). {@code @규칙}(예: @keyframes)은 현재 무시하고 경고만 남긴다(M2.5에서 지원).
+ * 변수({@code --name}, {@code var()}), {@code @keyframes}. 그 밖의 {@code @규칙}은 무시하고 경고만 남긴다.
  * 잘못된 규칙은 건너뛰고 {@link #warnings()} 에 기록하는 관대한 파서다(편집 중 깨진 CSS 한 줄이 화면 전체를 막지 않도록).
  */
 public final class Stylesheet {
@@ -15,8 +18,11 @@ public final class Stylesheet {
 
     private final List<Rule> rules = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
+    private final Map<String, Keyframes> keyframes = new LinkedHashMap<>();
 
     public List<Rule> rules() { return rules; }
+
+    public Map<String, Keyframes> keyframes() { return keyframes; }
 
     public List<String> warnings() { return warnings; }
 
@@ -38,8 +44,12 @@ public final class Stylesheet {
             }
             String body = s.substring(open + 1, close);
             i = close + 1;
+            if (selectorText.startsWith("@keyframes")) {
+                sheet.parseKeyframes(selectorText.substring("@keyframes".length()).trim(), body);
+                continue;
+            }
             if (selectorText.startsWith("@")) {
-                sheet.warnings.add("스타일: '" + selectorText.split("\\s+")[0] + "' 은(는) 아직 지원하지 않아 무시합니다");
+                sheet.warnings.add("스타일: '" + selectorText.split("\\s+")[0] + "' 은(는) 지원하지 않아 무시합니다");
                 continue;
             }
             List<Declaration> decls = parseDeclarations(body);
@@ -52,6 +62,48 @@ public final class Stylesheet {
             }
         }
         return sheet;
+    }
+
+    /** {@code from {..} 50% {..} to {..}} 본문을 정지점 목록으로 읽는다. */
+    private void parseKeyframes(String name, String body) {
+        if (!name.matches("[A-Za-z_][A-Za-z0-9_-]*")) {
+            warnings.add("스타일: 잘못된 @keyframes 이름 '" + name + "'");
+            return;
+        }
+        List<Keyframes.Stop> stops = new ArrayList<>();
+        int i = 0, n = body.length();
+        while (i < n) {
+            int open = body.indexOf('{', i);
+            if (open < 0) break;
+            int close = matchingBrace(body, open);
+            if (close < 0) {
+                warnings.add("스타일: @keyframes " + name + " 의 '}' 가 없습니다");
+                break;
+            }
+            String stopList = body.substring(i, open).trim();
+            Map<String, String> props = new LinkedHashMap<>();
+            for (Declaration d : parseDeclarations(body.substring(open + 1, close))) props.put(d.prop(), d.value());
+            for (String one : stopList.split(",")) {
+                Double offset = stopOffset(one.trim().toLowerCase());
+                if (offset == null) warnings.add("스타일: @keyframes " + name + " 의 잘못된 지점 '" + one.trim() + "'");
+                else stops.add(new Keyframes.Stop(offset, props));
+            }
+            i = close + 1;
+        }
+        if (stops.isEmpty()) warnings.add("스타일: @keyframes " + name + " 에 지점이 없습니다");
+        else keyframes.put(name, Keyframes.of(name, stops));
+    }
+
+    private static Double stopOffset(String s) {
+        if (s.equals("from")) return 0.0;
+        if (s.equals("to")) return 1.0;
+        if (!s.endsWith("%")) return null;
+        try {
+            double v = Double.parseDouble(s.substring(0, s.length() - 1)) / 100.0;
+            return v >= 0 && v <= 1 ? v : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** {@code a: b; c: d !important} → 선언 목록. 괄호/따옴표 안의 ';' 는 구분자로 보지 않는다. */

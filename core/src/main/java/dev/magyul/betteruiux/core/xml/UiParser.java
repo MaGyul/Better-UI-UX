@@ -28,7 +28,7 @@ public final class UiParser {
                         for (int i = 0; i < r.getAttributeCount(); i++) {
                             n.attributes().put(r.getAttributeLocalName(i), r.getAttributeValue(i));
                         }
-                        if (stack.isEmpty()) root = n; else stack.peek().children().add(n);
+                        if (stack.isEmpty()) root = n; else stack.peek().append(n);
                         stack.push(n);
                     }
                     case XMLStreamConstants.CHARACTERS -> {

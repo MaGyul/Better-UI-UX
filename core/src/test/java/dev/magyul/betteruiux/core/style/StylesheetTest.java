@@ -41,7 +41,7 @@ class StylesheetTest {
     @Test
     void unsupportedAtRuleAndBadSelectorsOnlyWarn() {
         Stylesheet s = Stylesheet.parse("""
-            @keyframes spin { from { opacity: 0 } to { opacity: 1 } }
+            @font-face { font-family: x }
             label:nonsense { color: red }
             button { color: blue }
             """);

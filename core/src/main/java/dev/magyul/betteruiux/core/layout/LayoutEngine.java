@@ -1,10 +1,12 @@
 package dev.magyul.betteruiux.core.layout;
 
 import dev.magyul.betteruiux.api.TextMetrics;
+import dev.magyul.betteruiux.core.doc.UiWidget;
 import dev.magyul.betteruiux.core.style.StyleResolver;
 import dev.magyul.betteruiux.core.xml.UiNode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * XML 노드 트리 → {@link LayoutBox} 트리. flex 유사 모델:
@@ -20,11 +22,23 @@ public final class LayoutEngine {
 
     private final StyleResolver resolver;
 
+    private final Function<String, String> interpolator;
+    private final Function<UiNode, UiWidget> widgets;
+
     public LayoutEngine(TextMetrics text) { this(text, new StyleResolver(List.of())); }
 
-    public LayoutEngine(TextMetrics text, StyleResolver resolver) {
+    public LayoutEngine(TextMetrics text, StyleResolver resolver) { this(text, resolver, s -> s, n -> null); }
+
+    /**
+     * @param interpolator 텍스트의 {@code {이름}} 바인딩 치환
+     * @param widgets      커스텀 위젯 조회(등록되지 않은 태그는 null)
+     */
+    public LayoutEngine(TextMetrics text, StyleResolver resolver,
+                        Function<String, String> interpolator, Function<UiNode, UiWidget> widgets) {
         this.text = text;
         this.resolver = resolver;
+        this.interpolator = interpolator;
+        this.widgets = widgets;
     }
 
     public LayoutBox layout(UiNode root, int viewW, int viewH) {
@@ -44,12 +58,13 @@ public final class LayoutEngine {
 
     /** 레이아웃 대상이 아닌 메타 요소(스타일 정의 등). */
     private static boolean isMeta(String tag) {
-        return tag.equals("style") || tag.equals("link");
+        return tag.equals("style") || tag.equals("link") || tag.equals("template");
     }
 
     private LayoutBox buildStructure(UiNode node, LayoutBox parent) {
         LayoutBox b = new LayoutBox(node);
         b.parent = parent;
+        b.widget = widgets.apply(node);
         for (UiNode c : node.children()) {
             if (isMeta(c.tag())) continue;
             LayoutBox child = buildStructure(c, b);
@@ -66,17 +81,22 @@ public final class LayoutEngine {
 
     // ---- 내재 크기 (auto) ----
 
-    private static boolean isLeaf(String tag) {
-        return switch (tag) {
+    private static boolean isLeaf(LayoutBox b) {
+        if (b.widget != null) return true;
+        return switch (b.tag()) {
             case "label", "button", "image", "spacer" -> true;
             default -> false;
         };
     }
 
-    public static String textOf(LayoutBox b) {
+    /** 바인딩 치환 전의 텍스트({@code text} 속성 우선, 없으면 본문). */
+    public static String rawText(LayoutBox b) {
         String t = b.style.get("text");
         return t != null ? t : b.node.text().trim();
     }
+
+    /** 바인딩({@code {이름}})까지 치환된 표시용 텍스트. */
+    public String textOf(LayoutBox b) { return interpolator.apply(rawText(b)); }
 
     private Insets padding(LayoutBox b) {
         Insets def = b.tag().equals("button") ? new Insets(4, 8, 4, 8) : Insets.ZERO;
@@ -122,6 +142,7 @@ public final class LayoutEngine {
     private int outerH(LayoutBox b) { return prefH(b) + margin(b).vertical(); }
 
     private int contentW(LayoutBox b) {
+        if (b.widget != null) return b.widget.intrinsicWidth();
         switch (b.tag()) {
             case "label", "button": return maxLineWidth(textOf(b));
             case "image": return 16;
@@ -141,6 +162,7 @@ public final class LayoutEngine {
     }
 
     private int contentH(LayoutBox b) {
+        if (b.widget != null) return b.widget.intrinsicHeight();
         switch (b.tag()) {
             case "label", "button": return lineCount(textOf(b)) * text.lineHeight();
             case "image": return 16;
@@ -166,7 +188,7 @@ public final class LayoutEngine {
         b.y = y;
         b.w = Math.max(0, w);
         b.h = Math.max(0, h);
-        if (isLeaf(b.tag())) return;
+        if (isLeaf(b)) return;
         Insets pad = padding(b);
         int cx = x + pad.left(), cy = y + pad.top();
         int cw = Math.max(0, b.w - pad.horizontal()), ch = Math.max(0, b.h - pad.vertical());

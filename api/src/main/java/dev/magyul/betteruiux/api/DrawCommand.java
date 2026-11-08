@@ -15,5 +15,10 @@ public sealed interface DrawCommand {
 
     record PopClip() implements DrawCommand {}
 
+    record PushTransform(float tx, float ty, float scale, float rotateDeg, float originX, float originY)
+            implements DrawCommand {}
+
+    record PopTransform() implements DrawCommand {}
+
     record BlurBackground() implements DrawCommand {}
 }

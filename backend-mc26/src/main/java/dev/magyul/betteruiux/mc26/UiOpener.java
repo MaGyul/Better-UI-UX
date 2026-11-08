@@ -38,6 +38,7 @@ public final class UiOpener {
             }
             try {
                 UiDocument doc = UiDocumentLoader.load(userDir, id, metrics);
+                UiApi.fireOpened(id, doc);
                 mc.gui.setScreen(new UiScreen(Component.literal(id), id, userDir, metrics, doc, null, hotReload));
             } catch (NoSuchFileException e) {
                 say(mc, "UI '" + id + "' 를 찾을 수 없습니다 (config/better-uiux/ui/" + id + ".xml)");
