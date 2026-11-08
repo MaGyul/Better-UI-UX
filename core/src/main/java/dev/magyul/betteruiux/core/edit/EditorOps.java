@@ -94,6 +94,18 @@ public final class EditorOps {
             case "row" -> "<row gap=\"4\"/>";
             case "image" -> "<image src=\"minecraft:textures/item/diamond.png\" tex=\"16 16\" width=\"16\" height=\"16\"/>";
             case "spacer" -> "<spacer width=\"8\" height=\"8\"/>";
+            case "separator" -> "<separator/>";
+            case "item" -> "<item item=\"minecraft:diamond\" count=\"1\"/>";
+            case "checkbox" -> "<checkbox text=\"Option\"/>";
+            case "radio" -> "<radio group=\"group1\" text=\"Option\"/>";
+            case "slider" -> "<slider min=\"0\" max=\"100\" value=\"50\" width=\"100\"/>";
+            case "textfield" -> "<textfield placeholder=\"Type here...\" width=\"120\"/>";
+            case "select" -> "<select options=\"One,Two,Three\" value=\"One\"/>";
+            case "progress" -> "<progress value=\"50\" max=\"100\" width=\"100\"/>";
+            case "grid" -> "<grid columns=\"3\" gap=\"2\"/>";
+            case "scroll" -> "<scroll width=\"120\" height=\"80\" gap=\"2\"/>";
+            case "tabs" -> "<tabs width=\"140\" height=\"80\">\n  <tab title=\"One\"/>\n  <tab title=\"Two\"/>\n</tabs>";
+            case "dialog" -> "<dialog width=\"140\" height=\"70\"/>";
             default -> throw new IllegalArgumentException("추가할 수 없는 요소: " + tag);
         };
     }

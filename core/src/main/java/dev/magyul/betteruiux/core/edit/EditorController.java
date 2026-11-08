@@ -40,13 +40,21 @@ import java.util.function.Function;
 public final class EditorController {
     // ---- 모양 (테스트가 위치를 계산할 수 있도록 package-private) ----
     static final int TOOLBAR_H = 16, LEFT_W = 140, RIGHT_W = 142, ROW_H = 11;
-    static final int PALETTE_H = 62, OUTLINER_HEADER_H = 12;
+    static final int PALETTE_H = 74, OUTLINER_HEADER_H = 12;
     /** 속성 패널에서 값 칸이 시작하는 x 오프셋(패널 왼쪽 기준). */
     static final int FIELD_OFFSET = 60;
     static final int TAB_W = 10, TAB_H = 26;
-    static final List<String> PALETTE_TAGS = List.of("label", "button", "panel", "column", "row", "image", "spacer");
-    static final Map<String, String> PALETTE_LABELS = Map.of("label", "라벨", "button", "버튼", "panel", "패널",
-            "column", "세로", "row", "가로", "image", "이미지", "spacer", "여백");
+    static final List<String> PALETTE_TAGS = List.of("label", "button", "panel", "column", "row", "image", "spacer", "separator", "item",
+            "checkbox", "radio", "slider", "textfield", "select", "progress",
+            "grid", "scroll", "tabs", "dialog");
+    /** 팔레트 탭: {이름, 시작 번호, 끝 번호(미포함)}. */
+    static final Object[][] PALETTE_TABS = {{"기본", 0, 9}, {"입력", 9, 15}, {"구조", 15, 19}};
+    static final Map<String, String> PALETTE_LABELS = Map.ofEntries(Map.entry("label", "라벨"), Map.entry("button", "버튼"),
+            Map.entry("panel", "패널"), Map.entry("column", "세로"), Map.entry("row", "가로"), Map.entry("image", "이미지"),
+            Map.entry("spacer", "여백"), Map.entry("separator", "구분선"), Map.entry("item", "아이템"), Map.entry("checkbox", "체크"),
+            Map.entry("radio", "라디오"), Map.entry("slider", "슬라이더"), Map.entry("textfield", "입력칸"), Map.entry("select", "선택"),
+            Map.entry("progress", "진행바"), Map.entry("grid", "격자"), Map.entry("scroll", "스크롤"), Map.entry("tabs", "탭"),
+            Map.entry("dialog", "대화상자"));
     /** 속성 이름 → 화면에 보이는 한글 이름. */
     private static final Map<String, String> PROP_LABELS = Map.ofEntries(
             Map.entry("tag", "종류"), Map.entry("text", "글자"), Map.entry("onClick", "클릭 이벤트"), Map.entry("src", "이미지"),
@@ -55,7 +63,11 @@ public final class EditorController {
             Map.entry("justify", "정렬"), Map.entry("align", "교차정렬"), Map.entry("background", "배경"),
             Map.entry("color", "글자색"), Map.entry("border", "테두리"), Map.entry("border-color", "테두리색"),
             Map.entry("opacity", "투명도"), Map.entry("use", "배경효과"), Map.entry("visible", "보임"),
-            Map.entry("enabled", "사용"), Map.entry("checked", "체크됨"), Map.entry("align-self", "자기정렬"));
+            Map.entry("enabled", "사용"), Map.entry("checked", "체크됨"), Map.entry("align-self", "자기정렬"),
+            Map.entry("onChange", "변경 이벤트"), Map.entry("onSubmit", "Enter 이벤트"), Map.entry("value", "값"), Map.entry("min", "최소"),
+            Map.entry("max", "최대"), Map.entry("step", "단계"), Map.entry("maxlength", "최대길이"), Map.entry("placeholder", "안내글"),
+            Map.entry("options", "선택지"), Map.entry("group", "그룹"), Map.entry("columns", "열 수"), Map.entry("title", "제목"),
+            Map.entry("item", "아이템 id"), Map.entry("count", "개수"), Map.entry("tooltip", "툴팁"), Map.entry("modal", "모달"));
     private static final java.util.Set<String> COLOR_KEYS = java.util.Set.of("background", "color", "border-color");
     private static final int SUGGEST_MAX = 6;
     private static final int HANDLE_R = 3, MIN_SIZE = 4, SNAP_THRESHOLD = 4, DRAG_START = 3, GRID = 8, WHEEL_STEP = 16;
@@ -69,8 +81,9 @@ public final class EditorController {
             C_DROP_OK = 0xFF55FF77, C_DROP_BAD = 0xFFFF5555, C_TRASH = 0x70FF3030, C_TAB = 0xFF2E3350,
             SCREEN_OUTSIDE = 0x80000000, SCREEN_FRAME = 0xFF55AAFF, C_BTN_HOT = 0xFF7A6A20, C_SELECTION = 0xFF3A62B0;
 
-    private static final Set<String> ATTR_KEYS = Set.of("id", "class", "onClick", "src", "text");
-    private static final Set<String> CONTAINERS = Set.of("screen", "panel", "row", "column", "stack", "fragment");
+    private static final Set<String> ATTR_KEYS = Set.of("id", "class", "onClick", "src", "text", "onChange", "onSubmit", "value", "checked",
+            "min", "max", "step", "maxlength", "placeholder", "options", "group", "columns", "title", "item", "count", "tooltip", "enabled", "modal");
+    private static final Set<String> CONTAINERS = Set.of("screen", "panel", "row", "column", "stack", "fragment", "grid", "scroll", "tabs", "tab", "dialog");
 
     /**
      * 화면의 누를 수 있는 영역. {@code cursor} 는 그 위에서의 포인터 모양(없으면 기본), {@code passthrough} 이면 단순 배경이라
@@ -96,8 +109,8 @@ public final class EditorController {
             "text-align", List.of("left", "center", "right"),
             "overflow", List.of("visible", "hidden"));
     /** 값이 참/거짓인 속성과 그 기본값. */
-    private static final Map<String, Boolean> BOOLS = Map.of("checked", false, "enabled", true, "visible", true, "shadow", true);
-    private static final Set<String> NUMBERS = Set.of("width", "height", "gap", "border", "x", "y", "opacity");
+    private static final Map<String, Boolean> BOOLS = Map.of("checked", false, "enabled", true, "visible", true, "shadow", true, "modal", true);
+    private static final Set<String> NUMBERS = Set.of("width", "height", "gap", "border", "x", "y", "opacity", "min", "max", "step", "maxlength", "columns", "count");
 
     private static Kind kindOf(String key) {
         if (ENUMS.containsKey(key)) return Kind.ENUM;
@@ -566,8 +579,15 @@ public final class EditorController {
 
     private static Rect rectOf(LayoutBox b) { return new Rect(b.x, b.y, b.w, b.h); }
 
+    /** 자식이 x/y 로 자유롭게 놓이지 않고 순서대로 배치되는 컨테이너(row/column/scroll/grid). */
     private static boolean isFlow(LayoutBox parent) {
-        return parent != null && (parent.tag().equals("row") || parent.tag().equals("column"));
+        return parent != null && (parent.tag().equals("row") || parent.tag().equals("column")
+                || parent.tag().equals("scroll") || parent.tag().equals("grid"));
+    }
+
+    /** 내용보다 작게 줄일 수 없는 컨테이너(row/column). scroll 은 내용이 넘쳐도 되므로 제외. */
+    private static boolean isSizedFlow(LayoutBox b) {
+        return b != null && (b.tag().equals("row") || b.tag().equals("column"));
     }
 
     private static Rect contentRect(LayoutBox parent) {
@@ -613,8 +633,18 @@ public final class EditorController {
     /** i 번째 팔레트 블록의 사각형(3열). */
     static Rect paletteBlock(int i) {
         int w = (LEFT_W - 8 - 4) / 3, h = 13;
-        return new Rect(4 + (i % 3) * (w + 2), TOOLBAR_H + 12 + (i / 3) * (h + 2), w, h);
+        int pos = i - (int) PALETTE_TABS[paletteTabOf(i)][1];                  // 탭 안에서의 위치
+        return new Rect(4 + (pos % 3) * (w + 2), TOOLBAR_H + 24 + (pos / 3) * (h + 2), w, h);
     }
+
+    private static int paletteTabOf(int i) {
+        for (int t = 0; t < PALETTE_TABS.length; t++) {
+            if (i >= (int) PALETTE_TABS[t][1] && i < (int) PALETTE_TABS[t][2]) return t;
+        }
+        return 0;
+    }
+
+    private int paletteTab;
 
     static int rowsTop() { return TOOLBAR_H + PALETTE_H + OUTLINER_HEADER_H + 2; }
 
@@ -846,7 +876,7 @@ public final class EditorController {
         d.parentContent = parent == null ? new Rect(0, 0, viewW, viewH) : contentRect(parent);
         d.curX = b.style.integer("x", 0);
         d.curY = b.style.integer("y", 0);
-        if (isFlow(b)) {                                    // row/column: 내용보다 작게 줄일 수 없다
+        if (isSizedFlow(b)) {                               // row/column: 내용보다 작게 줄일 수 없다
             int[] mn = doc.minimumSize(b);
             d.minW = Math.max(MIN_SIZE, mn[0]);
             d.minH = Math.max(MIN_SIZE, mn[1]);
@@ -1452,7 +1482,7 @@ public final class EditorController {
             if (b == null) return t;
             boolean changed = false;
             for (LayoutBox a = displayParent(b); a != null && !changed; a = displayParent(a)) {
-                if (!isFlow(a)) continue;
+                if (!isSizedFlow(a)) continue;
                 int[] mn = tmp.minimumSize(a);
                 Map<String, String> props = new LinkedHashMap<>();
                 if (explicitPx(a.style.get("width")) != null && a.w < mn[0]) props.put("width", Integer.toString(mn[0]));
@@ -1626,7 +1656,7 @@ public final class EditorController {
 
     /** row/column 의 너비/높이를 내용(자식들)보다 작게 지정하면 내용 크기로 맞춘다. */
     private String clampFlowSize(LayoutBox box, String key, String value) {
-        if (value == null || !isFlow(box) || !(key.equals("width") || key.equals("height"))) return value;
+        if (value == null || !isSizedFlow(box) || !(key.equals("width") || key.equals("height"))) return value;
         Integer px = explicitPx(value);
         if (px == null) return value;
         int[] mn = doc.minimumSize(box);
@@ -1751,6 +1781,7 @@ public final class EditorController {
         if (tag.equals("label") || tag.equals("button")) rows.add(new PropRow(label("text"), "text", LayoutEngine.rawText(b), true));
         if (tag.equals("button")) rows.add(attr(b, "onClick"));
         if (tag.equals("image")) rows.add(attr(b, "src"));
+        widgetRows(b, tag, rows);
         rows.add(header("레이아웃"));
         if (!root) {
             rows.add(style(b, "width"));
@@ -1776,6 +1807,7 @@ public final class EditorController {
         rows.add(style(b, "border-color"));
         rows.add(style(b, "opacity"));
         if (root) rows.add(style(b, "use"));
+        else rows.add(attr(b, "tooltip"));
         return rows;
     }
 
@@ -1790,6 +1822,61 @@ public final class EditorController {
             srcSource = XmlSource.parse(t);
         }
         return srcSource.element(index);
+    }
+
+    /** 새 입력/레이아웃 태그에 맞는 속성 행. */
+    private static void widgetRows(LayoutBox b, String tag, List<PropRow> rows) {
+        switch (tag) {
+            case "checkbox", "radio" -> {
+                rows.add(attr(b, "text"));
+                rows.add(attr(b, "checked"));
+                if (tag.equals("radio")) rows.add(attr(b, "group"));
+                rows.add(attr(b, "enabled"));
+                rows.add(attr(b, "onChange"));
+            }
+            case "slider" -> {
+                rows.add(attr(b, "value"));
+                rows.add(numRow(b, "min"));
+                rows.add(numRow(b, "max"));
+                rows.add(numRow(b, "step"));
+                rows.add(attr(b, "text"));
+                rows.add(attr(b, "enabled"));
+                rows.add(attr(b, "onChange"));
+            }
+            case "progress" -> {
+                rows.add(attr(b, "value"));
+                rows.add(numRow(b, "min"));
+                rows.add(numRow(b, "max"));
+                rows.add(attr(b, "text"));
+            }
+            case "textfield" -> {
+                rows.add(attr(b, "value"));
+                rows.add(attr(b, "placeholder"));
+                rows.add(numRow(b, "maxlength"));
+                rows.add(attr(b, "enabled"));
+                rows.add(attr(b, "onChange"));
+                rows.add(attr(b, "onSubmit"));
+            }
+            case "select" -> {
+                rows.add(attr(b, "options"));
+                rows.add(attr(b, "value"));
+                rows.add(attr(b, "enabled"));
+                rows.add(attr(b, "onChange"));
+            }
+            case "item" -> {
+                rows.add(attr(b, "item"));
+                rows.add(numRow(b, "count"));
+            }
+            case "grid" -> rows.add(numRow(b, "columns"));
+            case "tab" -> rows.add(attr(b, "title"));
+            case "dialog" -> rows.add(attr(b, "modal"));
+            default -> { }
+        }
+    }
+
+    private static PropRow numRow(LayoutBox b, String key) {
+        String v = b.node.attr(key);
+        return new PropRow(label(key), key, v == null ? "" : v, true, Kind.NUMBER, List.of());
     }
 
     private static String label(String key) { return PROP_LABELS.getOrDefault(key, key); }
@@ -1973,7 +2060,10 @@ public final class EditorController {
             case "label" -> 0xFF4C8DDB;
             case "button" -> 0xFF8A5CD6;
             case "image" -> 0xFF45A86B;
-            case "spacer" -> 0xFF7A7F8F;
+            case "spacer", "separator" -> 0xFF7A7F8F;
+            case "item" -> 0xFF45A86B;
+            case "checkbox", "radio", "slider", "textfield", "select", "progress" -> 0xFFC2547A;
+            case "grid", "scroll", "tabs", "tab", "dialog" -> 0xFFD08A2E;
             default -> 0xFF666B7A;
         };
     }
@@ -2127,7 +2217,18 @@ public final class EditorController {
 
         // 팔레트
         g.drawText("블록 (끌어다 놓기)", 4, TOOLBAR_H + 2, C_DIM, false);
-        for (int i = 0; i < PALETTE_TAGS.size(); i++) {
+        int tabW = (LEFT_W - 8) / PALETTE_TABS.length;
+        for (int t = 0; t < PALETTE_TABS.length; t++) {                       // 팔레트 탭
+            Rect tr = new Rect(4 + t * tabW, TOOLBAR_H + 11, tabW - 1, 11);
+            boolean on = t == paletteTab, over = tr.contains(mouseX, mouseY);
+            g.fillRect(tr.x(), tr.y(), tr.w(), tr.h(), on ? 0xFF3A3F55 : over ? 0xFF2A2D3E : 0xFF1A1C28);
+            if (on) g.fillRect(tr.x(), tr.y(), tr.w(), 1, C_SEL);
+            String name = (String) PALETTE_TABS[t][0];
+            g.drawText(name, tr.x() + (tr.w() - tm.width(name)) / 2, tr.y() + 2, on ? C_TEXT : C_DIM, false);
+            final int idx = t;
+            regions.add(new Region(tr, () -> paletteTab = idx));
+        }
+        for (int i = (int) PALETTE_TABS[paletteTab][1]; i < (int) PALETTE_TABS[paletteTab][2]; i++) {
             String tag = PALETTE_TAGS.get(i);
             Rect r = paletteBlock(i);
             g.fillRect(r.x(), r.y(), r.w(), r.h(), tagColor(tag));

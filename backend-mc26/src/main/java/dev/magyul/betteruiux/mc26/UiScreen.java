@@ -77,6 +77,19 @@ public final class UiScreen extends Screen {
 
     private void bind(UiDocument d) {
         d.setOnClose(this::onClose);
+        // 글자 입력 칸(textfield): 채팅창과 같은 시스템 클립보드, SDL 글자 입력(IME 포함) 켜기/끄기
+        d.setClipboardHandler(() -> net.minecraft.client.Minecraft.getInstance().keyboardHandler.getClipboard(),
+                s -> net.minecraft.client.Minecraft.getInstance().keyboardHandler.setClipboard(s));
+        d.setTextInputHandler((on, x, y, w, h) -> {
+            var manager = net.minecraft.client.Minecraft.getInstance().textInputManager();
+            if (on) {
+                manager.setTextInputArea(x, y, x + w, y + h);
+                manager.startTextInput(this);
+            } else {
+                manager.stopTextInput(this);
+                preedit = null;
+            }
+        });
     }
 
     @Override
@@ -189,7 +202,7 @@ public final class UiScreen extends Screen {
         }
         int idx = first.get().node.sourceIndex();
         editor.select(idx);
-        int fx = this.width - 142 + 60 + 6, fy = 16 + 3 + 3 * 12 + 1;   // 속성 패널의 4번째 행(너비)
+        int fx = this.width - 142 + 60 + 6, fy = 16 + 3 + 4 * 12 + 1;   // 속성 패널의 5번째 행(너비)
         String before = editor.text();
         editor.mousePressed(fx, fy, 0);
         editor.mouseReleased(fx, fy, 0);
@@ -235,6 +248,7 @@ public final class UiScreen extends Screen {
             if (error != null) messages.add(new ErrorOverlay.Message(true, error));
             for (String w : doc.warnings()) messages.add(new ErrorOverlay.Message(false, w));
             if (!messages.isEmpty()) ErrorOverlay.paint(gfx, metrics, this.width, messages);
+            paintPreedit(graphics, mouseX, mouseY, a);
         }
         if (!loggedFirstFrame) {
             loggedFirstFrame = true;
@@ -249,13 +263,14 @@ public final class UiScreen extends Screen {
     /** SDL 이 보내 주는 IME 조합 중인 글자. 비어 있으면 조합이 끝난 것. */
     @Override
     public boolean preeditUpdated(net.minecraft.client.input.PreeditEvent event) {
-        if (editor == null || !editor.isEditingField()) return super.preeditUpdated(event);
+        boolean fieldFocused = editor == null && doc.caretScreen() != null;
+        if (!fieldFocused && (editor == null || !editor.isEditingField())) return super.preeditUpdated(event);
         preedit = event == null || event.fullText().isEmpty() ? null : event;
         return true;
     }
 
     private void paintPreedit(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
-        int[] caret = editor.caretScreen();
+        int[] caret = editor != null ? editor.caretScreen() : doc.caretScreen();
         if (preedit == null || caret == null) {
             if (caret == null) preedit = null;
             return;
@@ -280,6 +295,7 @@ public final class UiScreen extends Screen {
             if (DEBUG) LOG.info("[better-uiux] editor key={} -> {} used={} editing={}", event.key(), mapped, used, editor.isEditingField());
             return true;   // 편집 중에는 게임 단축키(Esc 로 닫기 등)를 막는다. 나가려면 F8.
         }
+        if (doc.keyPressed(McUiKeys.map(event), event.hasControlDown(), event.hasShiftDown())) return true;
         return super.keyPressed(event);
     }
 
@@ -290,6 +306,7 @@ public final class UiScreen extends Screen {
             if (DEBUG) LOG.info("[better-uiux] editor char U+{} used={} editing={}", Integer.toHexString(event.codepoint()), used, editor.isEditingField());
             return true;
         }
+        if (event.codepoint() <= 0xFFFF && doc.charTyped((char) event.codepoint())) return true;
         return super.charTyped(event);
     }
 
@@ -317,13 +334,13 @@ public final class UiScreen extends Screen {
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
         if (editor != null) return editor.mouseDragged((int) event.x(), (int) event.y());
-        return super.mouseDragged(event, dx, dy);
+        return doc.mouseDragged((int) event.x(), (int) event.y()) || super.mouseDragged(event, dx, dy);
     }
 
     @Override
     public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
         if (editor != null) return editor.mouseScrolled((int) x, (int) y, scrollY);
-        return super.mouseScrolled(x, y, scrollX, scrollY);
+        return doc.mouseScrolled((int) x, (int) y, scrollY) || super.mouseScrolled(x, y, scrollX, scrollY);
     }
 
     /**
@@ -336,7 +353,7 @@ public final class UiScreen extends Screen {
 
     @Override
     public boolean shouldCloseOnEsc() {
-        return editor == null;
+        return editor == null && doc.focusedElement() == null;
     }
 
     @Override
