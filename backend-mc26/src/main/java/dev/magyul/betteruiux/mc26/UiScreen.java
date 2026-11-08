@@ -75,7 +75,7 @@ public final class UiScreen extends Screen {
 
     private UiDocument activeDoc() { return editor != null ? editor.document() : doc; }
 
-    private dev.magyul.betteruiux.core.script.ScriptHost scriptHost;
+    private ScriptBridge.Attached scriptHost;
 
     private void bind(UiDocument d) {
         d.setOnClose(this::onClose);

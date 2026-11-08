@@ -1,0 +1,16 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "All-Rights-Reserved"
+
+[[mods]]
+modId = "better_uiux_script"
+version = "${version}"
+displayName = "Better UI/UX - Script runtime (GraalJS)"
+description = "Optional JavaScript runtime for Better UI/UX documents. Sandboxed GraalJS (about 37 MB). Cannot limit memory use: only enable scripting for UI packs you trust."
+
+[[dependencies.better_uiux_script]]
+modId = "better_uiux"
+type = "required"
+versionRange = "[0,)"
+ordering = "AFTER"
+side = "CLIENT"

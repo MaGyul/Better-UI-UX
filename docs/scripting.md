@@ -14,8 +14,12 @@ enabled = true
 commands = "say"        # 스크립트가 실행할 수 있는 명령어의 첫 단어(쉼표로 구분). 비우면 모든 명령 거부
 ```
 
-JavaScript 런타임(GraalJS)은 **선택 모듈 `script-graal`** 이다. 개발 실행(`runClient`)에는 자동으로 들어가고, 배포 jar 에는 들어 있지 않다.
+JavaScript 런타임(GraalJS)은 **선택 모듈 `script-graal`** 이다(약 37MB). 개발 실행(`runClient`)에는 자동으로 들어가고, 배포 jar 에는 들어 있지 않다.
 런타임이 없으면 `<script>` 는 무시되고 경고만 나온다.
+
+**배포/설치**: `./gradlew :script-graal:bundleJar` 가 `script-graal/build/libs/script-graal-<버전>-bundle.jar` 를 만든다
+(GraalJS 의존성 + 우리 런타임 + Fabric/NeoForge 모드 정보가 든 모드 jar 하나, 모드 id `better_uiux_script`).
+Better UI/UX 와 같이 `mods` 폴더에 넣으면 된다. 스크립트가 필요 없는 모드팩은 이 jar 를 빼면 된다.
 
 ## 문서에 연결
 
@@ -57,6 +61,13 @@ function buy(event, state) {               // event: 누른 요소, state: id �
 `selector` 는 문서 선택자(`#id`, `.class`, `tag`, `a > b`)다. 맞는 요소가 여럿이면 모두에 적용된다(최대 200개).
 
 ## 한계와 보안
+
+> **안내문(모드 설명/README 에 그대로 쓰세요)**: 스크립트는 샌드박스 안에서 실행되어 파일·네트워크·게임 내부에 접근할 수 없지만,
+> JavaScript 런타임(GraalVM Community)이 **메모리 사용량 상한을 지원하지 않습니다.** 악의적으로 만든 스크립트가 메모리를 많이 쓸 수 있으므로,
+> 스크립트는 **신뢰할 수 있는 UI 팩에서만** 켜세요(기본값은 꺼짐).
+
+시작 속도: 런타임은 처음 켜는 데 1~2초 걸려서 **백그라운드에서 준비**한다. 화면은 바로 뜨고, 준비되는 동안 누른 스크립트 버튼은 "준비 중" 경고만 낸다.
+
 
 - **샌드박스**: 자바 클래스/객체, 파일, 네트워크, 프로세스, 스레드, 환경 변수에 접근할 수 없다.
 - **상한**: 호출 한 번에 문장 500,000개 / 300ms, 문자열 길이 1,000,000, 요청 64개, 명령 8개(초당 20개), 한 줄 256자.

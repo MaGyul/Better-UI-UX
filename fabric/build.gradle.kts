@@ -40,7 +40,8 @@ val scriptRuntime = configurations.resolvable("scriptRuntime") {
     attributes { attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage::class.java, Usage.JAVA_RUNTIME)) }
 }
 dependencies { add("scriptRuntimeDeps", project(":script-graal")) }
-tasks.matching { it.name == "runClient" }.configureEach {
+// -PscriptFromMods : 개발용 클래스패스를 붙이지 않고, run/mods 에 넣은 배포용 묶음(bundleJar)으로 스크립트 런타임을 확인한다.
+if (!providers.gradleProperty("scriptFromMods").isPresent) tasks.matching { it.name == "runClient" }.configureEach {
     // GraalJS 의 일부 의존성은 .pom 파일이 같이 풀려 나오는데 jar 가 아니라서 로더가 읽다가 실패한다: jar 만 붙인다.
     (this as JavaExec).classpath(scriptRuntime.get().filter { it.name.endsWith(".jar") })
 }

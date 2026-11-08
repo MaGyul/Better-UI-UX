@@ -129,4 +129,29 @@ class GraalScriptRuntimeTest {
         assertEquals(List.of(), d.warnings());
         host.close();
     }
+
+    @Test
+    void runtimesShareOneEngineButNotTheirState() throws Exception {
+        GraalScriptRuntime other = new GraalScriptRuntime();
+        try {
+            rt.load("a.js", "var secret = 'A'; function who() { ui.log(typeof globalThis.secret + ':' + secret); }");
+            other.load("b.js", "function who() { ui.log(typeof globalThis.secret); }");
+            assertTrue(call("who").contains("string:A"));
+            String b = other.call("{\"type\":\"call\",\"fn\":\"who\",\"event\":{},\"state\":{}}");
+            assertTrue(b.contains("undefined"), "다른 런타임의 전역은 보이지 않는다: " + b);
+        } finally {
+            other.close();
+        }
+        assertTrue(call("who").contains("string:A"), "다른 런타임을 닫아도 영향이 없다");
+    }
+
+    @Test
+    void prewarmMakesTheNextRuntimeStartFast() {
+        GraalScriptRuntime.prewarm();
+        long t0 = System.nanoTime();
+        GraalScriptRuntime fresh = new GraalScriptRuntime();
+        long ms = (System.nanoTime() - t0) / 1_000_000;
+        fresh.close();
+        assertTrue(ms < 2_000, "예열 뒤 런타임 생성 시간: " + ms + "ms");
+    }
 }
