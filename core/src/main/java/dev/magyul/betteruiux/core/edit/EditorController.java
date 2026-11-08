@@ -298,6 +298,9 @@ public final class EditorController {
     /** 시간 원본(테스트에서 바꿀 수 있다). */
     java.util.function.LongSupplier clock = System::nanoTime;
 
+    /** 시간 원본을 바꾼다(스냅샷/애니메이션 테스트용). */
+    public void setClockForTests(java.util.function.LongSupplier c) { this.clock = c; }
+
     private boolean toolbarVisible() {
         return panelsVisible && !dragStarted() && (!toolbarHidden || toolbarPeek);
     }

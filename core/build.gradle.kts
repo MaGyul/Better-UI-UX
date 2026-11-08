@@ -15,4 +15,8 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-tasks.test { useJUnitPlatform() }
+tasks.test {
+    useJUnitPlatform()
+    // 골든(스냅샷) 파일을 다시 만들 때: ./gradlew :core:test -Pgolden.update=true
+    systemProperty("golden.update", (project.findProperty("golden.update") ?: "false").toString())
+}
