@@ -42,3 +42,9 @@ tasks.processResources {
     inputs.properties(props)
     filesMatching("META-INF/neoforge.mods.toml") { expand(props) }
 }
+
+// 26.x 공통 백엔드 소스를 로더 모듈이 함께 컴파일한다(두 로더 모두 같은 공식 이름의 마인크래프트 클래스를 사용).
+sourceSets.main {
+    java.srcDir("../backend-mc26/src/main/java")
+    resources.srcDir("../backend-mc26/src/main/resources")
+}
