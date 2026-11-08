@@ -30,19 +30,34 @@ import java.util.function.Function;
  * <p>스크래치처럼 다룬다: 왼쪽 <b>블록 팔레트</b>에서 요소를 끌어 캔버스나 구조 트리에 놓으면 추가되고,
  * 이미 있는 요소를 구조 트리 안에서 끌어 옮기거나, <b>팔레트 쪽으로 끌어다 놓으면 삭제</b>된다.
  * 구조 트리는 접고 펼 수 있다.
+ *
+ * <p>화면 이동(팬): 문서는 실제 화면 크기로 배치된 채 그대로 두고, 보는 위치만 옮긴다. 선택한 요소가 양옆 패널에 가려지면
+ * 가운데로 자동 이동하고, 마우스 휠 / 가운데 버튼 드래그로도 옮길 수 있다. 요소를 끌어 옮기는 동안에는 양옆 패널이
+ * 숨겨져 화면 전체가 보이며, 패널은 가장자리 탭으로 직접 접을 수도 있다.
  */
 public final class EditorController {
     // ---- 모양 (테스트가 위치를 계산할 수 있도록 package-private) ----
     static final int TOOLBAR_H = 16, LEFT_W = 140, RIGHT_W = 142, ROW_H = 11;
     static final int PALETTE_H = 62, OUTLINER_HEADER_H = 12;
+    /** 속성 패널에서 값 칸이 시작하는 x 오프셋(패널 왼쪽 기준). */
+    static final int FIELD_OFFSET = 60;
+    static final int TAB_W = 10, TAB_H = 26;
     static final List<String> PALETTE_TAGS = List.of("label", "button", "panel", "column", "row", "image", "spacer");
     static final Map<String, String> PALETTE_LABELS = Map.of("label", "라벨", "button", "버튼", "panel", "패널",
             "column", "세로", "row", "가로", "image", "이미지", "spacer", "여백");
-    private static final int HANDLE_R = 3, MIN_SIZE = 4, SNAP_THRESHOLD = 4, DRAG_START = 3, GRID = 8;
-    private static final int C_PANEL = 0xE0161820, C_BTN = 0xFF3A3F55, C_BTN_OFF = 0xFF262838, C_SEL = 0xFFFFFF55,
+    /** 속성 이름 → 화면에 보이는 한글 이름. */
+    private static final Map<String, String> PROP_LABELS = Map.ofEntries(
+            Map.entry("tag", "종류"), Map.entry("text", "글자"), Map.entry("onClick", "클릭"), Map.entry("src", "이미지"),
+            Map.entry("width", "너비"), Map.entry("height", "높이"), Map.entry("margin", "바깥여백"),
+            Map.entry("padding", "안쪽여백"), Map.entry("anchor", "기준점"), Map.entry("gap", "간격"),
+            Map.entry("justify", "정렬"), Map.entry("align", "교차정렬"), Map.entry("background", "배경"),
+            Map.entry("color", "글자색"), Map.entry("border", "테두리"), Map.entry("border-color", "테두리색"),
+            Map.entry("opacity", "투명도"), Map.entry("use", "배경효과"));
+    private static final int HANDLE_R = 3, MIN_SIZE = 4, SNAP_THRESHOLD = 4, DRAG_START = 3, GRID = 8, WHEEL_STEP = 16;
+    private static final int C_PANEL = 0xF2161820, C_BTN = 0xFF3A3F55, C_BTN_OFF = 0xFF262838, C_SEL = 0xFFFFFF55,
             C_HOVER = 0x9055FFFF, C_GUIDE = 0xFFFF55FF, C_TEXT = 0xFFFFFFFF, C_DIM = 0xFF9090A0, C_ERR = 0xFFFF6060,
             C_OK = 0xFF80FF80, C_ROW_SEL = 0xFF3A4A80, C_ROW_HOVER = 0xFF2A3050, C_FIELD = 0xFF101018,
-            C_DROP_OK = 0xFF55FF77, C_DROP_BAD = 0xFFFF5555, C_TRASH = 0x70FF3030;
+            C_DROP_OK = 0xFF55FF77, C_DROP_BAD = 0xFFFF5555, C_TRASH = 0x70FF3030, C_TAB = 0xFF2E3350;
 
     private static final Set<String> ATTR_KEYS = Set.of("id", "class", "onClick", "src", "text");
     private static final Set<String> CONTAINERS = Set.of("screen", "panel", "row", "column", "stack", "fragment");
@@ -53,11 +68,11 @@ public final class EditorController {
 
     private record TreeRow(LayoutBox box, int depth, boolean hasKids, boolean collapsed, String key) {}
 
-    /** 놓을 자리. {@code refIndex} 는 그 앞에 넣을 형제의 요소 번호(-1 이면 맨 뒤). */
+    /** 놓을 자리. {@code refIndex} 는 그 앞에 넣을 형제의 요소 번호(-1 이면 맨 뒤). 사각형은 문서 좌표(트리/휴지통은 화면 좌표). */
     private record Drop(int parentIndex, int refIndex, Rect highlight, Rect line, boolean valid, boolean trash,
                         boolean onCanvas) {}
 
-    /** 팔레트/트리에서 시작한 끌어놓기. */
+    /** 팔레트/트리에서 시작한 끌어놓기. 좌표는 화면 좌표. */
     private static final class Dnd {
         final boolean fromPalette;
         final String tag;
@@ -75,7 +90,7 @@ public final class EditorController {
         }
     }
 
-    /** 캔버스에서 요소를 직접 끄는 중(이동/크기/재정렬). 시작 시점의 기하 정보를 담고 매 프레임 기준 텍스트에 처음부터 적용한다. */
+    /** 캔버스에서 요소를 직접 끄는 중(이동/크기/재정렬). 좌표는 문서 좌표. 매 프레임 기준 텍스트에 처음부터 적용한다. */
     private static final class Drag {
         Handle handle;
         int startMx, startMy;
@@ -104,10 +119,15 @@ public final class EditorController {
     private int hoverIndex = -1;
     private int mouseX = -1, mouseY = -1;
     private boolean panelsVisible = true;
+    private boolean leftCollapsed, rightCollapsed;
     private boolean grid;
     private int outlinerScroll;
     private final Set<String> collapsed = new HashSet<>();
     private int lastRevealed = -2;
+    private int lastPanned = -2;
+    private int panX, panY;
+    private boolean panning;
+    private int panAnchorX, panAnchorY;
     private Drag drag;
     private Dnd dnd;
     private List<Geometry.Guide> guides = List.of();
@@ -160,9 +180,34 @@ public final class EditorController {
         commitFieldQuietly();
     }
 
+    /** 에디터를 닫을 때 호출한다(편집 중인 칸을 취소하고 글자 입력을 끈다). */
+    public void close() {
+        cancelField();
+        dnd = null;
+        drag = null;
+        panning = false;
+    }
+
     private void setStatus(String s, boolean error) {
         status = s;
         statusError = error;
+    }
+
+    // ---- 패널 보이기 상태 ----
+
+    private boolean dragStarted() { return drag != null && drag.started; }
+
+    /** 왼쪽 패널(블록+구조): 접었거나, 캔버스에서 요소를 끄는 중이면 숨긴다. */
+    private boolean leftVisible() { return panelsVisible && !leftCollapsed && !dragStarted(); }
+
+    /** 오른쪽 패널(속성): 접었거나, 무엇이든 끄는 중이면 숨긴다. */
+    private boolean rightVisible() { return panelsVisible && !rightCollapsed && !dragStarted() && dnd == null; }
+
+    /** 팬 계산용: 끄는 중이 아닐 때의 "가운데 작업 영역"(패널이 접혀 있으면 그만큼 넓다). */
+    private Rect centerView() {
+        int left = panelsVisible && !leftCollapsed ? LEFT_W : 0, right = panelsVisible && !rightCollapsed ? RIGHT_W : 0;
+        int top = panelsVisible ? TOOLBAR_H : 0;
+        return new Rect(left, top, Math.max(1, viewW - left - right), Math.max(1, viewH - top));
     }
 
     // ---- 문서 다시 만들기 / 편집 적용 ----
@@ -194,7 +239,7 @@ public final class EditorController {
         return true;
     }
 
-    // ---- 박스 조회 ----
+    // ---- 박스 조회 (문서 좌표) ----
 
     private LayoutBox selectedBox() { return selected < 0 ? null : boxByIndex(doc.layout(), selected); }
 
@@ -207,7 +252,7 @@ public final class EditorController {
         return null;
     }
 
-    /** 점 아래의 요소 중 원본 XML 에 실제로 있는 가장 깊은 것(확장으로 생긴 요소는 조상으로 올라간다). */
+    /** 문서 좌표 (x,y) 아래의 요소 중 원본 XML 에 실제로 있는 가장 깊은 것(확장으로 생긴 요소는 조상으로 올라간다). */
     private LayoutBox hitSource(int x, int y) {
         LayoutBox hit = doc.hitTest(x, y);
         while (hit != null && hit.node.sourceIndex() < 0) hit = hit.parent;
@@ -251,9 +296,14 @@ public final class EditorController {
         return false;
     }
 
-    // ================= 팔레트 / 트리 기하 =================
+    // ================= 팔레트 / 트리 / 휴지통 기하 (화면 좌표) =================
 
     private Rect paletteRect() { return new Rect(0, TOOLBAR_H, LEFT_W, PALETTE_H); }
+
+    /** 요소를 끌어다 놓으면 삭제되는 곳: 왼쪽 패널이 보이면 블록 칸, 숨겨져 있으면 왼쪽 아래 구석. */
+    private Rect trashRect() {
+        return leftVisible() ? paletteRect() : new Rect(0, viewH - 28, 110, 28);
+    }
 
     /** i 번째 팔레트 블록의 사각형(3열). */
     static Rect paletteBlock(int i) {
@@ -264,6 +314,18 @@ public final class EditorController {
     static int rowsTop() { return TOOLBAR_H + PALETTE_H + OUTLINER_HEADER_H + 2; }
 
     private int visibleRows() { return Math.max(1, (viewH - rowsTop()) / ROW_H); }
+
+    private Rect leftTab() { return new Rect(leftCollapsed ? 0 : LEFT_W, TOOLBAR_H + 2, TAB_W, TAB_H); }
+
+    private Rect rightTab() { return new Rect(rightCollapsed ? viewW - TAB_W : viewW - RIGHT_W - TAB_W, TOOLBAR_H + 2, TAB_W, TAB_H); }
+
+    private boolean overPanel(int x, int y) {
+        if (!panelsVisible) return false;
+        if (y < TOOLBAR_H) return true;
+        if (leftVisible() && x < LEFT_W) return true;
+        if (rightVisible() && x >= viewW - RIGHT_W) return true;
+        return !dragStarted() && (leftTab().contains(x, y) || rightTab().contains(x, y));
+    }
 
     // ================= 입력: 마우스 =================
 
@@ -276,6 +338,12 @@ public final class EditorController {
     public boolean mousePressed(int x, int y, int button) {
         mouseX = x;
         mouseY = y;
+        if (button == 1) {                                  // 가운데 버튼: 화면 이동
+            panning = true;
+            panAnchorX = x - panX;
+            panAnchorY = y - panY;
+            return true;
+        }
         if (button != 0) return true;
         refreshRegions();
         if (editKey != null && (editRect == null || !editRect.contains(x, y))) commitField();
@@ -287,22 +355,23 @@ public final class EditorController {
                 return true;
             }
         }
+        int cx = x - panX, cy = y - panY;                   // 이후는 문서 좌표
         LayoutBox sel = selectedBox();
         if (sel != null && sel.parent != null) {
-            Handle h = handleAt(sel, x, y);
+            Handle h = handleAt(sel, cx, cy);
             if (h != null) {
-                prepareDrag(sel, h, x, y);
+                prepareDrag(sel, h, cx, cy);
                 return true;
             }
-            if (sel.contains(x, y)) {
-                prepareDrag(sel, Handle.BODY, x, y);
+            if (sel.contains(cx, cy)) {
+                prepareDrag(sel, Handle.BODY, cx, cy);
                 return true;
             }
         }
-        LayoutBox hit = hitSource(x, y);
+        LayoutBox hit = hitSource(cx, cy);
         if (hit != null) {
             selected = hit.node.sourceIndex();
-            if (hit.parent != null) prepareDrag(hit, Handle.BODY, x, y);
+            if (hit.parent != null) prepareDrag(hit, Handle.BODY, cx, cy);
         } else {
             selected = -1;
         }
@@ -312,24 +381,34 @@ public final class EditorController {
     public boolean mouseDragged(int x, int y) {
         mouseX = x;
         mouseY = y;
+        if (panning) {
+            panX = x - panAnchorX;
+            panY = y - panAnchorY;
+            return true;
+        }
         if (dnd != null) {
             if (!dnd.started && Math.max(Math.abs(x - dnd.startX), Math.abs(y - dnd.startY)) >= DRAG_START) dnd.started = true;
             return true;
         }
         if (drag == null) return false;
-        int dx = x - drag.startMx, dy = y - drag.startMy;
+        int cx = x - panX, cy = y - panY;
+        int dx = cx - drag.startMx, dy = cy - drag.startMy;
         if (!drag.started) {
             if (Math.max(Math.abs(dx), Math.abs(dy)) < DRAG_START) return true;
             drag.started = true;
             session.beginTransient();
         }
-        applyDrag(x, y);
+        applyDrag(cx, cy);
         return true;
     }
 
     public boolean mouseReleased(int x, int y, int button) {
         mouseX = x;
         mouseY = y;
+        if (panning) {
+            panning = false;
+            return true;
+        }
         if (dnd != null) {
             Dnd d = dnd;
             dnd = null;
@@ -338,10 +417,10 @@ public final class EditorController {
         }
         if (drag == null) return true;
         Drag d = drag;
+        boolean trash = d.started && d.handle == Handle.BODY && d.index > 0 && panelsVisible && trashRect().contains(x, y);
         drag = null;
         guides = List.of();
         if (d.started) {
-            boolean trash = d.handle == Handle.BODY && panelsVisible && d.index > 0 && paletteRect().contains(x, y);
             if (trash) {
                 session.cancelTransient();
                 reload();
@@ -356,12 +435,21 @@ public final class EditorController {
         return true;
     }
 
+    /** 휠: 왼쪽 구조 트리 위에서는 목록 스크롤, 캔버스에서는 화면 이동. */
     public boolean mouseScrolled(int x, int y, double amount) {
-        if (panelsVisible && x < LEFT_W && y >= rowsTop() - 2) {
+        if (leftVisible() && x < LEFT_W && y >= rowsTop() - 2) {
             outlinerScroll = Math.max(0, outlinerScroll - (int) Math.signum(amount) * 3);
             return true;
         }
-        return false;
+        if (overPanel(x, y)) return false;
+        panY += (int) Math.signum(amount) * WHEEL_STEP;
+        return true;
+    }
+
+    /** 화면 이동을 처음 위치로 되돌린다. */
+    public void resetView() {
+        panX = 0;
+        panY = 0;
     }
 
     private Handle handleAt(LayoutBox b, int x, int y) {
@@ -490,16 +578,19 @@ public final class EditorController {
         return best;
     }
 
-    // ================= 끌어놓기(팔레트 → 캔버스/트리, 트리 → 트리/캔버스, 팔레트로 끌면 삭제) =================
+    // ================= 끌어놓기(팔레트 → 캔버스/트리, 트리 → 트리/캔버스, 휴지통으로 끌면 삭제) =================
 
-    /** 놓으려는 자리를 계산한다. 놓을 수 있는 곳이 없으면 null. {@code movingIndex} 는 옮기는 기존 요소(팔레트 블록이면 -1). */
+    /**
+     * 놓으려는 자리를 계산한다. 놓을 수 있는 곳이 없으면 null. (x,y)는 화면 좌표.
+     * {@code movingIndex} 는 옮기는 기존 요소(팔레트 블록이면 -1).
+     */
     private Drop dropTarget(int x, int y, int movingIndex) {
-        if (panelsVisible && paletteRect().contains(x, y)) {
-            return new Drop(-1, -1, paletteRect(), null, movingIndex > 0, true, false);
+        if (panelsVisible && trashRect().contains(x, y) && (leftVisible() || movingIndex > 0)) {
+            return new Drop(-1, -1, trashRect(), null, movingIndex > 0, true, false);
         }
-        if (panelsVisible && x < LEFT_W && y >= rowsTop() - 1) return treeDrop(x, y, movingIndex);
+        if (leftVisible() && x < LEFT_W && y >= rowsTop() - 1) return treeDrop(x, y, movingIndex);
         if (overPanel(x, y)) return null;
-        return canvasDrop(x, y, movingIndex);
+        return canvasDrop(x - panX, y - panY, movingIndex);
     }
 
     private Drop treeDrop(int x, int y, int movingIndex) {
@@ -535,6 +626,7 @@ public final class EditorController {
         return new Drop(parent == null ? 0 : parent.node.sourceIndex(), ref, highlight, line, valid, false, false);
     }
 
+    /** (x,y)는 문서 좌표. */
     private Drop canvasDrop(int x, int y, int movingIndex) {
         LayoutBox b = hitSource(x, y);
         while (b != null && !(CONTAINERS.contains(b.tag()) && (movingIndex < 0 || !isInsideOrSelf(b, movingIndex)))) b = b.parent;
@@ -588,7 +680,7 @@ public final class EditorController {
             EditorOps.Added r = d.fromPalette
                     ? EditorOps.addChild(session.text(), drop.parentIndex(), pos, d.tag)
                     : EditorOps.move(session.text(), d.index, drop.parentIndex(), pos);
-            String text = place ? placeAt(r.text(), r.index(), drop.parentIndex(), x, y) : r.text();
+            String text = place ? placeAt(r.text(), r.index(), drop.parentIndex(), x - panX, y - panY) : r.text();
             if (applyEdit(s -> text)) selected = r.index();
         } catch (IllegalArgumentException e) {
             setStatus("여기에는 놓을 수 없습니다", true);
@@ -596,7 +688,7 @@ public final class EditorController {
     }
 
     /**
-     * stack 계열 부모 안에 놓았다면 요소의 가운데가 놓은 지점에 오도록 x/y 오프셋을 정한다.
+     * stack 계열 부모 안에 놓았다면 요소의 가운데가 놓은 지점(문서 좌표)에 오도록 x/y 오프셋을 정한다.
      * (row/column 은 배치가 위치를 정하므로 손대지 않는다.)
      */
     private String placeAt(String text, int index, int parentIndex, int x, int y) {
@@ -670,6 +762,10 @@ public final class EditorController {
             }
             case TAB -> {
                 panelsVisible = !panelsVisible;
+                return true;
+            }
+            case HOME -> {
+                resetView();
                 return true;
             }
             case LEFT -> {
@@ -813,11 +909,15 @@ public final class EditorController {
         editBuffer.append(value);
         editCursor = editBuffer.length();
         editRect = fieldRect;
+        // 게임이 SDL 이면 글자 입력(IME 포함)을 따로 켜 줘야 한다. 켜지 않으면 키 이벤트만 오고 글자는 들어오지 않는다.
+        host.textInput(true, fieldRect.x(), fieldRect.y(), fieldRect.w(), fieldRect.h());
     }
 
     private void cancelField() {
+        boolean wasEditing = editKey != null;
         editKey = null;
         editRect = null;
+        if (wasEditing) host.textInput(false, 0, 0, 0, 0);
     }
 
     private void commitFieldQuietly() {
@@ -844,10 +944,10 @@ public final class EditorController {
         List<PropRow> rows = new ArrayList<>();
         String tag = b.tag();
         boolean root = b.parent == null;
-        rows.add(new PropRow("tag", "", tag + "  #" + b.node.sourceIndex(), false));
+        rows.add(new PropRow(label("tag"), "", tag + "  #" + b.node.sourceIndex(), false));
         rows.add(attr(b, "id"));
         rows.add(attr(b, "class"));
-        if (tag.equals("label") || tag.equals("button")) rows.add(new PropRow("text", "text", LayoutEngine.rawText(b), true));
+        if (tag.equals("label") || tag.equals("button")) rows.add(new PropRow(label("text"), "text", LayoutEngine.rawText(b), true));
         if (tag.equals("button")) rows.add(attr(b, "onClick"));
         if (tag.equals("image")) rows.add(attr(b, "src"));
         if (!root) {
@@ -875,14 +975,16 @@ public final class EditorController {
         return rows;
     }
 
+    private static String label(String key) { return PROP_LABELS.getOrDefault(key, key); }
+
     private static PropRow attr(LayoutBox b, String key) {
         String v = b.node.attr(key);
-        return new PropRow(key, key, v == null ? "" : v, true);
+        return new PropRow(label(key), key, v == null ? "" : v, true);
     }
 
     private static PropRow style(LayoutBox b, String key) {
         String v = b.style.get(key);
-        return new PropRow(key, key, v == null ? "" : v, true);
+        return new PropRow(label(key), key, v == null ? "" : v, true);
     }
 
     // ================= 구조 트리(접기/펼치기) =================
@@ -940,18 +1042,48 @@ public final class EditorController {
         }
     }
 
+    // ================= 화면 이동(팬) =================
+
+    /**
+     * 선택이 바뀌었을 때, 선택한 요소가 양옆 패널에 가려지거나 화면 밖이면 가운데 작업 영역 중앙으로 보이게 옮긴다.
+     * 작업 영역보다 큰 요소(배경 패널, 루트)는 옮기지 않는다. 끄는 중에는 화면이 움직이지 않는다.
+     */
+    private void autoPan() {
+        if (lastPanned == selected) return;
+        lastPanned = selected;
+        if (drag != null || dnd != null) return;
+        LayoutBox sb = selectedBox();
+        if (sb == null) return;
+        Rect v = centerView();
+        Rect r = rectOf(sb).translate(panX, panY);
+        if (r.w() > v.w() || r.h() > v.h()) return;
+        boolean inside = r.x() >= v.x() && r.right() <= v.right() && r.y() >= v.y() && r.bottom() <= v.bottom();
+        if (inside) return;
+        panX += v.centerX() - r.centerX();
+        panY += v.centerY() - r.centerY();
+    }
+
     // ================= 그리기 =================
 
     private void refreshRegions() { paint(new DrawList()); }
 
+    /** 편집 중인 문서를 현재 화면 이동 위치에 맞춰 그린다. (호버/클릭 효과는 끈다.) */
+    public void paintDocument(UiGfx g) {
+        g.pushTransform(panX, panY, 1f, 0f, 0f, 0f);
+        doc.paint(g, -1, -1);
+        g.popTransform();
+    }
+
     public void paint(UiGfx g) {
         regions.clear();
+        autoPan();
+        g.pushTransform(panX, panY, 1f, 0f, 0f, 0f);
         paintCanvasOverlay(g);
-        if (panelsVisible) {
-            paintLeftPanel(g);
-            paintProperties(g);
-            paintToolbar(g);
-        }
+        g.popTransform();
+        if (leftVisible()) paintLeftPanel(g);
+        if (rightVisible()) paintProperties(g);
+        if (panelsVisible) paintToolbar(g);
+        if (panelsVisible && !dragStarted()) paintTabs(g);
         paintDndFeedback(g);
         paintStatus(g);
     }
@@ -967,9 +1099,10 @@ public final class EditorController {
         };
     }
 
+    /** 문서 좌표계(팬 변환 안)에서 그리는 캔버스 위 표시: 호버/선택 윤곽, 손잡이, 정렬선. */
     private void paintCanvasOverlay(UiGfx g) {
-        boolean dragging = drag != null || dnd != null;
-        LayoutBox hover = !dragging && !overPanel(mouseX, mouseY) ? hitSource(mouseX, mouseY) : null;
+        boolean dragging = drag != null || dnd != null || panning;
+        LayoutBox hover = !dragging && !overPanel(mouseX, mouseY) ? hitSource(mouseX - panX, mouseY - panY) : null;
         hoverIndex = hover == null ? -1 : hover.node.sourceIndex();
         if (hover != null && hoverIndex != selected) outline(g, rectOf(hover), C_HOVER);
 
@@ -985,14 +1118,15 @@ public final class EditorController {
                     g.fillRect(c[0] - HANDLE_R, c[1] - HANDLE_R, HANDLE_R * 2, HANDLE_R * 2, 0xFFFFFFFF);
                 }
             }
+            // 크기/위치 표시는 요소 위쪽(자리가 없으면 아래쪽)의 불투명한 띠에 그려 뒤의 글자와 섞이지 않게 한다.
             String label = r.w() + "x" + r.h() + "  @" + r.x() + "," + r.y();
-            int ly = r.y() >= tm.lineHeight() + 4 ? r.y() - tm.lineHeight() - 3 : r.bottom() + 3;
-            g.fillRect(r.x(), ly - 1, tm.width(label) + 4, tm.lineHeight() + 2, 0xC0000000);
-            g.drawText(label, r.x() + 2, ly, C_SEL, false);
+            int ly = r.y() >= tm.lineHeight() + 8 ? r.y() - tm.lineHeight() - 6 : r.bottom() + 6;
+            g.fillRect(r.x(), ly - 2, tm.width(label) + 6, tm.lineHeight() + 4, 0xFF000000);
+            g.drawText(label, r.x() + 3, ly, C_SEL, false);
         }
         for (Geometry.Guide gd : guides) {
-            if (gd.vertical()) g.fillRect(gd.pos(), 0, 1, viewH, C_GUIDE);
-            else g.fillRect(0, gd.pos(), viewW, 1, C_GUIDE);
+            if (gd.vertical()) g.fillRect(gd.pos(), -4000, 1, 8000 + viewH, C_GUIDE);
+            else g.fillRect(-4000, gd.pos(), 8000 + viewW, 1, C_GUIDE);
         }
     }
 
@@ -1001,11 +1135,6 @@ public final class EditorController {
         g.fillRect(r.x(), r.bottom() - 1, r.w(), 1, color);
         g.fillRect(r.x(), r.y(), 1, r.h(), color);
         g.fillRect(r.right() - 1, r.y(), 1, r.h(), color);
-    }
-
-    private boolean overPanel(int x, int y) {
-        if (!panelsVisible) return false;
-        return y < TOOLBAR_H || x < LEFT_W || x >= viewW - RIGHT_W;
     }
 
     private int button(UiGfx g, int x, int y, String label, boolean enabled, Runnable action) {
@@ -1026,25 +1155,34 @@ public final class EditorController {
         x += 4;
         x += button(g, x, y, "Dup", selected > 0, this::duplicate);
         x += button(g, x, y, "Del", selected > 0, this::deleteSelected);
+        x += 4;
         x += button(g, x, y, grid ? "Grid:8" : "Grid:off", true, () -> grid = !grid);
+        x += button(g, x, y, "Fit", panX != 0 || panY != 0, this::resetView);
         String title = host.title() + (session.isDirty() ? " *" : "");
         g.drawText(title, Math.max(x + 6, viewW - tm.width(title) - 4), 4, C_DIM, false);
+    }
+
+    /** 패널 가장자리의 접기/펼치기 탭. */
+    private void paintTabs(UiGfx g) {
+        Rect lt = leftTab(), rt = rightTab();
+        g.fillRect(lt.x(), lt.y(), lt.w(), lt.h(), C_TAB);
+        g.drawText(leftCollapsed ? ">" : "<", lt.x() + 2, lt.y() + (lt.h() - tm.lineHeight()) / 2, C_TEXT, false);
+        regions.add(new Region(lt, () -> leftCollapsed = !leftCollapsed));
+        g.fillRect(rt.x(), rt.y(), rt.w(), rt.h(), C_TAB);
+        g.drawText(rightCollapsed ? "<" : ">", rt.x() + 2, rt.y() + (rt.h() - tm.lineHeight()) / 2, C_TEXT, false);
+        regions.add(new Region(rt, () -> rightCollapsed = !rightCollapsed));
     }
 
     private void paintStatus(UiGfx g) {
         String text = status;
         boolean error = statusError;
-        if (text.isEmpty() && dnd == null && drag == null) {
-            text = "블록을 끌어다 놓으세요 · 요소를 왼쪽 블록 칸으로 끌면 삭제";
-            error = false;
-            if (!panelsVisible) return;
-            int x = LEFT_W + 6, y = viewH - tm.lineHeight() - 5;
-            g.drawText(text, x, y, C_DIM, false);
+        int x = (leftVisible() ? LEFT_W : 0) + 14, y = viewH - tm.lineHeight() - 5;
+        if (text.isEmpty()) {
+            if (dnd != null || drag != null || !panelsVisible || !leftVisible()) return;
+            g.drawText("블록을 끌어다 놓으세요 · 요소를 왼쪽 블록 칸으로 끌면 삭제 · 휠/가운데 버튼: 화면 이동", x, y, C_DIM, false);
             return;
         }
-        if (text.isEmpty()) return;
-        int x = panelsVisible ? LEFT_W + 6 : 6, y = viewH - tm.lineHeight() - 5;
-        g.fillRect(x - 3, y - 2, tm.width(text) + 6, tm.lineHeight() + 4, 0xD0000000);
+        g.fillRect(x - 3, y - 2, tm.width(text) + 6, tm.lineHeight() + 4, 0xE0000000);
         g.drawText(text, x, y, error ? C_ERR : C_OK, false);
     }
 
@@ -1052,6 +1190,7 @@ public final class EditorController {
 
     private void paintLeftPanel(UiGfx g) {
         g.fillRect(0, TOOLBAR_H, LEFT_W, viewH - TOOLBAR_H, C_PANEL);
+        g.fillRect(LEFT_W - 1, TOOLBAR_H, 1, viewH - TOOLBAR_H, 0x40FFFFFF);
         regions.add(new Region(new Rect(0, TOOLBAR_H, LEFT_W, viewH - TOOLBAR_H), null));
 
         // 팔레트
@@ -1068,9 +1207,9 @@ public final class EditorController {
 
         // 구조 트리 머리말
         int headerY = TOOLBAR_H + PALETTE_H;
-        g.fillRect(0, headerY, LEFT_W, 1, 0x40FFFFFF);
+        g.fillRect(0, headerY, LEFT_W - 1, 1, 0x40FFFFFF);
         g.drawText("구조", 4, headerY + 3, C_DIM, false);
-        Rect expand = new Rect(LEFT_W - 12, headerY + 2, 10, 9), collapse = new Rect(LEFT_W - 24, headerY + 2, 10, 9);
+        Rect expand = new Rect(LEFT_W - 14, headerY + 2, 10, 9), collapse = new Rect(LEFT_W - 26, headerY + 2, 10, 9);
         g.fillRect(collapse.x(), collapse.y(), collapse.w(), collapse.h(), C_BTN);
         g.drawText("-", collapse.x() + 3, collapse.y() + 1, C_TEXT, false);
         g.fillRect(expand.x(), expand.y(), expand.w(), expand.h(), C_BTN);
@@ -1088,7 +1227,7 @@ public final class EditorController {
         int visible = visibleRows();
         outlinerScroll = Math.max(0, Math.min(outlinerScroll, Math.max(0, rows.size() - visible)));
         int top = rowsTop();
-        g.pushClip(0, top - 1, LEFT_W, viewH - top + 1);
+        g.pushClip(0, top - 1, LEFT_W - 1, viewH - top + 1);
         for (int i = outlinerScroll; i < rows.size() && i < outlinerScroll + visible; i++) {
             TreeRow row = rows.get(i);
             LayoutBox b = row.box();
@@ -1096,8 +1235,8 @@ public final class EditorController {
             int idx = b.node.sourceIndex();
             boolean sel = idx == selected;
             boolean hot = mouseX >= 0 && mouseX < LEFT_W && mouseY >= y - 1 && mouseY < y - 1 + ROW_H && dnd == null;
-            if (sel) g.fillRect(0, y - 1, LEFT_W, ROW_H, C_ROW_SEL);
-            else if (hot || idx == hoverIndex) g.fillRect(0, y - 1, LEFT_W, ROW_H, C_ROW_HOVER);
+            if (sel) g.fillRect(0, y - 1, LEFT_W - 1, ROW_H, C_ROW_SEL);
+            else if (hot || idx == hoverIndex) g.fillRect(0, y - 1, LEFT_W - 1, ROW_H, C_ROW_HOVER);
             int x = 3 + row.depth() * 8;
             if (row.hasKids()) {
                 g.fillRect(x, y + 1, 7, 7, 0xFF2A2D3E);
@@ -1105,7 +1244,7 @@ public final class EditorController {
             }
             int chip = x + 9;
             g.fillRect(chip, y + 1, 3, 7, tagColor(b.tag()));
-            g.drawText(fit(rowLabel(b), LEFT_W - chip - 8), chip + 6, y, sel ? C_SEL : C_TEXT, false);
+            g.drawText(fit(rowLabel(b), LEFT_W - chip - 10), chip + 6, y, sel ? C_SEL : C_TEXT, false);
             Rect rowRect = new Rect(0, y - 1, LEFT_W, ROW_H);
             regions.add(new Region(rowRect, () -> {
                 select(idx);
@@ -1134,15 +1273,22 @@ public final class EditorController {
     // ---- 끌어놓는 중의 표시(놓을 자리, 따라다니는 블록, 휴지통) ----
 
     private void paintDndFeedback(UiGfx g) {
-        boolean canvasMove = drag != null && drag.started && drag.handle == Handle.BODY && drag.index > 0;
+        boolean canvasMove = dragStarted() && drag.handle == Handle.BODY && drag.index > 0;
         boolean treeMove = dnd != null && !dnd.fromPalette && dnd.started;
         boolean palette = dnd != null && dnd.fromPalette;
         if (!canvasMove && !treeMove && !palette) return;
 
         int moving = canvasMove ? drag.index : treeMove ? dnd.index : -1;
         Drop drop = canvasMove ? null : dropTarget(mouseX, mouseY, moving);
-        boolean overTrash = panelsVisible && paletteRect().contains(mouseX, mouseY);
-        if (canvasMove && overTrash) drop = new Drop(-1, -1, paletteRect(), null, true, true, false);
+        Rect trash = trashRect();
+        boolean overTrash = panelsVisible && trash.contains(mouseX, mouseY);
+
+        // 캔버스에서 끄는 동안에는 패널이 숨겨지므로 왼쪽 아래에 삭제 칸이 나타난다.
+        if (canvasMove) {
+            g.fillRect(trash.x(), trash.y(), trash.w(), trash.h(), overTrash ? 0xD0C03030 : 0xA0402020);
+            String msg = overTrash ? "놓으면 삭제" : "삭제 칸";
+            g.drawText(msg, trash.x() + (trash.w() - tm.width(msg)) / 2, trash.y() + (trash.h() - tm.lineHeight()) / 2, C_TEXT, true);
+        }
 
         if (drop != null) {
             if (drop.trash()) {
@@ -1154,8 +1300,11 @@ public final class EditorController {
                 }
             } else {
                 int color = drop.valid() ? C_DROP_OK : C_DROP_BAD;
+                boolean doc = drop.onCanvas();            // 캔버스 위 표시는 문서 좌표 → 팬 변환 안에서 그린다
+                if (doc) g.pushTransform(panX, panY, 1f, 0f, 0f, 0f);
                 if (drop.highlight() != null) outline(g, drop.highlight(), color);
                 if (drop.line() != null) g.fillRect(drop.line().x(), drop.line().y(), drop.line().w(), drop.line().h(), color);
+                if (doc) g.popTransform();
             }
         }
 
@@ -1180,6 +1329,7 @@ public final class EditorController {
     private void paintProperties(UiGfx g) {
         int x0 = viewW - RIGHT_W, top = TOOLBAR_H;
         g.fillRect(x0, top, RIGHT_W, viewH - top, C_PANEL);
+        g.fillRect(x0, top, 1, viewH - top, 0x40FFFFFF);
         regions.add(new Region(new Rect(x0, top, RIGHT_W, viewH - top), null));
         LayoutBox sel = selectedBox();
         if (sel == null) {
@@ -1187,11 +1337,11 @@ public final class EditorController {
             return;
         }
         int y = top + 3;
-        int fieldX = x0 + 52, fieldW = RIGHT_W - 56;
+        int fieldX = x0 + FIELD_OFFSET, fieldW = RIGHT_W - FIELD_OFFSET - 4;
         g.pushClip(x0, top, RIGHT_W, viewH - top);
         for (PropRow row : rowsFor(sel)) {
             if (y + ROW_H > viewH) break;
-            g.drawText(row.label(), x0 + 4, y + 1, C_DIM, false);
+            g.drawText(row.label(), x0 + 5, y + 1, C_DIM, false);
             Rect field = new Rect(fieldX, y - 1, fieldW, ROW_H);
             boolean editing = row.key().equals(editKey) && !row.key().isEmpty();
             g.fillRect(field.x(), field.y(), field.w(), field.h(), C_FIELD);

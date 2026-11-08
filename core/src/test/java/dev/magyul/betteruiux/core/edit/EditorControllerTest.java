@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 class EditorControllerTest {
     private static final int W = 400, H = 240;
     // 패널 모양: 왼쪽 120, 오른쪽 142, 도구 모음 높이 16, 속성 행 높이 11 (EditorController 상수와 같다)
-    private static final int RIGHT_X = W - 142, FIELD_X = RIGHT_X + 52 + 2, ROW_STEP = 12, ROW0_Y = 16 + 3;
+    private static final int RIGHT_X = W - 142, FIELD_X = RIGHT_X + EditorController.FIELD_OFFSET + 2, ROW_STEP = 12, ROW0_Y = 16 + 3;
 
     private static final String XML = """
         <screen>
@@ -180,7 +180,7 @@ class EditorControllerTest {
         DrawList l = new DrawList();
         ed.paint(l);
         assertEquals("140", attr("a", "x"), "달라붙어서 140 유지");
-        assertTrue(l.commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect r && r.w() == 1 && r.x() == 140 && r.h() == H),
+        assertTrue(l.commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect r && r.w() == 1 && r.x() == 140 && r.h() > H),
                 "세로 보조선이 그려진다");
         ed.mouseReleased(147, 53, 0);
     }
@@ -368,7 +368,7 @@ class EditorControllerTest {
         assertTrue(c.stream().anyMatch(x -> x instanceof DrawCommand.DrawText t && t.text().startsWith("50x30")), "크기 표시");
         assertTrue(c.stream().anyMatch(x -> x instanceof DrawCommand.DrawText t && t.text().equals("Save")), "도구 모음");
         assertTrue(c.stream().anyMatch(x -> x instanceof DrawCommand.DrawText t && t.text().startsWith("panel#a")), "아웃라이너");
-        assertTrue(c.stream().anyMatch(x -> x instanceof DrawCommand.DrawText t && t.text().equals("width")), "속성 패널");
+        assertTrue(c.stream().anyMatch(x -> x instanceof DrawCommand.DrawText t && t.text().equals("너비")), "속성 패널(한글 라벨)");
         long handles = c.stream().filter(x -> x instanceof DrawCommand.FillRect r && r.w() == 6 && r.h() == 6 && r.argb() == 0xFFFFFFFF).count();
         assertEquals(8, handles, "손잡이 8개");
     }
@@ -391,8 +391,8 @@ class EditorControllerTest {
         String xml = "<screen>\n<template id=\"t\"><label id=\"x\" text=\"tpl\"/></template>\n"
                 + "<column id=\"c\" x=\"140\" y=\"40\"><use template=\"t\"/></column>\n</screen>";
         EditorController e2 = new EditorController(host, new FixedMetrics(), xml, W, H);
-        e2.mousePressed(141, 41, 0);
-        e2.mouseReleased(141, 41, 0);
+        e2.mousePressed(141, 48, 0);
+        e2.mouseReleased(141, 48, 0);
         XmlSource s = XmlSource.parse(xml);
         assertEquals("column", s.element(e2.selectedIndex()).tag, "템플릿에서 생긴 라벨 대신 원본에 있는 조상 column 이 선택된다");
         assertNotEquals(-1, e2.selectedIndex());

@@ -52,6 +52,9 @@ public final class UiScreen extends Screen {
     private boolean startInEditor;
     private String error;
     private boolean loggedFirstFrame;
+    private boolean selfTestDone;
+    /** -Dbetteruiux.selftest=true : 에디터가 켜지면 게임 안에서 "속성 클릭 → 입력 → Enter" 를 스스로 수행해 결과를 로그에 남긴다(개발용). */
+    private static final boolean SELFTEST = Boolean.getBoolean("betteruiux.selftest");
 
     /** @param doc 처음 로드에 실패했으면 null(빈 화면 + 오류 띠 → 파일을 고쳐 저장하면 자동으로 나타난다) */
     public UiScreen(Component title, String id, Path userDir, TextMetrics metrics,
@@ -161,6 +164,7 @@ public final class UiScreen extends Screen {
     private void leaveEditor() {
         boolean dirty = editor.isDirty();
         UiDocument edited = editor.document();
+        editor.close();   // 편집 중이던 칸 취소 + 글자 입력 끄기
         editor = null;
         edited.setAnimationsEnabled(true);
         bind(edited);
@@ -168,6 +172,28 @@ public final class UiScreen extends Screen {
         doc.layout(this.width, this.height);
         LOG.info("[better-uiux] editor off ('{}', unsaved={})", id, dirty);
         if (dirty) UiOpener.say(this.minecraft, "저장하지 않은 변경이 화면에만 남아 있습니다. 파일을 고치면 사라집니다.");
+    }
+
+    /** 속성 패널 입력 경로를 실제 게임 환경(실제 폰트/좌표)에서 점검한다. 결과는 로그로만 남기고 편집은 되돌린다. */
+    private void runEditorSelfTest() {
+        var first = editor.document().layout().children.stream().filter(b -> b.node.sourceIndex() >= 0).findFirst();
+        if (first.isEmpty()) {
+            LOG.info("[better-uiux] selftest: 렌더되는 요소가 없음");
+            return;
+        }
+        int idx = first.get().node.sourceIndex();
+        editor.select(idx);
+        int fx = this.width - 142 + 52 + 6, fy = 16 + 3 + 3 * 12 + 1;   // 속성 패널의 4번째 행(width)
+        String before = editor.text();
+        editor.mousePressed(fx, fy, 0);
+        editor.mouseReleased(fx, fy, 0);
+        boolean editing = editor.isEditingField();
+        editor.charTyped('9');
+        editor.keyPressed(dev.magyul.betteruiux.core.edit.EditorKey.ENTER, false, false);
+        boolean changed = !editor.text().equals(before);
+        LOG.info("[better-uiux] selftest: select({}) field-click({}, {}) -> editing={} -> typed '9' + Enter -> changed={} dirty={} status='{}' (view {}x{})",
+                idx, fx, fy, editing, changed, editor.isDirty(), editor.status(), this.width, this.height);
+        editor.undo();
     }
 
     // ---- 그리기 ----
@@ -189,9 +215,13 @@ public final class UiScreen extends Screen {
         super.extractRenderState(graphics, mouseX, mouseY, a);
         McGfx gfx = new McGfx(graphics, this.font);
         if (editor != null) {
-            editor.document().paint(gfx, -1, -1);   // 편집 중에는 호버/클릭 효과를 끈다
+            editor.paintDocument(gfx);   // 편집 중에는 호버/클릭 효과를 끄고, 화면 이동(팬) 위치에 맞춰 그린다
             editor.mouseMoved(mouseX, mouseY);
             editor.paint(gfx);
+            if (SELFTEST && !selfTestDone) {
+                selfTestDone = true;
+                runEditorSelfTest();
+            }
         } else {
             doc.paint(gfx, mouseX, mouseY);
             List<ErrorOverlay.Message> messages = new ArrayList<>();

@@ -228,7 +228,7 @@ class EditorDragDropTest {
 
     @Test
     void draggingACanvasElementOntoThePaletteDeletesItAndUndoRestoresIt() {
-        drag(150, 50, 50, 40);                                            // 패널 a 를 팔레트 위로
+        drag(150, 50, 30, H - 10);                                        // 패널 a 를 왼쪽 아래 삭제 칸으로(끄는 동안 패널이 숨겨져 칸이 나타난다)
         assertNull(attr("a", "width"));
         assertEquals(1, src().root().children().size());
         ed.undo();

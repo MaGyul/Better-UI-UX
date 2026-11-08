@@ -11,6 +11,7 @@ import dev.magyul.betteruiux.core.xml.UiParseException;
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import net.minecraft.client.Minecraft;
 
 /**
  * 에디터와 게임 사이의 연결. 이 클래스는 에디터를 처음 켤 때 로드되므로, 설정에서 에디터가 꺼져 있으면
@@ -42,6 +43,23 @@ final class EditorBackend {
             }
 
             @Override public String title() { return id + ".xml"; }
+
+            /**
+             * 26.x 는 SDL 로 입력을 받는다. SDL 은 "텍스트 입력 시작" 을 호출해야 글자(와 IME 조합)를 보내 주므로,
+             * 기본 텍스트 위젯이 포커스를 받을 때 하는 것과 똑같이 TextInputManager 를 켜고 끈다.
+             */
+            @Override public void textInput(boolean active, int x, int y, int w, int h) {
+                var manager = Minecraft.getInstance().textInputManager();
+                if (Boolean.getBoolean("betteruiux.debug")) {
+                    org.slf4j.LoggerFactory.getLogger("better_uiux").info("[better-uiux] text input {} ({},{} {}x{})", active ? "ON" : "OFF", x, y, w, h);
+                }
+                if (active) {
+                    manager.setTextInputArea(x, y, x + w, y + h);
+                    manager.startTextInput(screen);
+                } else {
+                    manager.stopTextInput(screen);
+                }
+            }
         };
         return new EditorController(host, metrics, text, width, height);
     }

@@ -19,4 +19,12 @@ public interface EditorHost {
 
     /** 도구 모음에 표시할 이름(예: demo.xml). */
     String title();
+
+    /**
+     * 속성 칸 편집을 시작/끝낼 때 호출된다. 게임이 SDL 기반이면 글자 입력(IME 포함)을 받기 위해 "텍스트 입력 시작"을
+     * 따로 켜야 하므로, 백엔드가 여기서 켜고 끈다(켜지 않으면 키 이벤트만 오고 글자는 들어오지 않는다).
+     *
+     * @param active (x,y,w,h) 입력 칸의 화면 위치(조합 중인 글자 창을 띄울 위치). active 가 false 면 무시.
+     */
+    default void textInput(boolean active, int x, int y, int w, int h) { }
 }
