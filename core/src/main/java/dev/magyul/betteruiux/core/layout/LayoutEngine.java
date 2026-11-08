@@ -294,15 +294,22 @@ public final class LayoutEngine {
             Insets m = margin(c);
             int w = resolve(c.style.size("width", Size.AUTO), cw - m.horizontal(), prefW(c));
             int h = resolve(c.style.size("height", Size.AUTO), ch - m.vertical(), prefH(c));
-            String anchor = c.style.get("anchor", "top-left").toLowerCase();
-            boolean left = anchor.contains("left"), right = anchor.contains("right");
-            boolean top = anchor.contains("top"), bottom = anchor.contains("bottom");
-            int px = left ? cx + m.left() : right ? cx + cw - w - m.right() : cx + (cw - w) / 2;
-            int py = top ? cy + m.top() : bottom ? cy + ch - h - m.bottom() : cy + (ch - h) / 2;
-            px += c.style.integer("x", 0);
-            py += c.style.integer("y", 0);
-            place(c, px, py, w, h);
+            int[] base = anchorPosition(cx, cy, cw, ch, m, c.style.get("anchor", "top-left"), w, h);
+            place(c, base[0] + c.style.integer("x", 0), base[1] + c.style.integer("y", 0), w, h);
         }
+    }
+
+    /**
+     * anchor 로 정해지는 자식의 왼쪽 위 좌표(x/y 오프셋을 더하기 전). 부모 안쪽 영역 (cx,cy,cw,ch) 기준.
+     * 에디터가 드래그 결과를 x/y 오프셋으로 되돌릴 때 같은 공식을 쓰도록 공개한다.
+     */
+    public static int[] anchorPosition(int cx, int cy, int cw, int ch, Insets m, String anchor, int w, int h) {
+        String a = anchor == null ? "top-left" : anchor.toLowerCase();
+        boolean left = a.contains("left"), right = a.contains("right");
+        boolean top = a.contains("top"), bottom = a.contains("bottom");
+        int px = left ? cx + m.left() : right ? cx + cw - w - m.right() : cx + (cw - w) / 2;
+        int py = top ? cy + m.top() : bottom ? cy + ch - h - m.bottom() : cy + (ch - h) / 2;
+        return new int[] {px, py};
     }
 
     private static int resolve(Size s, int avail, int auto) {
