@@ -174,7 +174,23 @@ public final class UiDocument {
         this.resolver = new StyleResolver(sheets);
         this.anim = new AnimationEngine(name -> resolver.keyframes(name));
         this.layoutEngine = new LayoutEngine(textMetrics, resolver, this::interpolate, this::widgetFor);
+        this.layoutEngine.setImageSizer(imageSizer);
     }
+
+    private java.util.function.Function<String, int[]> imageSizer = src -> null;
+
+    /**
+     * 이미지의 원래 크기를 알려 주는 함수를 정한다(외부 이미지처럼 크기를 문서가 모를 때). width/height 가 auto 인 {@code <image>} 가 이 크기로 놓인다.
+     * 아직 불러오는 중이면 null 을 돌려주고, 준비되면 {@link #requestRelayout()} 을 불러 다시 배치하게 한다.
+     */
+    public void setImageSizer(java.util.function.Function<String, int[]> sizer) {
+        this.imageSizer = sizer == null ? src -> null : sizer;
+        layoutEngine.setImageSizer(imageSizer);
+        dirty = true;
+    }
+
+    /** 다음 프레임에 레이아웃을 다시 계산하게 한다(백그라운드에서 이미지가 준비되었을 때 등). 렌더 스레드에서 불러야 한다. */
+    public void requestRelayout() { dirty = true; }
 
     private UiWidget widgetFor(UiNode node) {
         if (BuiltinWidgets.has(node.tag())) {

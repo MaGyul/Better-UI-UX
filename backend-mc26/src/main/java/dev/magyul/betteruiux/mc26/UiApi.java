@@ -38,6 +38,7 @@ public final class UiApi {
     public static void init(Path configBaseDir) {
         baseDir = configBaseDir;
         HudManager.init(configBaseDir);
+        ExternalImages.init(configBaseDir);
         BackendBuiltins.register();
         ScriptBridge.prewarm(configBaseDir);
     }
@@ -73,7 +74,8 @@ public final class UiApi {
     public static void registerDataSource(String name, java.util.function.Supplier<?> value) { DataSources.register(name, value); }
 
     static void fireOpened(String id, UiDocument doc) {
-        DataSources.bindTo(doc);                                     // 내장/등록된 데이터 소스 먼저(모드의 훅이 같은 이름을 덮어쓸 수 있다)
+        DataSources.bindTo(doc);
+        doc.setImageSizer(src -> ExternalImages.size(src, doc::requestRelayout));      // file: 이미지는 원래 크기로 놓는다                                     // 내장/등록된 데이터 소스 먼저(모드의 훅이 같은 이름을 덮어쓸 수 있다)
         for (BiConsumer<String, UiDocument> l : OPENED) {
             try {
                 l.accept(id, doc);

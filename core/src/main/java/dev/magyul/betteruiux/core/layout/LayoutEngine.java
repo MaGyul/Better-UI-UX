@@ -24,6 +24,16 @@ public final class LayoutEngine {
     private final StyleResolver resolver;
 
     private final Function<String, String> interpolator;
+    private Function<String, int[]> imageSizer = src -> null;
+
+    /** 이미지의 원래 크기를 알려 주는 함수(모르면 null → 기본 16x16). width/height 가 auto 일 때 이 크기를 쓴다. */
+    public void setImageSizer(Function<String, int[]> sizer) { this.imageSizer = sizer == null ? src -> null : sizer; }
+
+    private int naturalSize(LayoutBox b, int axis) {
+        String src = b.style.get("src");
+        int[] size = src == null ? null : imageSizer.apply(src);
+        return size == null ? 16 : Math.max(1, size[axis]);
+    }
     private final Function<UiNode, UiWidget> widgets;
 
     public LayoutEngine(TextMetrics text) { this(text, new StyleResolver(List.of())); }
@@ -161,7 +171,7 @@ public final class LayoutEngine {
         if (b.widget != null && !b.widget.container()) return b.widget.intrinsicWidth();
         switch (b.tag()) {
             case "label", "button": return maxLineWidth(textOf(b));
-            case "image": return 16;
+            case "image": return naturalSize(b, 0);
             case "item": return Math.max(1, b.style.integer("size", 16));
             case "spacer", "separator": return 0;
             case "grid": return gridMetrics(b)[0][0];
@@ -183,7 +193,7 @@ public final class LayoutEngine {
         if (b.widget != null && !b.widget.container()) return b.widget.intrinsicHeight();
         switch (b.tag()) {
             case "label", "button": return lineCount(textOf(b)) * text.lineHeight();
-            case "image": return 16;
+            case "image": return naturalSize(b, 1);
             case "item": return Math.max(1, b.style.integer("size", 16));
             case "spacer", "separator": return 0;
             case "grid": return gridMetrics(b)[1][0];

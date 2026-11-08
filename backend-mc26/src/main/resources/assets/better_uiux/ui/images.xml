@@ -1,0 +1,30 @@
+<screen use="blur,dim">
+  <style>
+    .card { background: #E0181A24; border: 1; border-color: #FF3A3F55; padding: 8; }
+    .dim  { color: #FFB0B0C0; }
+  </style>
+
+  <panel class="card" anchor="center" width="250" height="170">
+    <column gap="6" width="fill" height="fill">
+      <label text="외부 이미지 데모 (file: 이미지)" />
+      <separator />
+      <row gap="12" align="center">
+        <column gap="2" align="center">
+          <image src="file:demo.png" />                        <!-- 크기를 안 정하면 이미지 원래 크기(96x48) -->
+          <label class="dim" text="PNG 원래 크기" />
+        </column>
+        <column gap="2" align="center">
+          <image src="file:spin.gif" />                        <!-- GIF 는 저절로 움직인다 -->
+          <label class="dim" text="GIF 애니메이션" />
+        </column>
+        <column gap="2" align="center">
+          <image src="file:spin.gif" width="24" height="24" />
+          <label class="dim" text="24x24" />
+        </column>
+      </row>
+      <label class="dim" text="config/better-uiux/images/ 에 png, jpg, gif 를 넣고 file:이름 으로 쓰세요." />
+      <spacer height="fill" />
+      <button text="닫기" onClick="close" />
+    </column>
+  </panel>
+</screen>
