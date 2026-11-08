@@ -1,5 +1,8 @@
 package dev.magyul.betteruiux.core.edit;
 
+import static dev.magyul.betteruiux.core.edit.EditorColors.*;
+import static dev.magyul.betteruiux.core.edit.PropertyModel.*;
+
 import dev.magyul.betteruiux.api.Cursor;
 import dev.magyul.betteruiux.api.DrawList;
 import dev.magyul.betteruiux.api.TextMetrics;
@@ -56,76 +59,14 @@ public final class EditorController {
             Map.entry("radio", "라디오"), Map.entry("slider", "슬라이더"), Map.entry("textfield", "입력칸"), Map.entry("select", "선택"),
             Map.entry("progress", "진행바"), Map.entry("grid", "격자"), Map.entry("scroll", "스크롤"), Map.entry("tabs", "탭"),
             Map.entry("dialog", "대화상자"));
-    /** 속성 이름 → 화면에 보이는 한글 이름. */
-    private static final Map<String, String> PROP_LABELS = Map.ofEntries(
-            Map.entry("tag", "종류"), Map.entry("text", "글자"), Map.entry("onClick", "클릭 이벤트"), Map.entry("src", "이미지"),
-            Map.entry("width", "너비"), Map.entry("height", "높이"), Map.entry("margin", "바깥여백"),
-            Map.entry("padding", "안쪽여백"), Map.entry("anchor", "기준점"), Map.entry("gap", "간격"),
-            Map.entry("justify", "정렬"), Map.entry("align", "교차정렬"), Map.entry("background", "배경"),
-            Map.entry("color", "글자색"), Map.entry("border", "테두리"), Map.entry("border-color", "테두리색"),
-            Map.entry("opacity", "투명도"), Map.entry("use", "배경효과"), Map.entry("visible", "보임"),
-            Map.entry("enabled", "사용"), Map.entry("checked", "체크됨"), Map.entry("align-self", "자기정렬"),
-            Map.entry("onChange", "변경 이벤트"), Map.entry("onSubmit", "Enter 이벤트"), Map.entry("value", "값"), Map.entry("min", "최소"),
-            Map.entry("max", "최대"), Map.entry("step", "단계"), Map.entry("maxlength", "최대길이"), Map.entry("placeholder", "안내글"),
-            Map.entry("options", "선택지"), Map.entry("group", "그룹"), Map.entry("columns", "열 수"), Map.entry("title", "제목"),
-            Map.entry("item", "아이템 id"), Map.entry("count", "개수"), Map.entry("size", "크기"),
-            Map.entry("bar-color", "채움색"), Map.entry("fill-color", "채움색"), Map.entry("check-color", "체크색"), Map.entry("tooltip", "툴팁"), Map.entry("modal", "모달"));
-    private static final Set<String> COLOR_KEYS = java.util.Set.of("background", "color", "border-color", "bar-color", "fill-color", "check-color");
     private static final int SUGGEST_MAX = 6;
     private static final int HANDLE_R = 3, MIN_SIZE = 4, SNAP_THRESHOLD = 4, DRAG_START = 3, GRID = 8, WHEEL_STEP = 16;
     /** 기준점 자동 추론 임계값: 끌어 놓았을 때 / 팔레트에서 놓았을 때(가운데는 놓을 때 추론하지 않는다). */
     private static final int ANCHOR_T = 8, DROP_ANCHOR_T = 6;
     /** 선택한 요소를 화면으로 불러올 때 작업 영역 가장자리와 띄울 여유. */
     private static final int REVEAL_MARGIN = 6;
-    private static final int C_MULTI = 0xFF55C8FF;
-    private static final int C_PANEL = 0xF2161820, C_BTN = 0xFF3A3F55, C_BTN_OFF = 0xFF262838, C_SEL = 0xFFFFFF55,
-            C_HOVER = 0x9055FFFF, C_GUIDE = 0xFFFF55FF, C_TEXT = 0xFFFFFFFF, C_DIM = 0xFF9090A0, C_ERR = 0xFFFF6060,
-            C_OK = 0xFF80FF80, C_ROW_SEL = 0xFF3A4A80, C_ROW_HOVER = 0xFF2A3050, C_FIELD = 0xFF101018,
-            C_DROP_OK = 0xFF55FF77, C_DROP_BAD = 0xFFFF5555, C_TRASH = 0x70FF3030, C_TAB = 0xFF2E3350,
-            SCREEN_OUTSIDE = 0x80000000, SCREEN_FRAME = 0xFF55AAFF, C_BTN_HOT = 0xFF7A6A20, C_SELECTION = 0xFF3A62B0;
 
-    private static final Set<String> ATTR_KEYS = Set.of("id", "class", "onClick", "src", "text", "onChange", "onSubmit", "value", "checked",
-            "min", "max", "step", "maxlength", "placeholder", "options", "group", "columns", "title", "item", "count", "size", "tooltip", "enabled", "modal");
     private static final Set<String> CONTAINERS = Set.of("screen", "panel", "row", "column", "stack", "fragment", "grid", "scroll", "tabs", "tab", "dialog");
-
-    /**
-     * 화면의 누를 수 있는 영역. {@code cursor} 는 그 위에서의 포인터 모양(없으면 기본), {@code passthrough} 이면 단순 배경이라
-     * 누른 것이 아래의 캔버스로 통과한다(툴바의 빈 곳 아래에 걸친 요소를 잡을 수 있도록).
-     */
-    private record Region(Rect rect, Runnable action, Cursor cursor, boolean passthrough) {
-        Region(Rect rect, Runnable action) { this(rect, action, action == null ? null : Cursor.POINTER, false); }
-    }
-
-    private enum Kind { TEXT, ENUM, BOOL, NUMBER, COLOR, HEADER }
-
-    private record PropRow(String label, String key, String value, boolean editable, Kind kind, List<String> options) {
-        PropRow(String label, String key, String value, boolean editable) {
-            this(label, key, value, editable, Kind.TEXT, List.of());
-        }
-    }
-
-    private static final Map<String, List<String>> ENUMS = Map.of(
-            "anchor", List.of("top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"),
-            "justify", List.of("start", "center", "end", "space-between"),
-            "align", List.of("start", "center", "end", "stretch"),
-            "align-self", List.of("start", "center", "end", "stretch"),
-            "text-align", List.of("left", "center", "right"),
-            "overflow", List.of("visible", "hidden"));
-    /** 값이 참/거짓인 속성과 그 기본값. */
-    private static final Map<String, Boolean> BOOLS = Map.of("checked", false, "enabled", true, "visible", true, "shadow", true, "modal", true);
-    private static final Set<String> NUMBERS = Set.of("width", "height", "gap", "border", "x", "y", "opacity", "min", "max", "step", "maxlength", "columns", "count", "size");
-
-    private static Kind kindOf(String key) {
-        if (ENUMS.containsKey(key)) return Kind.ENUM;
-        if (BOOLS.containsKey(key)) return Kind.BOOL;
-        if (COLOR_KEYS.contains(key)) return Kind.COLOR;
-        if (NUMBERS.contains(key)) return Kind.NUMBER;
-        return Kind.TEXT;
-    }
-
-    private static PropRow header(String name) {
-        return new PropRow(name, "§" + name, "", false, Kind.HEADER, List.of());
-    }
 
     private record TreeRow(LayoutBox box, int depth, boolean hasKids, boolean collapsed, String key) {}
 
@@ -179,6 +120,7 @@ public final class EditorController {
 
     private final EditorHost host;
     private final TextMetrics tm;
+    private final HelpOverlay help;
     private final EditSession session;
     private UiDocument doc;
     private int viewW, viewH;
@@ -239,6 +181,7 @@ public final class EditorController {
         this.host = host;
         this.animatePan = host.panAnimation();
         this.tm = tm;
+        this.help = new HelpOverlay(tm);
         this.session = new EditSession(text);
         this.viewW = viewW;
         this.viewH = viewH;
@@ -689,7 +632,7 @@ public final class EditorController {
     private static Rect rectOf(LayoutBox b) { return new Rect(b.x, b.y, b.w, b.h); }
 
     /** 자식이 x/y 로 자유롭게 놓이지 않고 순서대로 배치되는 컨테이너(row/column/scroll/grid). */
-    private static boolean isFlow(LayoutBox parent) {
+    static boolean isFlow(LayoutBox parent) {
         return parent != null && (parent.tag().equals("row") || parent.tag().equals("column")
                 || parent.tag().equals("scroll") || parent.tag().equals("grid"));
     }
@@ -1047,16 +990,16 @@ public final class EditorController {
 
     /** 휠: 왼쪽 구조 트리 위에서는 목록 스크롤, 캔버스에서는 화면 이동. */
     public boolean mouseScrolled(int x, int y, double amount) {
-        if (itemPicker) {
-            itemScrollRow = Math.max(0, itemScrollRow - (int) Math.signum(amount) * 2);
+        if (itemPicker.isOpen()) {
+            itemPicker.scroll(amount);
             return true;
         }
-        if (helpOpen) {
-            helpScroll = Math.max(0, helpScroll - (int) Math.signum(amount) * 2);
+        if (help.open) {
+            help.scrollBy(amount);
             return true;
         }
-        if (xmlOpen) {
-            xmlScroll = Math.max(0, xmlScroll - (int) Math.signum(amount) * 3);
+        if (xmlView.open) {
+            xmlView.scrollBy(amount);
             return true;
         }
         if (leftVisible() && x < LEFT_W && y >= rowsTop() - 2) {
@@ -1431,18 +1374,15 @@ public final class EditorController {
     // ================= 입력: 키보드 =================
 
     public boolean charTyped(char c) {
-        if (itemPicker) {
-            if (c >= 32 && c != 127) {
-                itemFilter.append(c);
-                itemScrollRow = 0;
-            }
+        if (itemPicker.isOpen()) {
+            itemPicker.type(c);
             return true;
         }
         if (editKey == null && c == '?' && exitDialog == false) {
-            helpOpen = !helpOpen;
+            help.open = !help.open;
             return true;
         }
-        if (editKey == null && !exitDialog && !helpOpen && !xmlOpen && (c == '[' || c == ']')) {
+        if (editKey == null && !exitDialog && !help.open && !xmlView.open && (c == '[' || c == ']')) {
             reorder(c == ']' ? 1 : -1);                         // [ ] : 같은 부모 안에서 순서 이동(뒤로/앞으로)
             return true;
         }
@@ -1458,20 +1398,17 @@ public final class EditorController {
             else if (key == EditorKey.ENTER) saveAndExit();
             return true;
         }
-        if (itemPicker) {                                          // 아이템 선택 상자: Esc 닫기, Backspace 검색어 지우기
+        if (itemPicker.isOpen()) {                                 // 아이템 선택 상자: Esc 닫기, Backspace 검색어 지우기
             if (key == EditorKey.ESCAPE) closeItemPicker();
-            else if (key == EditorKey.BACKSPACE && itemFilter.length() > 0) {
-                itemFilter.setLength(itemFilter.length() - 1);
-                itemScrollRow = 0;
-            }
+            else if (key == EditorKey.BACKSPACE) itemPicker.backspace();
             return true;
         }
-        if (helpOpen) {
-            if (key == EditorKey.ESCAPE || key == EditorKey.F1) helpOpen = false;
+        if (help.open) {
+            if (key == EditorKey.ESCAPE || key == EditorKey.F1) help.open = false;
             return true;
         }
-        if (xmlOpen) {
-            if (key == EditorKey.ESCAPE) xmlOpen = false;
+        if (xmlView.open) {
+            if (key == EditorKey.ESCAPE) xmlView.open = false;
             return true;
         }
         if (menuNear != null) {
@@ -1479,7 +1416,7 @@ public final class EditorController {
             return true;
         }
         if (key == EditorKey.F1 && editKey == null) {
-            helpOpen = true;
+            help.open = true;
             return true;
         }
         if (editKey != null) return editKeyPressed(key, ctrl, shift);
@@ -2125,52 +2062,6 @@ public final class EditorController {
         regions.add(new Region(picker.area(), null));
     }
 
-    private List<PropRow> rowsFor(LayoutBox b) {
-        List<PropRow> rows = new ArrayList<>();
-        Element srcEl = sourceElement(b.node.sourceIndex());
-        if (srcEl != null && srcEl.tag.equals("use")) {         // 템플릿 사용: <use> 의 속성(매개변수)을 그대로 고친다
-            rows.add(new PropRow(label("tag"), "", "use  #" + b.node.sourceIndex(), false));
-            for (XmlSource.Attr a : srcEl.attrs()) rows.add(new PropRow(a.name, a.name, srcSource.attrValue(srcEl, a.name), true));
-            return rows;
-        }
-        String tag = b.tag();
-        boolean root = b.parent == null;
-        rows.add(new PropRow(label("tag"), "", tag + "  #" + b.node.sourceIndex(), false));
-        rows.add(attr(b, "id"));
-        rows.add(attr(b, "class"));
-        if (tag.equals("label") || tag.equals("button")) rows.add(new PropRow(label("text"), "text", LayoutEngine.rawText(b), true));
-        if (tag.equals("button")) rows.add(attr(b, "onClick"));
-        if (tag.equals("image")) rows.add(attr(b, "src"));
-        widgetRows(b, tag, rows);
-        rows.add(header("레이아웃"));
-        if (!root) {
-            rows.add(style(b, "width"));
-            rows.add(style(b, "height"));
-            rows.add(style(b, "margin"));
-            if (!isFlow(b.parent)) {
-                rows.add(style(b, "anchor"));
-                rows.add(style(b, "x"));
-                rows.add(style(b, "y"));
-            }
-        }
-        if (!tag.equals("label") && !tag.equals("image") && !tag.equals("spacer")) rows.add(style(b, "padding"));
-        if (tag.equals("row") || tag.equals("column")) {
-            rows.add(style(b, "gap"));
-            rows.add(style(b, "justify"));
-            rows.add(style(b, "align"));
-        }
-        if (!root) rows.add(style(b, "visible"));
-        rows.add(header("모양"));
-        rows.add(style(b, "background"));
-        if (tag.equals("label") || tag.equals("button")) rows.add(style(b, "color"));
-        rows.add(style(b, "border"));
-        rows.add(style(b, "border-color"));
-        rows.add(style(b, "opacity"));
-        if (root) rows.add(style(b, "use"));
-        else rows.add(attr(b, "tooltip"));
-        return rows;
-    }
-
     private String srcText;
     private XmlSource srcSource;
 
@@ -2184,75 +2075,8 @@ public final class EditorController {
         return srcSource.element(index);
     }
 
-    /** 새 입력/레이아웃 태그에 맞는 속성 행. */
-    private static void widgetRows(LayoutBox b, String tag, List<PropRow> rows) {
-        switch (tag) {
-            case "checkbox", "radio" -> {
-                rows.add(style(b, "check-color"));
-                rows.add(attr(b, "text"));
-                rows.add(attr(b, "checked"));
-                if (tag.equals("radio")) rows.add(attr(b, "group"));
-                rows.add(attr(b, "enabled"));
-                rows.add(attr(b, "onChange"));
-            }
-            case "slider" -> {
-                rows.add(style(b, "fill-color"));
-                rows.add(attr(b, "value"));
-                rows.add(numRow(b, "min"));
-                rows.add(numRow(b, "max"));
-                rows.add(numRow(b, "step"));
-                rows.add(attr(b, "text"));
-                rows.add(attr(b, "enabled"));
-                rows.add(attr(b, "onChange"));
-            }
-            case "progress" -> {
-                rows.add(style(b, "bar-color"));
-                rows.add(attr(b, "value"));
-                rows.add(numRow(b, "min"));
-                rows.add(numRow(b, "max"));
-                rows.add(attr(b, "text"));
-            }
-            case "textfield" -> {
-                rows.add(attr(b, "value"));
-                rows.add(attr(b, "placeholder"));
-                rows.add(numRow(b, "maxlength"));
-                rows.add(attr(b, "enabled"));
-                rows.add(attr(b, "onChange"));
-                rows.add(attr(b, "onSubmit"));
-            }
-            case "select" -> {
-                rows.add(attr(b, "options"));
-                rows.add(attr(b, "value"));
-                rows.add(attr(b, "enabled"));
-                rows.add(attr(b, "onChange"));
-            }
-            case "item" -> {
-                rows.add(attr(b, "item"));
-                rows.add(numRow(b, "count"));
-                rows.add(numRow(b, "size"));
-            }
-            case "grid" -> rows.add(numRow(b, "columns"));
-            case "tab" -> rows.add(attr(b, "title"));
-            case "dialog" -> rows.add(attr(b, "modal"));
-            default -> { }
-        }
-    }
-
-    private static PropRow numRow(LayoutBox b, String key) {
-        String v = b.node.attr(key);
-        return new PropRow(label(key), key, v == null ? "" : v, true, Kind.NUMBER, List.of());
-    }
-
-    private static String label(String key) { return PROP_LABELS.getOrDefault(key, key); }
-
-    private static PropRow attr(LayoutBox b, String key) {
-        String v = b.node.attr(key);
-        return new PropRow(label(key), key, v == null ? "" : v, true, kindOf(key), ENUMS.getOrDefault(key, List.of()));
-    }
-
-    private static PropRow style(LayoutBox b, String key) {
-        String v = b.style.get(key);
-        return new PropRow(label(key), key, v == null ? "" : v, true, kindOf(key), ENUMS.getOrDefault(key, List.of()));
+    private List<PropRow> rowsFor(LayoutBox b) {
+        return PropertyModel.rows(b, sourceElement(b.node.sourceIndex()), srcSource);
     }
 
     // ================= 구조 트리(접기/펼치기) =================
@@ -2419,7 +2243,7 @@ public final class EditorController {
         paintMenu(g);
         paintItemPicker(g);
         paintXmlView(g);
-        paintHelp(g);
+        help.paint(g, viewW, viewH, regions);
         paintExitDialog(g);
         paintStatus(g);
         g.requestCursor(cursorNow());
@@ -2602,11 +2426,11 @@ public final class EditorController {
                 new ToolItem(grid ? "Grid:8" : "Grid:off", true, r -> grid = !grid, C_BTN, 4),
                 new ToolItem(autoAnchor ? "Anchor:auto" : "Anchor:keep", true, r -> autoAnchor = !autoAnchor, C_BTN, 0),
                 new ToolItem("View", true, r -> openMenu(r, List.of("XML 보기", "상태 미리보기: 없음", "상태 미리보기: hover", "상태 미리보기: active", "도움말"), item -> {
-                    if (item.startsWith("XML")) xmlOpen = true;
+                    if (item.startsWith("XML")) xmlView.open = true;
                     else if (item.contains("없음")) previewState = 0;
                     else if (item.contains("hover")) previewState = 1;
                     else if (item.contains("active")) previewState = 2;
-                    else helpOpen = true;
+                    else help.open = true;
                 }), C_BTN, 0),
                 new ToolItem(panned ? "Fit!" : "Fit", panned, r -> resetView(), C_BTN_HOT, 0));
         int exitW = tm.width("Exit") + 8;
@@ -2649,7 +2473,7 @@ public final class EditorController {
             int helpW = tm.width("?") + 8;
             if (rx - helpW - 2 > x + 2) {
                 rx -= helpW + 2;
-                button(g, rx, y, "?", true, () -> helpOpen = true);
+                button(g, rx, y, "?", true, () -> help.open = true);
             }
         }
         String title = host.title() + (session.isDirty() ? " *" : "");
@@ -3052,162 +2876,33 @@ public final class EditorController {
         }
     }
 
-    // ---- 도움말 ----
-
-    private boolean helpOpen;
-
-    private static final String[] HELP = {
-        "[ 만들기 ]  왼쪽 블록을 끌어다 놓기 / 클릭하면 선택한 컨테이너에 추가",
-        "[ 선택 ]  요소 클릭 · 구조 트리 행 클릭 · Esc 선택 해제(한 번 더 누르면 에디터 닫기)",
-        "[ 이동·크기 ]  끌어서 이동 · 손잡이로 크기 · 방향키 1px / Shift+방향키 8px",
-        "[ 복제·복사 ]  Ctrl+D 복제 · Ctrl+C / Ctrl+X / Ctrl+V 복사·잘라내기·붙여넣기",
-        "[ 구조 ]  Ctrl+G 컨테이너로 감싸기(Wrap) · Ctrl+Shift+G 풀기(Unwrap) · Delete 삭제",
-        "[ 순서 ]  [ 뒤로 / ] 앞으로(같은 부모 안) · Align 으로 부모 안에서 정렬",
-        "[ 실행 취소 ]  Ctrl+Z / Ctrl+Y · 저장 Ctrl+S",
-        "[ 속성 ]  값 클릭 후 입력(Enter 확정 · Esc 취소) · -/+ 로 숫자 조절 · 목록·체크 칸은 클릭",
-        "[ 화면 ]  휠/가운데 버튼으로 화면 이동 · Home/Fit 원위치 · Tab 패널 숨기기",
-        "[ 패널 ]  가장자리 탭으로 접기 · 접힌 패널/툴바는 가장자리에 마우스를 올려 두면 나타남",
-        "[ 기타 ]  F1 또는 ? 이 도움말 · F8 / Exit 에디터 닫기",
-    };
-
-    private int helpScroll;
-
-    /** 도움말 줄을 상자 너비에 맞춰 줄바꿈한다(이어지는 줄은 들여쓴다). */
-    private List<String> wrapHelp(int maxW) {
-        List<String> out = new ArrayList<>();
-        for (String line : HELP) {
-            StringBuilder cur = new StringBuilder();
-            boolean first = true;
-            for (int i = 0; i < line.length(); i++) {
-                cur.append(line.charAt(i));
-                if (tm.width(cur.toString()) > maxW && cur.length() > 1) {
-                    cur.setLength(cur.length() - 1);
-                    out.add(first ? cur.toString() : "  " + cur);
-                    cur.setLength(0);
-                    cur.append(line.charAt(i));
-                    first = false;
-                }
-            }
-            if (cur.length() > 0) out.add(first ? cur.toString() : "  " + cur);
-        }
-        return out;
-    }
-
-    private void paintHelp(UiGfx g) {
-        if (!helpOpen) return;
-        regions.add(new Region(new Rect(0, 0, viewW, viewH), () -> helpOpen = false));
-        g.fillRect(0, 0, viewW, viewH, 0xB0000000);
-        int w = Math.min(viewW - 16, 380);
-        int lh = tm.lineHeight() + 3;
-        List<String> lines = wrapHelp(w - 14);
-        int rows = Math.max(1, Math.min(lines.size(), (viewH - 16 - 26) / lh));
-        int h = rows * lh + 26;
-        helpScroll = Math.max(0, Math.min(helpScroll, lines.size() - rows));
-        int x = (viewW - w) / 2, y = Math.max(4, (viewH - h) / 2);
-        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
-        g.fillRect(x, y, w, h, 0xFF161820);
-        String title = "에디터 도움말  (아무 곳이나 누르면 닫힘" + (lines.size() > rows ? " · 휠로 스크롤" : "") + ")";
-        g.drawText(title, x + 6, y + 5, C_SEL, false);
-        g.pushClip(x + 4, y + 16, w - 8, h - 18);
-        for (int i = 0; i < rows; i++) g.drawText(lines.get(helpScroll + i), x + 6, y + 18 + i * lh, C_TEXT, false);
-        g.popClip();
-        if (lines.size() > rows) {                                   // 스크롤 막대
-            int trackH = h - 20, thumbH = Math.max(8, trackH * rows / lines.size());
-            int thumbY = y + 16 + (trackH - thumbH) * helpScroll / Math.max(1, lines.size() - rows);
-            g.fillRect(x + w - 4, y + 16, 2, trackH, 0x30FFFFFF);
-            g.fillRect(x + w - 4, thumbY, 2, thumbH, 0xA0FFFFFF);
-        }
-    }
-
     // ---- 복사 / 붙여넣기 / 감싸기 ----
 
-    // ---- 아이템 선택 상자(격자 + 스크롤 + 검색) ----
+    // ---- 아이템 선택 상자(격자 + 스크롤 + 검색: ItemPickerOverlay) ----
 
-    private static final int PICK_COLS = 8, PICK_CELL = 18, PICK_ROWS = 6;
-    private boolean itemPicker;
-    private Rect itemPickerNear;
-    private final StringBuilder itemFilter = new StringBuilder();
-    private int itemScrollRow;
-    private List<String> itemIds = List.of();
+    private final ItemPickerOverlay itemPicker = new ItemPickerOverlay();
 
     private void openItemPicker(Rect near) {
         commitFieldQuietly();
-        itemPicker = true;
-        itemPickerNear = near;
-        itemFilter.setLength(0);
-        itemScrollRow = 0;
-        itemIds = host.suggestions("item");
-        // 게임(SDL)은 글자 입력을 켜 줘야 검색어가 들어온다
-        int w = PICK_COLS * PICK_CELL + 10;
-        host.textInput(true, Math.max(2, (near == null ? viewW : near.x()) - w - 4), near == null ? TOOLBAR_H : near.y(), w, 11);
+        itemPicker.open(near, host.suggestions("item"));
+        Rect search = itemPicker.searchArea(viewW, TOOLBAR_H);                  // 게임(SDL)은 글자 입력을 켜 줘야 검색어가 들어온다
+        host.textInput(true, search.x(), search.y(), search.w(), search.h());
     }
 
     private void closeItemPicker() {
-        if (!itemPicker) return;
-        itemPicker = false;
+        if (!itemPicker.isOpen()) return;
+        itemPicker.close();
         host.textInput(false, 0, 0, 0, 0);
     }
 
-    private List<String> filteredItems() {
-        String q = itemFilter.toString().trim().toLowerCase();
-        if (q.isEmpty()) return itemIds;
-        List<String> out = new ArrayList<>();
-        for (String id : itemIds) if (id.toLowerCase().contains(q)) out.add(id);
-        return out;
-    }
-
     private void paintItemPicker(UiGfx g) {
-        if (!itemPicker) return;
-        regions.add(new Region(new Rect(0, 0, viewW, viewH), this::closeItemPicker));       // 바깥을 누르면 닫는다
-        List<String> items = filteredItems();
-        int w = PICK_COLS * PICK_CELL + 10, h = PICK_ROWS * PICK_CELL + 30;
-        int x = Math.max(2, Math.min((itemPickerNear == null ? viewW : itemPickerNear.x()) - w - 4, viewW - w - 2));
-        int y = Math.max(TOOLBAR_H + 2, Math.min(itemPickerNear == null ? TOOLBAR_H : itemPickerNear.y(), viewH - h - 2));
-        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
-        g.fillRect(x, y, w, h, 0xFF161820);
-        regions.add(new Region(new Rect(x, y, w, h), null));
-        int totalRows = (items.size() + PICK_COLS - 1) / PICK_COLS;
-        itemScrollRow = Math.max(0, Math.min(itemScrollRow, Math.max(0, totalRows - PICK_ROWS)));
-        String q = itemFilter.toString();
-        g.fillRect(x + 4, y + 4, w - 8, 11, C_FIELD);
-        g.drawText(q.isEmpty() ? "검색... (글자를 입력)" : q + "_", x + 7, y + 6, q.isEmpty() ? C_DIM : C_TEXT, false);
-        g.drawText(items.size() + "개", x + w - 6 - tm.width(items.size() + "개"), y + 6, C_DIM, false);
-        int gx = x + 5, gy = y + 20;
-        String current = null;
+        if (!itemPicker.isOpen()) return;
         LayoutBox sel = selectedBox();
-        if (sel != null) current = sel.node.attr("item");
-        String hoverId = null;
-        g.pushClip(gx, gy, PICK_COLS * PICK_CELL, PICK_ROWS * PICK_CELL);
-        for (int r = 0; r < PICK_ROWS; r++) {
-            for (int c = 0; c < PICK_COLS; c++) {
-                int i = (itemScrollRow + r) * PICK_COLS + c;
-                if (i >= items.size()) break;
-                String id = items.get(i);
-                Rect cell = new Rect(gx + c * PICK_CELL, gy + r * PICK_CELL, PICK_CELL, PICK_CELL);
-                boolean hot = cell.contains(mouseX, mouseY);
-                if (hot) hoverId = id;
-                g.fillRect(cell.x() + 1, cell.y() + 1, PICK_CELL - 2, PICK_CELL - 2, hot ? 0xFF3A4A80 : id.equals(current) ? 0xFF2E5A3A : 0xFF222536);
-                g.drawItem(id, cell.x() + 1, cell.y() + 1, 1);
-                regions.add(new Region(cell, () -> {
+        itemPicker.paint(g, tm, viewW, viewH, TOOLBAR_H, mouseX, mouseY, regions, sel == null ? null : sel.node.attr("item"),
+                id -> {
                     closeItemPicker();
                     applyValue("item", id);
-                }));
-            }
-        }
-        g.popClip();
-        if (totalRows > PICK_ROWS) {                                 // 스크롤 막대
-            int trackH = PICK_ROWS * PICK_CELL, thumbH = Math.max(8, trackH * PICK_ROWS / totalRows);
-            int thumbY = gy + (trackH - thumbH) * itemScrollRow / Math.max(1, totalRows - PICK_ROWS);
-            g.fillRect(x + w - 4, gy, 2, trackH, 0x30FFFFFF);
-            g.fillRect(x + w - 4, thumbY, 2, thumbH, 0xA0FFFFFF);
-        }
-        if (hoverId != null) {                                       // 마우스 아래 아이템 id
-            int tw = tm.width(hoverId) + 8;
-            int tx = Math.max(2, Math.min(mouseX + 8, viewW - tw - 2)), ty = Math.min(mouseY + 12, viewH - tm.lineHeight() - 8);
-            g.fillRect(tx - 1, ty - 1, tw + 2, tm.lineHeight() + 6, 0xF0300070);
-            g.fillRect(tx, ty, tw, tm.lineHeight() + 4, 0xF0100010);
-            g.drawText(hoverId, tx + 4, ty + 2, C_TEXT, false);
-        }
+                }, this::closeItemPicker);
     }
 
     private String elementClip = "";
@@ -3303,39 +2998,20 @@ public final class EditorController {
 
     // ---- XML 보기(읽기 전용) ----
 
-    private boolean xmlOpen;
-    private int xmlScroll;
+    private final XmlViewOverlay xmlView = new XmlViewOverlay();
 
     private void paintXmlView(UiGfx g) {
-        if (!xmlOpen) return;
-        regions.add(new Region(new Rect(0, 0, viewW, viewH), () -> xmlOpen = false));
-        g.fillRect(0, 0, viewW, viewH, 0xC0000000);
-        int w = Math.min(viewW - 16, 420), lh = tm.lineHeight() + 1;
-        int y0 = TOOLBAR_H + 4, h = viewH - y0 - 10, x = (viewW - w) / 2;
-        g.fillRect(x - 1, y0 - 1, w + 2, h + 2, C_SEL);
-        g.fillRect(x, y0, w, h, 0xFF101018);
-        String[] lines = session.text().split("\n", -1);
-        int rows = Math.max(1, (h - 16) / lh);
-        xmlScroll = Math.max(0, Math.min(xmlScroll, Math.max(0, lines.length - rows)));
+        if (!xmlView.open) return;
         int selStart = -1, selEnd = -1;
         if (selected >= 0) {
-            XmlSource s = session.source();
-            Element el = s.element(selected);
+            Element el = session.source().element(selected);
             if (el != null) {
-                selStart = session.text().substring(0, el.start()).split("\n", -1).length - 1;
-                selEnd = session.text().substring(0, el.end()).split("\n", -1).length - 1;
+                String t = session.text();
+                selStart = t.substring(0, el.start()).split("\n", -1).length - 1;
+                selEnd = t.substring(0, el.end()).split("\n", -1).length - 1;
             }
         }
-        g.drawText("XML (읽기 전용 · 휠로 스크롤 · 아무 곳이나 누르면 닫힘)", x + 4, y0 + 3, C_DIM, false);
-        g.pushClip(x, y0 + 14, w, h - 14);
-        for (int i = 0; i < rows && xmlScroll + i < lines.length; i++) {
-            int ln = xmlScroll + i;
-            int ly = y0 + 15 + i * lh;
-            if (ln >= selStart && ln <= selEnd) g.fillRect(x + 1, ly - 1, w - 2, lh, 0xFF26304F);
-            g.drawText(String.format("%3d", ln + 1), x + 3, ly, C_DIM, false);
-            g.drawText(lines[ln].replace("\t", "  "), x + 26, ly, C_TEXT, false);
-        }
-        g.popClip();
+        xmlView.paint(g, tm, viewW, viewH, TOOLBAR_H, regions, session.text(), selStart, selEnd);
     }
 
     /** 선택한 요소를 컨테이너(row/column/panel/stack)로 감싼다. */
