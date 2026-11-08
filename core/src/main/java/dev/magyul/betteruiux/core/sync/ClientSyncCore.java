@@ -144,7 +144,8 @@ public final class ClientSyncCore {
             return;
         }
         assembler = new BundleAssembler(b, need);
-        out.send(new BundleNeed(need));
+        // 클라이언트→서버 패킷은 로더에 따라 32KB 로 제한되므로 요청 목록을 나눠 보낸다(서버는 도착 순서대로 보낸다).
+        for (int i = 0; i < need.size(); i += 32) out.send(new BundleNeed(need.subList(i, Math.min(need.size(), i + 32))));
     }
 
     private void chunk(BundleChunk c) throws SyncException {

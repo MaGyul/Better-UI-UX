@@ -1,7 +1,11 @@
 package dev.magyul.betteruiux.neoforge;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
+import dev.magyul.betteruiux.mc26.ClientSync;
 import dev.magyul.betteruiux.mc26.HudManager;
+import dev.magyul.betteruiux.mc26.SyncPayload;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import dev.magyul.betteruiux.mc26.UiApi;
 import dev.magyul.betteruiux.mc26.UiOpener;
 import java.nio.file.Path;
@@ -26,6 +30,14 @@ public final class BetterUiuxNeoForgeClient {
     public BetterUiuxNeoForgeClient(IEventBus modBus) {
         Path baseDir = FMLPaths.CONFIGDIR.get().resolve("better-uiux");
         UiApi.init(baseDir);
+        // 서버 동기화(채널은 공통 진입점이 등록): 접속하면 인사를 보내고, 서버가 보낸 것은 렌더 스레드에서 처리한다.
+        ClientSync.init(baseDir);
+        ClientSync.setSender(p -> ClientPacketDistributor.sendToServer(p));
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn e) -> {
+            var conn = Minecraft.getInstance().getConnection();
+            if (conn != null && conn.hasChannel(SyncPayload.TYPE)) ClientSync.onJoin();
+        });
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut e) -> ClientSync.onDisconnect());
         // XML HUD: 설정(config.toml 의 [hud] ids)에 적은 문서를 인게임 HUD 맨 위에 그린다.
         modBus.addListener((RegisterGuiLayersEvent e) ->
                 e.registerAboveAll(Identifier.fromNamespaceAndPath(MOD_ID, "hud"), HudManager::render));

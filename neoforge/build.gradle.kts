@@ -13,7 +13,13 @@ neoForge {
     runs {
         register("client") {
             client()
+            // 개발용 자동 접속: -PquickPlay=localhost:25565 (이름은 Dev)
+            providers.gradleProperty("quickPlay").orNull?.let { programArguments.addAll("--username", "Dev", "--quickPlayMultiplayer", it) }
             systemProperty("forge.logging.markers", "REGISTRIES")
+        }
+        register("server") {
+            server()
+            programArgument("--nogui")
         }
     }
 

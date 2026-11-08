@@ -33,6 +33,7 @@ public final class ClientSync {
     private static Path baseDir;
     private static volatile ClientSyncCore core;
     private static volatile Consumer<SyncPayload> sender = p -> {};
+    private static final int MAX_C2S = 32_000;
     private static volatile boolean serverFeaturesDisabled;
     private static volatile Path cacheFiles;
     private static volatile Map<String, Object> latestState = Map.of();
@@ -177,7 +178,12 @@ public final class ClientSync {
 
     private static void send(SyncMessage m) {
         try {
-            sender.accept(new SyncPayload(SyncCodec.encode(m)));
+            byte[] data = SyncCodec.encode(m);
+            if (data.length > MAX_C2S) {                                              // 클라이언트→서버 패킷 상한(로더/바닐라 32KB)
+                LOG.warn("[better-uiux] 서버로 보내기에 메시지가 너무 큽니다({} 바이트)", data.length);
+                return;
+            }
+            sender.accept(new SyncPayload(data));
         } catch (SyncException e) {
             LOG.warn("[better-uiux] 동기화 메시지를 만들지 못했습니다: {}", e.getMessage());
         }
