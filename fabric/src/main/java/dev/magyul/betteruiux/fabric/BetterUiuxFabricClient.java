@@ -1,7 +1,7 @@
-package dev.betteruiux.fabric;
+package dev.magyul.betteruiux.fabric;
 
-import dev.betteruiux.core.xml.UiNode;
-import dev.betteruiux.core.xml.UiParser;
+import dev.magyul.betteruiux.core.xml.UiNode;
+import dev.magyul.betteruiux.core.xml.UiParser;
 import net.fabricmc.api.ClientModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

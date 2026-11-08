@@ -7,7 +7,7 @@
   "license": "All-Rights-Reserved",
   "environment": "client",
   "entrypoints": {
-    "client": ["dev.betteruiux.fabric.BetterUiuxFabricClient"]
+    "client": ["dev.magyul.betteruiux.fabric.BetterUiuxFabricClient"]
   },
   "depends": {
     "fabricloader": ">=0.20.1",

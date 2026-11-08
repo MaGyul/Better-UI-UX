@@ -1,7 +1,7 @@
-package dev.betteruiux.neoforge;
+package dev.magyul.betteruiux.neoforge;
 
-import dev.betteruiux.core.xml.UiNode;
-import dev.betteruiux.core.xml.UiParser;
+import dev.magyul.betteruiux.core.xml.UiNode;
+import dev.magyul.betteruiux.core.xml.UiParser;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.common.Mod;
 import org.slf4j.Logger;
