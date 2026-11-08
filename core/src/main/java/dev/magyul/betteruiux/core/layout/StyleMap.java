@@ -1,30 +1,23 @@
 package dev.magyul.betteruiux.core.layout;
 
-import dev.magyul.betteruiux.core.xml.UiNode;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * 노드 하나의 스타일 값 모음. M1: XML 속성 + 인라인 {@code style="a: b; c: d"} (인라인이 우선).
- * M2에서 스타일시트 캐스케이드로 확장되며, 이 클래스의 조회 API는 유지된다.
- */
+/** 노드 하나의 해석된(computed) 스타일 값 모음. 값은 문자열로 보관하고 타입별 조회 헬퍼를 제공한다. */
 public final class StyleMap {
     private final Map<String, String> values = new HashMap<>();
 
-    public static StyleMap of(UiNode node) {
+    public StyleMap copy() {
         StyleMap m = new StyleMap();
-        for (var e : node.attributes().entrySet()) {
-            if (!e.getKey().equals("style")) m.values.put(e.getKey().toLowerCase(), e.getValue());
-        }
-        String inline = node.attr("style");
-        if (inline != null) {
-            for (String decl : inline.split(";")) {
-                int i = decl.indexOf(':');
-                if (i > 0) m.values.put(decl.substring(0, i).trim().toLowerCase(), decl.substring(i + 1).trim());
-            }
-        }
+        m.values.putAll(values);
         return m;
     }
+
+    public void put(String key, String value) { values.put(key, value); }
+
+    public void putAll(StyleMap other) { values.putAll(other.values); }
+
+    public Map<String, String> entries() { return values; }
 
     public String get(String key) { return values.get(key); }
 

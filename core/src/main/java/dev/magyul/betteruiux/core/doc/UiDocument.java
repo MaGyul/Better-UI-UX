@@ -5,12 +5,16 @@ import dev.magyul.betteruiux.api.UiGfx;
 import dev.magyul.betteruiux.core.layout.LayoutBox;
 import dev.magyul.betteruiux.core.layout.LayoutEngine;
 import dev.magyul.betteruiux.core.render.UiPainter;
+import dev.magyul.betteruiux.core.style.StyleResolver;
+import dev.magyul.betteruiux.core.style.Stylesheet;
 import dev.magyul.betteruiux.core.xml.UiNode;
 import dev.magyul.betteruiux.core.xml.UiParseException;
 import dev.magyul.betteruiux.core.xml.UiParser;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * 파싱 + 레이아웃 + 그리기 + 입력(호버/클릭)을 묶은 문서 하나. 마인크래프트 비의존.
+ * 파싱 + 스타일 + 레이아웃 + 그리기 + 입력(호버/클릭)을 묶은 문서 하나. 마인크래프트 비의존.
  * 백엔드의 Screen/HUD 는 이 객체를 감싸 입력을 전달하고 {@link #paint}를 호출한다.
  */
 public final class UiDocument {
@@ -23,8 +27,8 @@ public final class UiDocument {
     private final UiNode root;
     private final LayoutEngine layoutEngine;
     private final UiPainter painter;
+    private final List<String> warnings;
     private LayoutBox layout;
-    private int viewW, viewH;
     private LayoutBox hovered, pressed;
     private ActionHandler actionHandler = (a, s) -> { };
 
@@ -34,26 +38,44 @@ public final class UiDocument {
         @Override public boolean pressed(LayoutBox b) { return b == pressed && b == hovered; }
     };
 
-    public UiDocument(UiNode root, TextMetrics text) {
+    public UiDocument(UiNode root, TextMetrics text, List<Stylesheet> sheets, List<String> warnings) {
         this.root = root;
-        this.layoutEngine = new LayoutEngine(text);
+        this.layoutEngine = new LayoutEngine(text, new StyleResolver(sheets));
         this.painter = new UiPainter(text);
+        this.warnings = List.copyOf(warnings);
     }
 
+    public UiDocument(UiNode root, TextMetrics text) {
+        this(root, text, inlineSheets(root), List.of());
+    }
+
+    /** 문서 안의 {@code <style>} 블록만 읽는다(외부 {@code <link>} 까지 읽으려면 {@link UiDocumentLoader}). */
     public static UiDocument parse(String xml, TextMetrics text) throws UiParseException {
         return new UiDocument(UiParser.parse(xml), text);
+    }
+
+    static List<Stylesheet> inlineSheets(UiNode root) {
+        List<Stylesheet> sheets = new ArrayList<>();
+        collectStyleBlocks(root, sheets);
+        return sheets;
+    }
+
+    private static void collectStyleBlocks(UiNode n, List<Stylesheet> out) {
+        if (n.tag().equals("style")) out.add(Stylesheet.parse(n.text()));
+        for (UiNode c : n.children()) collectStyleBlocks(c, out);
     }
 
     public UiNode root() { return root; }
 
     public LayoutBox layout() { return layout; }
 
+    /** 로드/스타일 파싱 중 생긴 경고(문서는 정상 표시됨). */
+    public List<String> warnings() { return warnings; }
+
     public void setActionHandler(ActionHandler h) { this.actionHandler = h == null ? (a, s) -> { } : h; }
 
     /** 화면 크기(GUI 픽셀)에 맞춰 레이아웃을 다시 계산한다. 창 크기/GUI scale 변경 시 호출. */
     public void layout(int viewW, int viewH) {
-        this.viewW = viewW;
-        this.viewH = viewH;
         this.layout = layoutEngine.layout(root, viewW, viewH);
         this.hovered = null;
         this.pressed = null;

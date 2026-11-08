@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.core.layout;
 
 import dev.magyul.betteruiux.api.TextMetrics;
+import dev.magyul.betteruiux.core.style.StyleResolver;
 import dev.magyul.betteruiux.core.xml.UiNode;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +18,14 @@ import java.util.List;
 public final class LayoutEngine {
     private final TextMetrics text;
 
-    public LayoutEngine(TextMetrics text) { this.text = text; }
+    private final StyleResolver resolver;
+
+    public LayoutEngine(TextMetrics text) { this(text, new StyleResolver(List.of())); }
+
+    public LayoutEngine(TextMetrics text, StyleResolver resolver) {
+        this.text = text;
+        this.resolver = resolver;
+    }
 
     public LayoutBox layout(UiNode root, int viewW, int viewH) {
         LayoutBox box = build(root, null);
@@ -27,11 +35,33 @@ public final class LayoutEngine {
 
     // ---- 트리 구성 ----
 
+    /** 구조(박스 트리)를 먼저 모두 만든 뒤, 위에서 아래로 스타일을 해석한다(형제/조상 선택자가 구조를 참조하므로). */
     private LayoutBox build(UiNode node, LayoutBox parent) {
-        LayoutBox b = new LayoutBox(node, StyleMap.of(node));
+        LayoutBox root = buildStructure(node, parent);
+        resolveStyles(root);
+        return root;
+    }
+
+    /** 레이아웃 대상이 아닌 메타 요소(스타일 정의 등). */
+    private static boolean isMeta(String tag) {
+        return tag.equals("style") || tag.equals("link");
+    }
+
+    private LayoutBox buildStructure(UiNode node, LayoutBox parent) {
+        LayoutBox b = new LayoutBox(node);
         b.parent = parent;
-        for (UiNode c : node.children()) b.children.add(build(c, b));
+        for (UiNode c : node.children()) {
+            if (isMeta(c.tag())) continue;
+            LayoutBox child = buildStructure(c, b);
+            child.index = b.children.size();
+            b.children.add(child);
+        }
         return b;
+    }
+
+    private void resolveStyles(LayoutBox b) {
+        resolver.resolve(b);
+        for (LayoutBox c : b.children) resolveStyles(c);
     }
 
     // ---- 내재 크기 (auto) ----

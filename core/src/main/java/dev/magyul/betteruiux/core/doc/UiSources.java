@@ -8,25 +8,35 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 /**
- * UI XML 원본 조회. 우선순위: ① 사용자 폴더({@code config/better-uiux/ui/<id>.xml}) ② 클래스패스 기본 제공
- * ({@code assets/better_uiux/ui/<id>.xml}). 사용자 파일이 있으면 기본 제공본을 덮어쓴다.
+ * UI 원본 파일 조회. 우선순위: ① 사용자 폴더({@code config/better-uiux/ui/<name>}) ② 클래스패스 기본 제공
+ * ({@code assets/better_uiux/ui/<name>}). 사용자 파일이 있으면 기본 제공본을 덮어쓴다.
  */
 public final class UiSources {
     private UiSources() {}
 
-    /** id 는 영문/숫자/_/-/. 만 허용(경로 탈출 방지). */
-    public static boolean validId(String id) {
-        return id != null && id.matches("[a-zA-Z0-9_\\-.]{1,64}") && !id.contains("..");
+    /** 파일 이름은 영문/숫자/_/-/. 만 허용하고 경로 구분자·".." 는 거부한다(경로 탈출 방지). */
+    public static boolean validName(String name) {
+        return name != null && name.matches("[a-zA-Z0-9_\\-.]{1,64}") && !name.contains("..");
     }
 
+    /** XML 문서 id(확장자 없음) 검증. */
+    public static boolean validId(String id) { return validName(id); }
+
+    /** {@code <id>.xml} 을 읽는다. */
     public static Optional<String> load(Path userDir, String id) throws IOException {
         if (!validId(id)) return Optional.empty();
+        return loadFile(userDir, id + ".xml");
+    }
+
+    /** 확장자를 포함한 파일 이름({@code demo.uicss} 등)으로 읽는다. */
+    public static Optional<String> loadFile(Path userDir, String fileName) throws IOException {
+        if (!validName(fileName)) return Optional.empty();
         if (userDir != null) {
-            Path p = userDir.resolve(id + ".xml");
+            Path p = userDir.resolve(fileName);
             if (Files.isRegularFile(p)) return Optional.of(Files.readString(p, StandardCharsets.UTF_8));
         }
         try (InputStream in = UiSources.class.getClassLoader()
-                .getResourceAsStream("assets/better_uiux/ui/" + id + ".xml")) {
+                .getResourceAsStream("assets/better_uiux/ui/" + fileName)) {
             if (in == null) return Optional.empty();
             return Optional.of(new String(in.readAllBytes(), StandardCharsets.UTF_8));
         }
