@@ -50,6 +50,7 @@ public final class UiDocument {
     private StyleResolver resolver;
     private AnimationEngine anim;
     private long frameNow;
+    private boolean animationsEnabled = true;
 
     private LayoutBox layout;
     private final Map<UiNode, LayoutBox> boxes = new IdentityHashMap<>();
@@ -79,7 +80,8 @@ public final class UiDocument {
         }
 
         @Override public StyleMap style(LayoutBox b) {
-            return anim.apply(b.node, b.effective(hovered(b), pressed(b)), frameNow);
+            StyleMap s = b.effective(hovered(b), pressed(b));
+            return animationsEnabled ? anim.apply(b.node, s, frameNow) : s;
         }
 
         @Override public int mouseX() { return mouseX; }
@@ -149,6 +151,12 @@ public final class UiDocument {
 
     /** 루트의 {@code use} 로 정해진 배경 레이어. {@link #layout} 이후 유효. */
     public ScreenBackground background() { return background; }
+
+    /**
+     * false 면 전환/@keyframes/Java 애니메이션을 적용하지 않고 스타일시트가 정한 최종 모양만 그린다.
+     * 에디터는 편집 중 문서가 자주 다시 만들어지므로(드래그마다) 애니메이션이 매번 처음부터 재생되지 않게 끈다.
+     */
+    public void setAnimationsEnabled(boolean enabled) { this.animationsEnabled = enabled; }
 
     /** 애니메이션 시간원을 바꾼다(테스트용). */
     public void setClock(UiClock clock) { this.clock = clock == null ? UiClock.SYSTEM : clock; }
