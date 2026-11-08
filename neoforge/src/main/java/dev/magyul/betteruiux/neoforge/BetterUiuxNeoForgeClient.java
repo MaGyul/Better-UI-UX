@@ -1,13 +1,17 @@
 package dev.magyul.betteruiux.neoforge;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
+import dev.magyul.betteruiux.mc26.HudManager;
 import dev.magyul.betteruiux.mc26.UiApi;
 import dev.magyul.betteruiux.mc26.UiOpener;
 import java.nio.file.Path;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.commands.Commands;
+import net.minecraft.resources.Identifier;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.fml.loading.FMLPaths;
@@ -19,9 +23,12 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class BetterUiuxNeoForgeClient {
     public static final String MOD_ID = "better_uiux";
 
-    public BetterUiuxNeoForgeClient() {
+    public BetterUiuxNeoForgeClient(IEventBus modBus) {
         Path baseDir = FMLPaths.CONFIGDIR.get().resolve("better-uiux");
         UiApi.init(baseDir);
+        // XML HUD: 설정(config.toml 의 [hud] ids)에 적은 문서를 인게임 HUD 맨 위에 그린다.
+        modBus.addListener((RegisterGuiLayersEvent e) ->
+                e.registerAboveAll(Identifier.fromNamespaceAndPath(MOD_ID, "hud"), HudManager::render));
         // 개발용 자동 열기: 타이틀 화면이 뜬 뒤 한 번만 연다.
         boolean[] opened = {false};
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
