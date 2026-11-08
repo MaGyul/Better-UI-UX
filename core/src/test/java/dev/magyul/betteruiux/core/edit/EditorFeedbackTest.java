@@ -486,4 +486,23 @@ class EditorFeedbackTest {
         assertFalse(paint(e).commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect f && f.argb() == 0x9055FFFF),
                 "대화상자가 떠 있으면 없다");
     }
+
+    @Test
+    void collapsedSidePanelsPeekOutWhenTheMouseRestsOnTheEdge() throws Exception {
+        EditorController e = editor(COLORED);
+        long[] now = {0};
+        e.clock = () -> now[0];
+        e.select(-1);
+        click(e, EditorController.LEFT_W + 3, EditorController.tabY(H) + 5);   // 왼쪽 패널 접기
+        e.mouseMoved(300, 120);
+        assertFalse(hasText(paint(e), "구조"));
+        e.mouseMoved(1, 100);
+        paint(e);
+        now[0] += 500_000_000L;
+        assertFalse(hasText(paint(e), "구조"), "아직");
+        now[0] += 1_000_000_000L;
+        assertTrue(hasText(paint(e), "구조"), "기다리면 나타난다");
+        e.mouseMoved(300, 120);
+        assertFalse(hasText(paint(e), "구조"), "벗어나면 다시 숨는다");
+    }
 }

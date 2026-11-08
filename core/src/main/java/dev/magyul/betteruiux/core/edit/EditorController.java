@@ -253,10 +253,10 @@ public final class EditorController {
     private boolean dragStarted() { return drag != null && drag.started; }
 
     /** 왼쪽 패널(블록+구조): 접었거나, 캔버스에서 요소를 끄는 중이면 숨긴다. */
-    private boolean leftVisible() { return panelsVisible && !leftCollapsed && !dragStarted(); }
+    private boolean leftVisible() { return panelsVisible && (!leftCollapsed || leftPeek) && !dragStarted(); }
 
     /** 오른쪽 패널(속성): 접었거나, 무엇이든 끄는 중이면 숨긴다. */
-    private boolean rightVisible() { return panelsVisible && rightShown() && !dragStarted() && dnd == null; }
+    private boolean rightVisible() { return panelsVisible && (rightShown() || rightPeek) && !dragStarted() && dnd == null; }
 
     /** 접어 두었어도 요소를 선택하고 있는 동안은 잠깐 펼쳐 보인다(선택이 풀리면 다시 접힘). */
     private boolean rightShown() { return !rightCollapsed || (selected >= 0 && !tempDismissed); }
@@ -278,6 +278,60 @@ public final class EditorController {
 
     private boolean toolbarVisible() {
         return panelsVisible && !dragStarted() && (!toolbarHidden || toolbarPeek);
+    }
+
+    // ---- 접어 둔 양옆 패널: 가장자리에 마우스를 올려 두면 튀어나오고 잠시 뒤 표시 ----
+
+    private boolean leftPeek, rightPeek;
+    private long leftHoverSince = -1, rightHoverSince = -1;
+
+    private void updateSidePeek() {
+        if (!panelsVisible || dragStarted() || dnd != null || panning) {
+            leftPeek = rightPeek = false;
+            leftHoverSince = rightHoverSince = -1;
+            return;
+        }
+        long now = clock.getAsLong();
+        if (leftCollapsed) {
+            if (leftPeek) {
+                if (mouseX >= LEFT_W + TAB_W || mouseX < 0) leftPeek = false;
+            } else if (mouseX >= 0 && mouseX <= (leftHoverSince >= 0 ? PEEK_SLIVER : 2) && mouseY >= TOOLBAR_H) {
+                if (leftHoverSince < 0) leftHoverSince = now;
+                if (now - leftHoverSince >= PEEK_NANOS) leftPeek = true;
+            } else {
+                leftHoverSince = -1;
+            }
+        } else {
+            leftPeek = false;
+            leftHoverSince = -1;
+        }
+        boolean rightHidden = rightCollapsed && !rightTempShown();
+        if (rightHidden) {
+            if (rightPeek) {
+                if (mouseX < viewW - RIGHT_W - TAB_W) rightPeek = false;
+            } else if (mouseX >= viewW - (rightHoverSince >= 0 ? PEEK_SLIVER : 2) && mouseY >= TOOLBAR_H) {
+                if (rightHoverSince < 0) rightHoverSince = now;
+                if (now - rightHoverSince >= PEEK_NANOS) rightPeek = true;
+            } else {
+                rightHoverSince = -1;
+            }
+        } else {
+            rightPeek = false;
+            rightHoverSince = -1;
+        }
+    }
+
+    private void paintSideSlivers(UiGfx g) {
+        if (!panelsVisible || dragStarted()) return;
+        int top = toolbarVisible() ? TOOLBAR_H : 0;
+        if (leftCollapsed && !leftPeek && leftHoverSince >= 0) {
+            g.fillRect(0, top, PEEK_SLIVER - 1, viewH - top, C_PANEL | 0xFF000000);
+            g.fillRect(PEEK_SLIVER - 1, top, 1, viewH - top, C_SEL);
+        }
+        if (rightCollapsed && !rightPeek && rightHoverSince >= 0) {
+            g.fillRect(viewW - PEEK_SLIVER + 1, top, PEEK_SLIVER - 1, viewH - top, C_PANEL | 0xFF000000);
+            g.fillRect(viewW - PEEK_SLIVER, top, 1, viewH - top, C_SEL);
+        }
     }
 
     private void updateToolbarPeek() {
@@ -1749,6 +1803,8 @@ public final class EditorController {
             mouseX = -9999;
             mouseY = -9999;
         }
+        updateToolbarPeek();
+        updateSidePeek();
         autoPan();
         stepPan();
         g.pushTransform(panX, panY, 1f, 0f, 0f, 0f);
@@ -1756,13 +1812,13 @@ public final class EditorController {
         g.popTransform();
         if (leftVisible()) paintLeftPanel(g);
         if (rightVisible()) paintProperties(g);
-        updateToolbarPeek();
         if (selected != lastSelected) {
             lastSelected = selected;
             tempDismissed = false;
         }
         if (toolbarVisible()) paintToolbar(g);
         else paintPeekSliver(g);
+        paintSideSlivers(g);
         if (panelsVisible && !dragStarted()) paintTabs(g);
         popupRect = null;
         paintPicker(g);
