@@ -82,3 +82,8 @@ M3 에디터를 만들면서 쌓인 피드백과 코드 상태를 바탕으로, 
 
 - **스크립트(JavaScript / GraalVM)**: 요소 수정, CSS 변수 조작, 마인크래프트 명령어 실행만 가능하고 Java 와는 JSON IPC 로만 통신한다.
   자세한 설계와 단계는 [scripting-plan.md](scripting-plan.md). (CSS 변수 Java API `setVariable` 은 이미 구현됨)
+
+## 8. 진행 상태 (2026-11-09)
+
+완료: P0 전체, 새 태그 12종, 정렬/순서/XML 보기/상태 미리보기/저장 충돌/툴팁, **다중 선택**, **구조 트리 검색**, 툴바 오버플로, 아이템 선택 상자.
+확인 완료: Fabric + NeoForge, OpenGL + Vulkan, 한글 IME. `feat/m3-editor` 는 `develop` 에 병합됨(이후 작업은 `feat/m3.5-editor-tools`).

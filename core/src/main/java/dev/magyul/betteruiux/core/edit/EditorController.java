@@ -77,6 +77,7 @@ public final class EditorController {
     private static final int ANCHOR_T = 8, DROP_ANCHOR_T = 6;
     /** 선택한 요소를 화면으로 불러올 때 작업 영역 가장자리와 띄울 여유. */
     private static final int REVEAL_MARGIN = 6;
+    private static final int C_MULTI = 0xFF55C8FF;
     private static final int C_PANEL = 0xF2161820, C_BTN = 0xFF3A3F55, C_BTN_OFF = 0xFF262838, C_SEL = 0xFFFFFF55,
             C_HOVER = 0x9055FFFF, C_GUIDE = 0xFFFF55FF, C_TEXT = 0xFFFFFFFF, C_DIM = 0xFF9090A0, C_ERR = 0xFFFF6060,
             C_OK = 0xFF80FF80, C_ROW_SEL = 0xFF3A4A80, C_ROW_HOVER = 0xFF2A3050, C_FIELD = 0xFF101018,
@@ -169,7 +170,12 @@ public final class EditorController {
         int resultIndex;
         /** 크기를 줄일 수 있는 하한. row/column 은 내용(자식들)보다 작아지지 못한다. */
         int minW = MIN_SIZE, minH = MIN_SIZE;
+        /** 함께 끌려가는 다른 선택 요소들(자유 배치 부모 안의 것만). */
+        List<GroupItem> group = List.of();
     }
+
+    private record GroupItem(int index, Rect startRect, String anchor, Insets margin, Rect parentContent, int curX, int curY,
+                             Map<String, Boolean> definedElsewhere) {}
 
     private final EditorHost host;
     private final TextMetrics tm;
@@ -178,6 +184,9 @@ public final class EditorController {
     private int viewW, viewH;
 
     private int selected = -1;
+    /** 여러 개를 고른 경우 대표({@link #selected}) 외의 선택. 번호는 편집 구조가 바뀌면 의미가 없어지므로 그때 비운다. */
+    private final java.util.LinkedHashSet<Integer> multi = new java.util.LinkedHashSet<>();
+    private boolean ctrlDown, shiftDown;
     private int hoverIndex = -1;
     private int mouseX = -1, mouseY = -1;
     private boolean panelsVisible = true;
@@ -645,7 +654,9 @@ public final class EditorController {
 
     /** 텍스트 패치를 Undo 가능한 한 단계로 적용하고 화면을 갱신한다. 실패하면 되돌린다. */
     private boolean applyEdit(Function<XmlSource, String> patch) {
+        int countBefore = XmlSource.parse(session.text()).all().size();
         if (!session.edit(patch)) return false;
+        if (XmlSource.parse(session.text()).all().size() != countBefore) multi.clear();   // 요소가 늘거나 줄면 번호가 밀린다
         if (!reload()) {
             session.undo();
             reload();
@@ -775,6 +786,73 @@ public final class EditorController {
         return true;
     }
 
+    /** 다음 마우스 입력에 적용할 Ctrl/Shift 상태(여러 개 선택용). */
+    public void setModifiers(boolean ctrl, boolean shift) {
+        this.ctrlDown = ctrl;
+        this.shiftDown = shift;
+    }
+
+    /** 선택된 요소 번호들(대표가 맨 앞). 루트(0)는 여러 선택에 포함되지 않는다. */
+    public List<Integer> selection() {
+        List<Integer> all = new ArrayList<>();
+        if (selected >= 0) all.add(selected);
+        for (int i : multi) if (i != selected) all.add(i);
+        return all;
+    }
+
+    private List<Integer> editableSelection() {
+        List<Integer> out = new ArrayList<>();
+        for (int i : selection()) if (i > 0) out.add(i);
+        return out;
+    }
+
+    private void toggleMulti(int idx) {
+        if (idx <= 0) return;
+        if (idx == selected) {
+            if (multi.isEmpty()) return;
+            selected = multi.iterator().next();
+            multi.remove(selected);
+        } else if (!multi.remove(idx)) {
+            if (selected <= 0) selected = idx;
+            else multi.add(idx);
+        }
+    }
+
+    // ---- 사각형(마퀴) 선택 ----
+
+    private int marqStartX, marqStartY, marqX, marqY;
+    private boolean marqPending, marqActive;
+
+    private Rect marqueeRect() {
+        return new Rect(Math.min(marqStartX, marqX), Math.min(marqStartY, marqY), Math.abs(marqX - marqStartX), Math.abs(marqY - marqStartY));
+    }
+
+    private void finishMarquee() {
+        Rect m = marqueeRect();
+        List<LayoutBox> hits = new ArrayList<>();
+        collectInside(doc.layout(), m, hits);
+        List<LayoutBox> top = new ArrayList<>();                         // 안에 있는 요소의 자손은 빼서 이중 이동을 막는다
+        for (LayoutBox b : hits) {
+            boolean covered = false;
+            for (LayoutBox o : hits) if (o != b && isInsideOrSelf(b, o.node.sourceIndex())) covered = true;
+            if (!covered) top.add(b);
+        }
+        multi.clear();
+        selected = -1;
+        for (LayoutBox b : top) {
+            if (selected < 0) selected = b.node.sourceIndex();
+            else multi.add(b.node.sourceIndex());
+        }
+        if (!top.isEmpty()) setStatus(top.size() + "개 선택", false);
+    }
+
+    private void collectInside(LayoutBox b, Rect m, List<LayoutBox> out) {
+        if (!b.visible() || b.inactive) return;
+        if (b.parent != null && b.node.sourceIndex() > 0 && b.w > 0 && b.h > 0
+                && b.x >= m.x() && b.y >= m.y() && b.x + b.w <= m.right() && b.y + b.h <= m.bottom()) out.add(b);
+        for (LayoutBox c : b.children) collectInside(c, m, out);
+    }
+
     public boolean mousePressed(int x, int y, int button) {
         mouseX = x;
         mouseY = y;
@@ -807,6 +885,14 @@ public final class EditorController {
         }
         int cx = x - panX, cy = y - panY;                   // 이후는 문서 좌표
         boolean underToolbar = toolbarVisible() && y < TOOLBAR_H;
+        marqPending = false;
+        if (ctrlDown || shiftDown) {                                                    // Ctrl/Shift+클릭: 선택에 넣고 빼기(끌기보다 우선)
+            LayoutBox mh = hitSource(cx, cy);
+            if (mh != null && mh.parent != null) {
+                toggleMulti(mh.node.sourceIndex());
+                return true;
+            }
+        }
         LayoutBox sel = selectedBox();
         if (sel != null && sel.parent != null) {
             Handle h = handleAt(sel, cx, cy);
@@ -826,7 +912,25 @@ public final class EditorController {
         }
         LayoutBox hit = hitSource(cx, cy);
         if (tabHeaderClick(hit, cx, cy)) return true;
+        if ((ctrlDown || shiftDown) && hit != null && hit.parent != null) {            // Ctrl/Shift+클릭: 선택에 넣고 빼기
+            toggleMulti(hit.node.sourceIndex());
+            return true;
+        }
         if (underToolbar && (hit == null || hit.parent == null)) return true;   // 툴바의 빈 곳을 눌렀을 뿐이면 배경(루트)을 고르지 않는다
+        if (hit != null && hit.parent != null && multi.contains(hit.node.sourceIndex())) {   // 선택 묶음 안의 요소를 누르면 묶음째 끈다
+            multi.remove(hit.node.sourceIndex());
+            if (selected > 0) multi.add(selected);
+            selected = hit.node.sourceIndex();
+            prepareDrag(hit, Handle.BODY, cx, cy);
+            return true;
+        }
+        multi.clear();
+        if (hit == null || hit.parent == null) {                                         // 빈 곳: 클릭이면 선택/해제, 끌면 사각형 선택
+            marqPending = true;
+            marqActive = false;
+            marqStartX = marqX = cx;
+            marqStartY = marqY = cy;
+        }
         if (hit != null) {
             selected = hit.node.sourceIndex();
             if (hit.parent != null) prepareDrag(hit, Handle.BODY, cx, cy);
@@ -864,6 +968,12 @@ public final class EditorController {
             editCursor = indexAt(x);
             return true;
         }
+        if (marqPending) {
+            marqX = x - panX;
+            marqY = y - panY;
+            if (!marqActive && Math.max(Math.abs(marqX - marqStartX), Math.abs(marqY - marqStartY)) >= DRAG_START) marqActive = true;
+            return true;
+        }
         if (dnd != null) {
             if (!dnd.started && Math.max(Math.abs(x - dnd.startX), Math.abs(y - dnd.startY)) >= DRAG_START) dnd.started = true;
             return true;
@@ -896,6 +1006,13 @@ public final class EditorController {
             fieldDragging = false;
             return true;
         }
+        if (marqPending) {
+            boolean was = marqActive;
+            marqPending = false;
+            marqActive = false;
+            if (was) finishMarquee();
+            return true;
+        }
         if (dnd != null) {
             Dnd d = dnd;
             try {
@@ -922,6 +1039,8 @@ public final class EditorController {
             selected = d.resultIndex;
             reload();
             setStatus("", false);
+        } else {
+            multi.clear();                                          // 끌지 않고 그냥 눌렀다 뗐으면 그 요소 하나만 선택한다
         }
         return true;
     }
@@ -1015,6 +1134,18 @@ public final class EditorController {
         for (String k : List.of("width", "height", "x", "y", "anchor")) {
             d.definedElsewhere.put(k, b.style.get(k) != null && b.node.attr(k) == null);
         }
+        if (h == Handle.BODY && !d.parentFlow && !multi.isEmpty()) {
+            List<GroupItem> group = new ArrayList<>();
+            for (int gi : multi) {
+                LayoutBox gb = boxByIndex(doc.layout(), gi);
+                if (gb == null || gb.parent == null || isFlow(gb.parent) || gi == d.index) continue;
+                Map<String, Boolean> def = new HashMap<>();
+                for (String k : List.of("x", "y", "anchor")) def.put(k, gb.style.get(k) != null && gb.node.attr(k) == null);
+                group.add(new GroupItem(gi, rectOf(gb), gb.style.get("anchor"), Insets.parse(gb.style.get("margin"), Insets.ZERO),
+                        contentRect(gb.parent), gb.style.integer("x", 0), gb.style.integer("y", 0), def));
+            }
+            d.group = group;
+        }
         List<LayoutBox> siblings = new ArrayList<>(parent == null ? List.of() : displayChildren(parent));
         siblings.remove(b);
         d.others = siblings;
@@ -1043,8 +1174,19 @@ public final class EditorController {
             Map<String, String> props = Geometry.propsForRect(d.parentFlow, anchor, d.margin, d.parentContent,
                     d.startRect, target, anchorChanged ? Geometry.UNKNOWN : d.curX, anchorChanged ? Geometry.UNKNOWN : d.curY);
             if (anchorChanged) props.put("anchor", anchor.equals("top-left") ? null : anchor);
-            ok = session.setTransient(src -> EditorOps.setProps(src.text(), d.index, props,
-                    p -> d.definedElsewhere.getOrDefault(p, false)));
+            int tx = target.x() - d.startRect.x(), ty = target.y() - d.startRect.y();
+            ok = session.setTransient(src -> {
+                String t = EditorOps.setProps(src.text(), d.index, props, p -> d.definedElsewhere.getOrDefault(p, false));
+                if (d.handle == Handle.BODY) {
+                    for (GroupItem gi : d.group) {                         // 함께 선택한 요소들도 같은 만큼 옮긴다(각자의 부모 안에서)
+                        Rect moved = Geometry.clamp(gi.startRect().translate(tx, ty), gi.parentContent());
+                        Map<String, String> gp = Geometry.propsForRect(false, Geometry.normalizeAnchor(gi.anchor()), gi.margin(),
+                                gi.parentContent(), gi.startRect(), moved, gi.curX(), gi.curY());
+                        t = EditorOps.setProps(t, gi.index(), gp, p -> gi.definedElsewhere().getOrDefault(p, false));
+                    }
+                }
+                return t;
+            });
             d.resultIndex = d.index;
         }
         if (!ok || !reload()) {
@@ -1397,6 +1539,10 @@ public final class EditorController {
                 return true;
             }
             case ESCAPE -> {
+                if (!multi.isEmpty()) {                       // 여러 개 선택 중이면 먼저 대표만 남긴다
+                    multi.clear();
+                    return true;
+                }
                 if (selected < 0) requestExit();          // 아무것도 선택하지 않았으면 에디터를 닫는다
                 selected = -1;
                 return true;
@@ -1581,6 +1727,7 @@ public final class EditorController {
     // ================= 명령 =================
 
     public void undo() {
+        multi.clear();
         if (session.undo()) {
             reload();
             setStatus("실행 취소", false);
@@ -1588,6 +1735,7 @@ public final class EditorController {
     }
 
     public void redo() {
+        multi.clear();
         if (session.redo()) {
             reload();
             setStatus("다시 실행", false);
@@ -1678,13 +1826,45 @@ public final class EditorController {
     }
 
     public void duplicate() {
+        List<Integer> sel = editableSelection();
+        if (sel.size() > 1) {                                               // 여러 개: 큰 번호부터 복제해야 앞쪽 번호가 밀리지 않는다
+            List<Integer> desc = new ArrayList<>(sel);
+            desc.sort(java.util.Comparator.reverseOrder());
+            String text = session.text();
+            for (int i : desc) text = EditorOps.duplicate(text, i).text();
+            String result = text;
+            if (applyEdit(src -> result)) {
+                multi.clear();
+                selected = -1;
+                setStatus(sel.size() + "개 복제됨", false);
+            }
+            return;
+        }
         if (selected <= 0) return;
         EditorOps.Added r = EditorOps.duplicate(session.text(), selected);
         String text = growToFit(r.text(), r.index());
         if (applyEdit(src -> text)) selected = r.index();
     }
 
-    public void deleteSelected() { deleteIndex(selected); }
+    public void deleteSelected() {
+        List<Integer> sel = editableSelection();
+        if (sel.size() > 1) {                                               // 여러 개: 큰 번호(자손)부터 지운다
+            List<Integer> desc = new ArrayList<>(sel);
+            desc.sort(java.util.Comparator.reverseOrder());
+            String text = session.text();
+            for (int i : desc) {
+                if (i < XmlSource.parse(text).all().size()) text = EditorOps.delete(text, i).text();
+            }
+            String result = text;
+            if (applyEdit(src -> result)) {
+                multi.clear();
+                selected = -1;
+                setStatus(sel.size() + "개 삭제됨 (Ctrl+Z 로 되돌릴 수 있어요)", false);
+            }
+            return;
+        }
+        deleteIndex(selected);
+    }
 
     private void deleteIndex(int index) {
         if (index <= 0) return;
@@ -1723,18 +1903,30 @@ public final class EditorController {
             if (k < after.size()) selected = after.get(k).node.sourceIndex();
             return;
         }
-        // 기준점에 맞는 오프셋으로 한 칸 옮기되, 부모 밖으로는 나가지 않는다.
-        Rect before = rectOf(b);
-        Rect content = contentRect(b.parent);
-        Rect desired = Geometry.clamp(before.translate(dx * step, dy * step), content);
-        if (desired.equals(before)) return;
-        int idx = selected;
-        LayoutBox box = b;
-        Map<String, String> props = Geometry.propsForRect(false, b.style.get("anchor"),
-                Insets.parse(b.style.get("margin"), Insets.ZERO), content, before, desired,
-                b.style.integer("x", 0), b.style.integer("y", 0));
-        applyEdit(src -> EditorOps.setProps(src.text(), idx, props,
-                p -> box.style.get(p) != null && box.node.attr(p) == null));
+        // 기준점에 맞는 오프셋으로 한 칸 옮기되, 부모 밖으로는 나가지 않는다. 여러 개를 골랐다면 모두 같이 옮긴다.
+        List<Integer> targets = new ArrayList<>();
+        targets.add(selected);
+        for (int i : multi) if (i > 0 && i != selected) targets.add(i);
+        String text = session.text();
+        boolean moved = false;
+        for (int idx : targets) {
+            LayoutBox box = boxByIndex(doc.layout(), idx);
+            if (box == null || box.parent == null || isFlow(box.parent)) continue;
+            Rect before = rectOf(box);
+            Rect content = contentRect(box.parent);
+            Rect desired = Geometry.clamp(before.translate(dx * step, dy * step), content);
+            if (desired.equals(before)) continue;
+            Map<String, String> props = Geometry.propsForRect(false, box.style.get("anchor"),
+                    Insets.parse(box.style.get("margin"), Insets.ZERO), content, before, desired,
+                    box.style.integer("x", 0), box.style.integer("y", 0));
+            final LayoutBox fb = box;
+            text = EditorOps.setProps(text, idx, props, p -> fb.style.get(p) != null && fb.node.attr(p) == null);
+            moved = true;
+        }
+        if (!moved) return;
+        String result = text;
+        java.util.Set<Integer> keep = new java.util.LinkedHashSet<>(multi);
+        if (applyEdit(src -> result)) multi.addAll(keep);               // 속성만 바뀌므로 번호는 그대로다
     }
 
     // ---- 속성 필드 편집 ----
@@ -1786,6 +1978,11 @@ public final class EditorController {
 
     /** 속성 하나를 값으로 바꾼다(빈 값이면 속성 제거). */
     private void applyValue(String key, String raw) {
+        if (key.equals(FILTER_KEY)) {                                      // 구조 트리 검색어
+            treeFilter = raw;
+            outlinerScroll = 0;
+            return;
+        }
         LayoutBox box = selectedBox();
         if (key == null || box == null) return;
         String value0 = raw.isEmpty() ? null : raw;
@@ -2076,7 +2273,33 @@ public final class EditorController {
         return out;
     }
 
+    private static final String FILTER_KEY = "§filter";
+    private String treeFilter = "";
+
+    /** 지금 적용할 검색어(편집 중이면 입력 중인 글자로 바로 걸러진다). */
+    private String activeFilter() {
+        return (FILTER_KEY.equals(editKey) ? editBuffer.toString() : treeFilter).trim().toLowerCase();
+    }
+
+    private boolean subtreeMatches(LayoutBox b, String f) {
+        if (rowLabel(b).toLowerCase().contains(f)) return true;
+        for (LayoutBox k : displayChildren(b)) if (subtreeMatches(k, f)) return true;
+        return false;
+    }
+
+    private void buildFiltered(LayoutBox b, int depth, List<TreeRow> out, String f) {
+        if (!subtreeMatches(b, f)) return;
+        List<LayoutBox> kids = displayChildren(b);
+        out.add(new TreeRow(b, depth, !kids.isEmpty(), false, keyOf(b)));
+        for (LayoutBox k : kids) buildFiltered(k, depth + 1, out, f);
+    }
+
     private void buildRows(LayoutBox b, int depth, List<TreeRow> out) {
+        String f = activeFilter();
+        if (!f.isEmpty()) {
+            buildFiltered(b, depth, out, f);
+            return;
+        }
         List<LayoutBox> kids = displayChildren(b);
         String key = keyOf(b);
         boolean isCollapsed = !kids.isEmpty() && collapsed.contains(key);
@@ -2250,6 +2473,15 @@ public final class EditorController {
         hoverIndex = hover == null ? -1 : hover.node.sourceIndex();
         if (hover != null && hoverIndex != selected) outline(g, rectOf(hover), C_HOVER);
 
+        for (int mi : multi) {
+            LayoutBox mb = boxByIndex(doc.layout(), mi);
+            if (mb != null) outline(g, rectOf(mb), C_MULTI);
+        }
+        if (marqActive) {
+            Rect mr = marqueeRect();
+            g.fillRect(mr.x(), mr.y(), mr.w(), mr.h(), 0x3055C8FF);
+            outline(g, mr, C_MULTI);
+        }
         LayoutBox sel = selectedBox();
         if (sel != null) {
             Rect r = rectOf(sel);
@@ -2263,7 +2495,7 @@ public final class EditorController {
                 }
             }
             // 크기/위치 표시는 요소 위쪽(자리가 없으면 아래쪽)의 불투명한 띠에 그려 뒤의 글자와 섞이지 않게 한다.
-            String label = r.w() + "x" + r.h() + "  @" + r.x() + "," + r.y();
+            String label = r.w() + "x" + r.h() + "  @" + r.x() + "," + r.y() + (multi.isEmpty() ? "" : "  외 " + multi.size() + "개");
             int ly = r.y() >= tm.lineHeight() + 8 ? r.y() - tm.lineHeight() - 6 : r.bottom() + 6;
             g.fillRect(r.x(), ly - 2, tm.width(label) + 6, tm.lineHeight() + 4, 0xFF000000);
             g.drawText(label, r.x() + 3, ly, C_SEL, false);
@@ -2479,6 +2711,17 @@ public final class EditorController {
         int headerY = TOOLBAR_H + PALETTE_H;
         g.fillRect(0, headerY, LEFT_W - 1, 1, 0x40FFFFFF);
         g.drawText("구조", 4, headerY + 3, C_DIM, false);
+        Rect filterField = new Rect(26, headerY + 2, LEFT_W - 26 - 30, 9);                 // 검색 칸
+        g.fillRect(filterField.x(), filterField.y(), filterField.w(), filterField.h(), C_FIELD);
+        if (FILTER_KEY.equals(editKey)) {
+            outline(g, filterField, C_SEL);
+            editRect = filterField;
+            paintEditText(g, filterField);
+        } else {
+            boolean has = !treeFilter.isEmpty();
+            g.drawText(has ? fit(treeFilter, filterField.w() - 4) : "검색", filterField.x() + 3, filterField.y() + 1, has ? C_SEL : C_DIM, false);
+            regions.add(new Region(filterField, () -> startEdit(FILTER_KEY, treeFilter, filterField)));
+        }
         Rect expand = new Rect(LEFT_W - 14, headerY + 2, 10, 9), collapse = new Rect(LEFT_W - 26, headerY + 2, 10, 9);
         g.fillRect(collapse.x(), collapse.y(), collapse.w(), collapse.h(), C_BTN);
         g.drawText("-", collapse.x() + 3, collapse.y() + 1, C_TEXT, false);
@@ -2495,6 +2738,7 @@ public final class EditorController {
             rows = treeRows();
         }
         int visible = visibleRows();
+        if (rows.isEmpty()) g.drawText("일치하는 요소가 없어요", 6, rowsTop() + 4, C_DIM, false);
         outlinerScroll = Math.max(0, Math.min(outlinerScroll, Math.max(0, rows.size() - visible)));
         int top = rowsTop();
         g.pushClip(0, top - 1, LEFT_W - 1, viewH - top + 1);
@@ -2503,7 +2747,7 @@ public final class EditorController {
             LayoutBox b = row.box();
             int y = top + (i - outlinerScroll) * ROW_H;
             int idx = b.node.sourceIndex();
-            boolean sel = idx == selected;
+            boolean sel = idx == selected || multi.contains(idx);
             boolean hot = mouseX >= 0 && mouseX < LEFT_W && mouseY >= y - 1 && mouseY < y - 1 + ROW_H && dnd == null;
             if (sel) g.fillRect(0, y - 1, LEFT_W - 1, ROW_H, C_ROW_SEL);
             else if (hot || idx == hoverIndex) g.fillRect(0, y - 1, LEFT_W - 1, ROW_H, C_ROW_HOVER);
@@ -2517,6 +2761,11 @@ public final class EditorController {
             g.drawText(fit(rowLabel(b), LEFT_W - chip - 10), chip + 6, y, sel ? C_SEL : C_TEXT, false);
             Rect rowRect = new Rect(0, y - 1, LEFT_W, ROW_H);
             regions.add(new Region(rowRect, () -> {
+                if (ctrlDown || shiftDown) {                                  // Ctrl/Shift+클릭: 여러 개 선택
+                    toggleMulti(idx);
+                    return;
+                }
+                if (!multi.contains(idx) || idx == selected) multi.clear();
                 select(idx);
                 dnd = new Dnd(false, "", idx, mouseX, mouseY);
             }));
@@ -3004,29 +3253,38 @@ public final class EditorController {
 
     private static final List<String> ALIGN_ITEMS = List.of("top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right");
 
-    /** 선택한 요소를 부모 안에서 정렬한다: 자유 배치 부모에서는 기준점을 지정하고 오프셋을 지우고, row/column 안에서는 교차축 정렬(align-self). */
+    /** 선택한 요소(여러 개면 모두)를 부모 안에서 정렬한다: 자유 배치 부모에서는 기준점을 지정하고 오프셋을 지우고, row/column 안에서는 교차축 정렬(align-self)을 쓴다. */
     public void alignSelected(String anchor) {
-        LayoutBox b = selectedBox();
-        if (b == null || b.parent == null || selected <= 0) return;
-        LayoutBox parent = displayParent(b);
-        if (parent == null) return;
-        Map<String, String> props = new LinkedHashMap<>();
-        if (isFlow(parent)) {
-            boolean horizontal = parent.tag().equals("row");            // row 는 위/아래, column 은 왼쪽/오른쪽이 교차축
-            String start = horizontal ? "top" : "left", end = horizontal ? "bottom" : "right";
-            props.put("align-self", anchor.contains(start) ? "start" : anchor.contains(end) ? "end" : "center");
-        } else {
-            props.put("anchor", anchor.equals("top-left") ? null : anchor);
-            props.put("x", null);
-            props.put("y", null);
+        String text = session.text();
+        boolean any = false;
+        java.util.Set<Integer> keep = new java.util.LinkedHashSet<>(multi);
+        for (int idx : editableSelection()) {
+            LayoutBox b = boxByIndex(doc.layout(), idx);
+            if (b == null || b.parent == null) continue;
+            LayoutBox parent = displayParent(b);
+            if (parent == null) continue;
+            Map<String, String> props = new LinkedHashMap<>();
+            if (isFlow(parent)) {
+                boolean horizontal = parent.tag().equals("row");            // row 는 위/아래, column 은 왼쪽/오른쪽이 교차축
+                String start = horizontal ? "top" : "left", end = horizontal ? "bottom" : "right";
+                props.put("align-self", anchor.contains(start) ? "start" : anchor.contains(end) ? "end" : "center");
+            } else {
+                props.put("anchor", anchor.equals("top-left") ? null : anchor);
+                props.put("x", null);
+                props.put("y", null);
+            }
+            final LayoutBox box = b;
+            text = EditorOps.setProps(text, idx, props, p -> box.style.get(p) != null && box.node.attr(p) == null);
+            any = true;
         }
-        int idx = selected;
-        LayoutBox box = b;
-        applyEdit(src -> EditorOps.setProps(src.text(), idx, props, p -> box.style.get(p) != null && box.node.attr(p) == null));
+        if (!any) return;
+        String result = text;
+        if (applyEdit(src -> result)) multi.addAll(keep);
     }
 
     /** 같은 부모 안에서 순서를 한 칸 옮긴다(dir -1 = 앞/뒤로 보내기: 먼저 그려지는 쪽, +1 = 위로). */
     public void reorder(int dir) {
+        multi.clear();
         LayoutBox b = selectedBox();
         if (b == null || selected <= 0) return;
         LayoutBox parent = displayParent(b);
