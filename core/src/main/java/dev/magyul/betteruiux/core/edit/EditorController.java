@@ -326,11 +326,9 @@ public final class EditorController {
     /** 숨긴 툴바 위에 마우스를 올려 두면 위쪽 가장자리에서 조금씩 튀어나온다(곧 나타난다는 표시). */
     private void paintPeekSliver(UiGfx g) {
         if (!toolbarHidden || toolbarPeek || topHoverSince < 0 || !panelsVisible || dragStarted()) return;
-        float p = Math.min(1f, (clock.getAsLong() - topHoverSince) / (float) PEEK_NANOS);
-        int h = 2 + Math.round(p * (PEEK_SLIVER - 2));
-        int w = 60 + Math.round(p * 40), x = Math.max(0, Math.min(viewW - w, mouseX - w / 2));
-        g.fillRect(x, 0, w, h, C_PANEL | 0xFF000000);
-        g.fillRect(x, h, w, 1, withAlpha(C_SEL, 0.5f + 0.5f * p));
+        // 길쭉하게(가로 전체) 살짝 튀어나온 채로 기다린다 — 크기는 변하지 않는다.
+        g.fillRect(0, 0, viewW, PEEK_SLIVER - 1, C_PANEL | 0xFF000000);
+        g.fillRect(0, PEEK_SLIVER - 1, viewW, 1, C_SEL);
     }
 
     private void paintExitDialog(UiGfx g) {
@@ -1745,6 +1743,12 @@ public final class EditorController {
 
     public void paint(UiGfx g) {
         regions.clear();
+        realMouseX = mouseX;
+        realMouseY = mouseY;
+        if (exitDialog) {                                    // 메시지 박스 뒤의 모든 것(요소 윤곽, 버튼, 패널)에 호버가 전해지지 않게 한다
+            mouseX = -9999;
+            mouseY = -9999;
+        }
         autoPan();
         stepPan();
         g.pushTransform(panX, panY, 1f, 0f, 0f, 0f);
@@ -1753,12 +1757,6 @@ public final class EditorController {
         if (leftVisible()) paintLeftPanel(g);
         if (rightVisible()) paintProperties(g);
         updateToolbarPeek();
-        realMouseX = mouseX;
-        realMouseY = mouseY;
-        if (exitDialog) {
-            mouseX = -9999;
-            mouseY = -9999;
-        }
         if (selected != lastSelected) {
             lastSelected = selected;
             tempDismissed = false;

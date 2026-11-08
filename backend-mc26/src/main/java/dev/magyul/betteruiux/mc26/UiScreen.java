@@ -163,7 +163,9 @@ public final class UiScreen extends Screen {
 
     /** 에디터의 Exit 버튼/Esc 에서 부른다. */
     void exitEditor() {
-        if (editor != null) leaveEditor();
+        if (editor == null) return;
+        leaveEditor();
+        this.onClose();   // 열린 화면으로 돌아가지 않고 그대로 닫는다
     }
 
     private void leaveEditor() {

@@ -471,4 +471,19 @@ class EditorFeedbackTest {
         e.requestExit();
         assertNotEquals(0xFF3A3F55 + 0x202020, c, "호버 색이 아니다");
     }
+
+    @Test
+    void elementsBehindTheExitDialogGetNoHoverOutline() throws Exception {
+        EditorController e = editor(COLORED);
+        e.select(1);
+        e.keyPressed(EditorKey.RIGHT, false, false);
+        Rect r = rect(e, "a");
+        e.mouseMoved(r.x() + 3, r.y() + 3);
+        e.select(-1);
+        assertTrue(paint(e).commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect f && f.argb() == 0x9055FFFF),
+                "대화상자가 없으면 호버 윤곽이 보인다");
+        e.requestExit();
+        assertFalse(paint(e).commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect f && f.argb() == 0x9055FFFF),
+                "대화상자가 떠 있으면 없다");
+    }
 }
