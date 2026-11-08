@@ -31,11 +31,11 @@
 - 호환 주의: ImmediatelyFast 26.2 폰트 렌더 버그(이슈 #542), 26.3 파이프라인 룩업이 vertex format 무시하는 충돌 사례 → 커스텀 `RenderPipeline` 등록 시 key 충돌 주의.
 - 필요 하드웨어: Vulkan 1.2 + dynamic rendering + push descriptors, 미지원 시 OpenGL 폴백 (→ **백엔드는 어느 쪽 렌더러에서도 동일하게 동작해야 함**: 우리는 Blaze3D 추상화 위에서만 그리므로 OK).
 
-## 4. 타깃 결정 (권고)
-1. **1차 타깃: 26.3** — 유일한 안정판이며 Fabric·NeoForge 둘 다 지원. 사용자는 Vulkan을 켜고 테스트 가능(옵션 설정).
-2. **26.4 대응**: Fabric은 이미 가능, NeoForge는 출시 대기. 백엔드를 `backend-mc26` 로 두고 26.3↔26.4 차이는 Stonecutter 분기로 처리. 26.4 정식 + NeoForge 26.4 출시 시 2번째 타깃으로 확장.
-3. GL 전용 구버전(1.21.x 등) 백엔드는 **우선순위 낮춤**: 26.1에서 비난독화·툴체인이 바뀌어 별도 빌드 라인이 필요하고, OpenGL은 제거 예정이므로 M4.6(두 번째 백엔드 검증)은 "26.3 ↔ 26.4" 로 대체 권고.
-4. Sodium/Iris/ImmediatelyFast 등의 26.3 지원 상태는 M0 후반에 모드 페이지에서 확인 후 호환 매트릭스 확정.
+## 4. 타깃 결정 (확정)
+1. **지원 범위: Java 25 / Minecraft 26.x 이상만.** 1.21.x 이하·GL 전용 구버전 백엔드는 만들지 않는다.
+2. **렌더러: Vulkan 주, OpenGL 호환.** Blaze3D 추상화 위에서만 그리므로 백엔드 모듈은 하나(`backend-mc26`)이고, 같은 코드가 두 렌더러에서 동작해야 한다. 개발·성능·스크린샷 기준은 Vulkan, OpenGL은 마일스톤마다 스모크 회귀 확인. 불가피한 차이는 `RendererQuirks` 한 곳에 격리(OpenGL 제거 시 삭제 가능하게).
+3. **1차 타깃 26.3**(유일한 안정판, Fabric·NeoForge 모두 지원), **26.4**는 Stonecutter 분기로 추가. NeoForge 26.4는 출시 대기.
+4. Sodium/Iris/ImmediatelyFast 등의 26.x 지원 상태는 M0 후반에 확인해 호환 매트릭스 확정.
 
 ## 5. 미확정 / 후속 확인 (코드 작성 시 직접 검증)
 - [ ] Loom 정확한 버전 및 Gradle 9.x 호환
