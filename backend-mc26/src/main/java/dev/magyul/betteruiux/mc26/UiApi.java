@@ -37,6 +37,9 @@ public final class UiApi {
     /** 로더 진입점이 설정 폴더({@code config/better-uiux})를 알려준다. */
     public static void init(Path configBaseDir) {
         baseDir = configBaseDir;
+        HudManager.init(configBaseDir);
+        ExternalImages.init(configBaseDir);
+        ExternalVideos.init(configBaseDir);
         BackendBuiltins.register();
         ScriptBridge.prewarm(configBaseDir);
     }
@@ -65,7 +68,16 @@ public final class UiApi {
         return Minecraft.getInstance().gui.screen() instanceof UiScreen s ? s.document() : null;
     }
 
+    /**
+     * 모든 문서에서 {@code {이름}} 으로 쓸 수 있는 읽기 전용 값을 추가한다(내장: fps, player.health, world.day ...).
+     * 값은 문서가 그려질 때마다 {@code value} 를 읽는다. 이름은 {@code [A-Za-z0-9_.-]} 만 가능하다.
+     */
+    public static void registerDataSource(String name, java.util.function.Supplier<?> value) { DataSources.register(name, value); }
+
     static void fireOpened(String id, UiDocument doc) {
+        DataSources.bindTo(doc);
+        doc.setImageSizer(src -> ExternalVideos.handles(src) ? ExternalVideos.size(src, doc::requestRelayout)
+                : ExternalImages.size(src, doc::requestRelayout));                        // file: 이미지/영상은 원래 크기로 놓는다                                     // 내장/등록된 데이터 소스 먼저(모드의 훅이 같은 이름을 덮어쓸 수 있다)
         for (BiConsumer<String, UiDocument> l : OPENED) {
             try {
                 l.accept(id, doc);

@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.fabric;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
+import dev.magyul.betteruiux.mc26.HudManager;
 import dev.magyul.betteruiux.mc26.UiApi;
 import dev.magyul.betteruiux.mc26.UiOpener;
 import java.nio.file.Path;
@@ -8,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.minecraft.resources.Identifier;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -19,6 +22,8 @@ public final class BetterUiuxFabricClient implements ClientModInitializer {
     public void onInitializeClient() {
         Path baseDir = FabricLoader.getInstance().getConfigDir().resolve("better-uiux");
         UiApi.init(baseDir);
+        // XML HUD: 설정(config.toml 의 [hud] ids)에 적은 문서를 인게임 HUD 맨 위에 그린다.
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath(MOD_ID, "hud"), HudManager::render);
         // 개발용 자동 열기: 타이틀 화면이 뜬 뒤 한 번만 연다(시작 시점에 열면 타이틀 화면이 덮어쓴다).
         boolean[] opened = {false};
         ClientTickEvents.END_CLIENT_TICK.register(client -> {

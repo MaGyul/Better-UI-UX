@@ -18,6 +18,7 @@ dependencies {
 
     implementation(project(":core"))
     include(project(":core"))
+    include("org.jcodec:jcodec:0.2.5")          // 영상(mp4/H.264) 해독 라이브러리(순수 Java)
     // 개발 실행에서만 스크립트 런타임(GraalJS)을 함께 띄운다. 배포 jar 에는 넣지 않는다(선택 모듈).
 }
 

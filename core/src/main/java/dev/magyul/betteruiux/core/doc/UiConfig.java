@@ -24,6 +24,10 @@ public final class UiConfig {
             # 인게임 에디터(개발 중). 모드팩 배포 시 false 권장.
             enabled = false
 
+            [hud]
+            # 게임 화면(HUD)에 항상 그릴 XML 문서 id(쉼표로 구분). 예: ids = "hud_demo"  (비워 두면 HUD 없음)
+            ids = ""
+
             [scripting]
             # UI 문서의 <script> (JavaScript, 선택 모듈 script-graal 필요). 신뢰할 수 있는 UI 만 쓰세요.
             enabled = false

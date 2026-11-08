@@ -99,7 +99,7 @@ public final class UiPainter {
         }
         switch (b.tag()) {
             case "label", "button" -> paintText(b, s, g, opacity, button && !b.enabled());
-            case "image" -> paintImage(b, s, g, opacity);
+            case "image", "video" -> paintImage(b, s, g, opacity);
             case "item" -> {
                 String item = s.get("item");
                 if (item != null && !item.isBlank()) {

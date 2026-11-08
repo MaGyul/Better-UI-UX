@@ -1,0 +1,24 @@
+<!-- HUD 데모: config.toml 의 [hud] ids = "hud_demo" 로 켠다. 값은 읽기 전용 데이터 소스({player.health} 등)로 채워진다. -->
+<hud>
+  <style>
+    .box { background: #A0101018; border: 1; border-color: #FF3A3F55; padding: 4; }
+    .dim { color: #FFB0B0C0; }
+    .hp  { bar-color: #FFE04040; }
+    .xp  { bar-color: #FF80FF20; }
+  </style>
+
+  <column class="box" anchor="top-left" margin="6" gap="3" width="132">
+    <label text="HUD 데모  {fps} FPS" />
+    <separator />
+    <progress class="hp" width="fill" height="9" value="{player.health}" max="{player.maxHealth}" text="HP {player.health}/{player.maxHealth}" />
+    <progress width="fill" height="7" value="{player.food}" max="20" bar-color="#FFD0A040" text="허기 {player.food}" />
+    <progress class="xp" width="fill" height="7" value="{player.xpProgress}" max="100" text="레벨 {player.xpLevel}" />
+    <label class="dim" text="{player.x}, {player.y}, {player.z}" />
+    <label class="dim" text="{world.dimension}  {world.day}일차" />
+  </column>
+
+  <row anchor="top-right" margin="6" gap="4" class="box">
+    <item item="minecraft:clock" />
+    <label text="{world.time}" />
+  </row>
+</hud>
