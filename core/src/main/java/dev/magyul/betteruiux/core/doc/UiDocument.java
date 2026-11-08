@@ -4,6 +4,7 @@ import dev.magyul.betteruiux.api.TextMetrics;
 import dev.magyul.betteruiux.api.UiGfx;
 import dev.magyul.betteruiux.core.layout.LayoutBox;
 import dev.magyul.betteruiux.core.layout.LayoutEngine;
+import dev.magyul.betteruiux.core.render.ScreenBackground;
 import dev.magyul.betteruiux.core.render.UiPainter;
 import dev.magyul.betteruiux.core.style.StyleResolver;
 import dev.magyul.betteruiux.core.style.Stylesheet;
@@ -30,6 +31,8 @@ public final class UiDocument {
     private final List<String> warnings;
     private LayoutBox layout;
     private LayoutBox hovered, pressed;
+    private int viewW, viewH;
+    private ScreenBackground background = ScreenBackground.defaults();
     private ActionHandler actionHandler = (a, s) -> { };
 
     private final UiPainter.PaintState state = new UiPainter.PaintState() {
@@ -70,15 +73,38 @@ public final class UiDocument {
     public LayoutBox layout() { return layout; }
 
     /** 로드/스타일 파싱 중 생긴 경고(문서는 정상 표시됨). */
-    public List<String> warnings() { return warnings; }
+    public List<String> warnings() {
+        List<String> bg = background.warnings();
+        if (bg.isEmpty()) return warnings;
+        List<String> all = new ArrayList<>(warnings);
+        all.addAll(bg);
+        return all;
+    }
+
+    /** 루트의 {@code use} 로 정해진 배경 레이어. {@link #layout} 이후 유효. */
+    public ScreenBackground background() { return background; }
 
     public void setActionHandler(ActionHandler h) { this.actionHandler = h == null ? (a, s) -> { } : h; }
 
     /** 화면 크기(GUI 픽셀)에 맞춰 레이아웃을 다시 계산한다. 창 크기/GUI scale 변경 시 호출. */
     public void layout(int viewW, int viewH) {
+        this.viewW = viewW;
+        this.viewH = viewH;
         this.layout = layoutEngine.layout(root, viewW, viewH);
+        this.background = ScreenBackground.parse(layout.style.get("use"));
         this.hovered = null;
         this.pressed = null;
+    }
+
+    /**
+     * 화면 배경(blur / dim / block:&lt;id&gt;)을 {@code use} 에 적힌 순서대로 그린다.
+     * 문서 내용({@link #paint})보다 먼저, 게임의 배경 단계에서 호출해야 한다.
+     */
+    public void paintBackground(UiGfx gfx) {
+        if (layout == null) return;
+        background.paint(gfx, viewW, viewH,
+                layout.style.integer("block-size", ScreenBackground.DEFAULT_BLOCK_SIZE),
+                layout.style.color("block-tint", ScreenBackground.DEFAULT_BLOCK_TINT));
     }
 
     public void paint(UiGfx gfx, int mouseX, int mouseY) {

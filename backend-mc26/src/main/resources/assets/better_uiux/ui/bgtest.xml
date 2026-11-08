@@ -1,0 +1,12 @@
+<!-- /uiux open bgtest : 배경 조합 확인용. use 값을 바꿔 저장하면 즉시 반영된다. -->
+<screen use="block:minecraft:dirt,blur,dim">
+  <link rel="style" href="demo.uicss" />
+
+  <panel class="card" anchor="center" width="220" height="70">
+    <column gap="6" width="fill" align="center">
+      <label class="title" text="use=block:minecraft:dirt,blur,dim" />
+      <label class="muted" text="blur | dim | block:id | none" />
+      <button text="Close" onClick="close" />
+    </column>
+  </panel>
+</screen>

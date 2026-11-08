@@ -1,5 +1,6 @@
 <!-- /uiux open demo -->
-<screen>
+<!-- use: blur | dim | block:<id> | none  (쉼표로 섞어 쓰면 적은 순서대로 쌓임. 예: use="block:minecraft:dirt,blur,dim") -->
+<screen use="blur">
   <link rel="style" href="demo.uicss" />
 
   <panel class="card" anchor="center" width="200" height="120">

@@ -17,17 +17,23 @@ public final class DrawList implements UiGfx {
         for (DrawCommand c : commands) {
             switch (c) {
                 case DrawCommand.FillRect f -> target.fillRect(f.x(), f.y(), f.w(), f.h(), f.argb());
+                case DrawCommand.FillGradient f -> target.fillGradient(f.x(), f.y(), f.w(), f.h(), f.topArgb(), f.bottomArgb());
                 case DrawCommand.DrawTexture t -> target.drawTexture(t.texture(), t.x(), t.y(), t.w(), t.h(),
                         t.u(), t.v(), t.regionW(), t.regionH(), t.texW(), t.texH(), t.argb());
                 case DrawCommand.DrawText t -> target.drawText(t.text(), t.x(), t.y(), t.argb(), t.shadow());
                 case DrawCommand.PushClip p -> target.pushClip(p.x(), p.y(), p.w(), p.h());
                 case DrawCommand.PopClip p -> target.popClip();
+                case DrawCommand.BlurBackground b -> target.blurBackground();
             }
         }
     }
 
     @Override public void fillRect(int x, int y, int w, int h, int argb) {
         commands.add(new DrawCommand.FillRect(x, y, w, h, argb));
+    }
+
+    @Override public void fillGradient(int x, int y, int w, int h, int topArgb, int bottomArgb) {
+        commands.add(new DrawCommand.FillGradient(x, y, w, h, topArgb, bottomArgb));
     }
 
     @Override public void drawTexture(String texture, int x, int y, int w, int h,
@@ -42,4 +48,6 @@ public final class DrawList implements UiGfx {
     @Override public void pushClip(int x, int y, int w, int h) { commands.add(new DrawCommand.PushClip(x, y, w, h)); }
 
     @Override public void popClip() { commands.add(new DrawCommand.PopClip()); }
+
+    @Override public void blurBackground() { commands.add(new DrawCommand.BlurBackground()); }
 }

@@ -108,6 +108,17 @@ public final class UiScreen extends Screen {
         if (error != null) LOG.warn("[better-uiux] reload failed ('{}' 유지): {}", id, error);
     }
 
+    /**
+     * 배경은 {@code <screen use="...">} 가 결정한다(vanilla 기본 배경을 쓰지 않는다).
+     * 월드가 없을 때(타이틀 화면 등)는 vanilla 와 같이 파노라마를 먼저 깔아 배경이 비어 보이지 않게 한다(none 제외).
+     */
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        if (this.minecraft.level == null && !doc.background().isNone()) extractPanorama(graphics, a);
+        doc.paintBackground(new McGfx(graphics, this.font));
+        this.minecraft.gui.hud.extractDeferredSubtitles();
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
         super.extractRenderState(graphics, mouseX, mouseY, a);
