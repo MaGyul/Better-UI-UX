@@ -1,0 +1,18 @@
+<!-- /uiux open demo -->
+<screen>
+  <panel anchor="center" width="200" height="120" background="#E0202030" border="1" border-color="#FF8888FF" padding="8">
+    <column gap="6" width="fill" height="fill" align="center">
+      <label text="Better UI/UX" color="#FFFF55" />
+      <row gap="6" align="center">
+        <image src="minecraft:textures/item/diamond.png" tex="16 16" width="16" height="16" />
+        <label text="XML로 만든 화면" />
+      </row>
+      <spacer height="fill" />
+      <row gap="6" justify="center">
+        <button text="Hello" onClick="hello" />
+        <button text="Close" onClick="close" />
+      </row>
+    </column>
+  </panel>
+  <label anchor="bottom-right" margin="4" text="demo.xml" color="#808080" />
+</screen>
