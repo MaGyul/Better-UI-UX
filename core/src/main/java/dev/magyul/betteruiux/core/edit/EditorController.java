@@ -295,6 +295,7 @@ public final class EditorController {
     public void select(int index) {
         selected = index;
         revealRequested = true;
+        scrollRevealPending = true;
         commitFieldQuietly();
     }
 
@@ -542,6 +543,7 @@ public final class EditorController {
             d.setAnimationsEnabled(false);
             d.layout(viewW, viewH);
             if (applyTabs(d)) d.layout(viewW, viewH);
+            if (applyScrolls(d)) d.layout(viewW, viewH);
             doc = d;
             int count = XmlSource.parse(session.text()).all().size();
             if (selected >= count) selected = -1;
@@ -566,6 +568,56 @@ public final class EditorController {
             }
         }
         return any;
+    }
+
+    // ---- 스크롤 요소: 편집으로 문서가 다시 만들어져도 위치를 유지하고, 고른 요소가 가려져 있으면 보이게 스크롤한다 ----
+
+    private final Map<Integer, Integer> scrollPos = new HashMap<>();
+    private boolean scrollRevealPending;
+
+    private boolean applyScrolls(UiDocument d) {
+        boolean any = false;
+        for (Map.Entry<Integer, Integer> e : scrollPos.entrySet()) {
+            LayoutBox b = boxByIndex(d.layout(), e.getKey());
+            if (b != null && b.widget instanceof BuiltinWidgets.Scroll sw) {
+                sw.setScrollY(e.getValue());
+                any = true;
+            }
+        }
+        return any;
+    }
+
+    private void revealSelectedInScroll() {
+        if (!scrollRevealPending) return;
+        scrollRevealPending = false;
+        LayoutBox b = selectedBox();
+        if (b == null) return;
+        boolean changed = false;
+        for (LayoutBox a = b.parent; a != null; a = a.parent) {
+            if (!(a.widget instanceof BuiltinWidgets.Scroll sw) || !sw.canScroll()) continue;
+            int dy = 0;
+            if (b.y < a.y) dy = b.y - a.y;                                   // 위로 가려짐
+            else if (b.y + b.h > a.y + a.h) dy = Math.min(b.y - a.y, b.y + b.h - (a.y + a.h));   // 아래로 가려짐
+            if (dy != 0 && sw.scrollBy(dy)) {
+                scrollPos.put(a.node.sourceIndex(), sw.scrollY());
+                changed = true;
+            }
+        }
+        if (changed) doc.layout(viewW, viewH);
+    }
+
+    /** 마우스 아래의 스크롤 요소를 휠로 스크롤한다. 스크롤할 수 있는 요소가 없으면 false. */
+    private boolean scrollUnderMouse(int x, int y, double amount) {
+        for (LayoutBox b = doc.hitTest(x - panX, y - panY); b != null; b = b.parent) {
+            if (b.widget instanceof BuiltinWidgets.Scroll sw && sw.canScroll()) {
+                if (sw.scrollBy(-(int) Math.signum(amount) * 12) || true) {
+                    scrollPos.put(b.node.sourceIndex(), sw.scrollY());
+                    doc.layout(viewW, viewH);
+                }
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int tabIndex(LayoutBox tabs, LayoutBox tab) {
@@ -895,6 +947,7 @@ public final class EditorController {
             return true;
         }
         if (overPanel(x, y)) return false;
+        if (scrollUnderMouse(x, y, amount)) return true;                     // scroll 요소 위의 휠은 그 안의 내용을 스크롤
         setPanNow(panX, panY + (int) Math.signum(amount) * WHEEL_STEP);
         return true;
     }
@@ -2101,6 +2154,7 @@ public final class EditorController {
     public void paint(UiGfx g) {
         regions.clear();
         revealSelectedTab();
+        revealSelectedInScroll();
         realMouseX = mouseX;
         realMouseY = mouseY;
         if (exitDialog) {                                    // 메시지 박스 뒤의 모든 것(요소 윤곽, 버튼, 패널)에 호버가 전해지지 않게 한다

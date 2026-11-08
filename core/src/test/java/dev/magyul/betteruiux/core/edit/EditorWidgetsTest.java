@@ -280,4 +280,32 @@ class EditorWidgetsTest {
     }
 
     private static String editorTextUnchanged(EditorController e) { return e.text(); }
+
+    private static final String SCROLL = "<screen><scroll id=\"s\" x=\"150\" y=\"40\" width=\"100\" height=\"50\">"
+            + "<label id=\"l1\" text=\"A\" height=\"20\"/><label id=\"l2\" text=\"B\" height=\"20\"/>"
+            + "<label id=\"l3\" text=\"C\" height=\"20\"/><label id=\"l4\" text=\"D\" height=\"20\"/></scroll></screen>";
+
+    @Test
+    void wheelOverAScrollElementScrollsItsContentInsideTheEditor() throws Exception {
+        EditorController e = editor(SCROLL);
+        paint(e);
+        int y0 = e.document().query("#l4").y();
+        assertTrue(e.mouseScrolled(170, 60, -1.0));
+        paint(e);
+        assertEquals(y0 - 12, e.document().query("#l4").y(), "내용이 스크롤됐다");
+        e.mouseScrolled(170, 60, -1.0);
+        e.keyPressed(EditorKey.RIGHT, false, false);                     // 편집으로 문서가 다시 만들어져도 위치 유지
+        assertEquals(y0 - 24, e.document().query("#l4").y());
+    }
+
+    @Test
+    void selectingAHiddenChildFromTheTreeScrollsItIntoView() throws Exception {
+        EditorController e = editor(SCROLL);
+        paint(e);
+        assertTrue(e.document().query("#l4").y() >= 40 + 50, "처음에는 가려져 있다");
+        e.select(5);                                                     // label#l4
+        paint(e);
+        var l4 = e.document().query("#l4");
+        assertTrue(l4.y() >= 40 && l4.y() + l4.height() <= 40 + 50, "보이는 영역 안으로 스크롤된다");
+    }
 }

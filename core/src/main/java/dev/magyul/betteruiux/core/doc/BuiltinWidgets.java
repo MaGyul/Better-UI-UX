@@ -479,6 +479,19 @@ public final class BuiltinWidgets {
 
         public int scrollY() { return scrollY; }
 
+        /** 스크롤 위치를 정한다(다음 레이아웃에서 범위 안으로 보정된다). */
+        public void setScrollY(int v) { scrollY = Math.max(0, v); }
+
+        /** 내용이 보이는 높이보다 길어 스크롤할 수 있는지. */
+        public boolean canScroll() { return scrollable(); }
+
+        /** 위치를 dy 만큼 옮긴다(양수 = 아래로). 실제로 움직였으면 true. */
+        public boolean scrollBy(int dy) {
+            int before = scrollY;
+            setScroll(scrollY + dy);
+            return scrollY != before;
+        }
+
         /** 레이아웃이 알려 주는 내용/보이는 높이. 스크롤 위치를 범위 안으로 되돌린다. */
         public void setContent(int contentH, int viewH) {
             this.contentH = contentH;
