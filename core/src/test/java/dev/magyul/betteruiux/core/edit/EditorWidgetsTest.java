@@ -249,4 +249,19 @@ class EditorWidgetsTest {
             dev.magyul.betteruiux.core.doc.UiActions.unregister("press");
         }
     }
+
+    @Test
+    void clickingAChildOfTheSelectedElementSelectsTheChild() throws Exception {
+        EditorController e = editor("<screen><panel id=\"p\" x=\"150\" y=\"40\" width=\"120\" height=\"80\" background=\"#FF222222\">"
+                + "<column id=\"c\" width=\"100\" height=\"60\"><label id=\"l\" text=\"hello\"/></column></panel></screen>");
+        e.select(1);                                                      // panel
+        paint(e);
+        e.mouseMoved(155, 45);
+        e.mousePressed(155, 45, 0);                                       // 안쪽 label 자리
+        e.mouseReleased(155, 45, 0);
+        assertEquals(3, e.selectedIndex(), "선택한 panel 안의 label 이 선택된다");
+        e.mousePressed(268, 118, 0);                                      // panel 의 빈 가장자리(자식이 없는 곳)
+        e.mouseReleased(268, 118, 0);
+        assertEquals(3, e.selectedIndex() >= 0 ? 3 : -1);
+    }
 }

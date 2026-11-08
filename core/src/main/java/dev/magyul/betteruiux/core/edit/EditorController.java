@@ -761,8 +761,12 @@ public final class EditorController {
                 return true;
             }
             if (sel.contains(cx, cy)) {
-                prepareDrag(sel, Handle.BODY, cx, cy);
-                return true;
+                LayoutBox inner = hitSource(cx, cy);
+                boolean childUnderMouse = inner != null && inner != sel && isInsideOrSelf(inner, selected);
+                if (!childUnderMouse) {                      // 선택한 요소 안의 자식을 누르면 그 자식을 고른다(아래로 이어짐)
+                    prepareDrag(sel, Handle.BODY, cx, cy);
+                    return true;
+                }
             }
         }
         LayoutBox hit = hitSource(cx, cy);
