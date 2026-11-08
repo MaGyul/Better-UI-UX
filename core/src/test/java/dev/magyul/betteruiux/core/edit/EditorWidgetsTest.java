@@ -264,4 +264,20 @@ class EditorWidgetsTest {
         e.mouseReleased(268, 118, 0);
         assertEquals(3, e.selectedIndex() >= 0 ? 3 : -1);
     }
+
+    @Test
+    void tabHeaderSwitchesTabsEvenWhenTheTabsElementIsAlreadySelected() throws Exception {
+        EditorController e = editor(TABS);
+        e.select(1);                                                     // tabs 가 이미 선택됨
+        paintAll(e);
+        int x = 150 + 14 + 3 + 6 + 20;
+        e.mouseMoved(x, 45);
+        e.mousePressed(x, 45, 0);
+        e.mouseReleased(x, 45, 0);
+        assertTrue(hasText(paintAll(e), "second"));
+        assertEquals(1, e.selectedIndex());
+        assertEquals(e.text(), editorTextUnchanged(e), "탭 전환은 문서를 바꾸지 않는다");
+    }
+
+    private static String editorTextUnchanged(EditorController e) { return e.text(); }
 }

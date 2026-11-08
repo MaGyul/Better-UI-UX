@@ -762,6 +762,7 @@ public final class EditorController {
             }
             if (sel.contains(cx, cy)) {
                 LayoutBox inner = hitSource(cx, cy);
+                if (tabHeaderClick(inner, cx, cy)) return true;          // 선택돼 있어도 탭 머리글은 탭 전환
                 boolean childUnderMouse = inner != null && inner != sel && isInsideOrSelf(inner, selected);
                 if (!childUnderMouse) {                      // 선택한 요소 안의 자식을 누르면 그 자식을 고른다(아래로 이어짐)
                     prepareDrag(sel, Handle.BODY, cx, cy);
@@ -770,16 +771,7 @@ public final class EditorController {
             }
         }
         LayoutBox hit = hitSource(cx, cy);
-        if (hit != null && hit.widget instanceof BuiltinWidgets.Tabs t && cy < hit.y + t.headerHeight()) {   // 탭 머리글: 탭 전환
-            int i = t.tabAt(cx - hit.x);
-            if (i >= 0) {
-                tabActive.put(hit.node.sourceIndex(), i);
-                t.setActive(i);
-                doc.layout(viewW, viewH);
-                selected = hit.node.sourceIndex();
-                return true;
-            }
-        }
+        if (tabHeaderClick(hit, cx, cy)) return true;
         if (underToolbar && (hit == null || hit.parent == null)) return true;   // 툴바의 빈 곳을 눌렀을 뿐이면 배경(루트)을 고르지 않는다
         if (hit != null) {
             selected = hit.node.sourceIndex();
@@ -787,6 +779,18 @@ public final class EditorController {
         } else {
             selected = -1;
         }
+        return true;
+    }
+
+    /** 탭 머리글을 눌렀으면 그 탭으로 전환하고 탭 요소를 선택한다. */
+    private boolean tabHeaderClick(LayoutBox hit, int cx, int cy) {
+        if (hit == null || !(hit.widget instanceof BuiltinWidgets.Tabs t) || cy >= hit.y + t.headerHeight()) return false;
+        int i = t.tabAt(cx - hit.x);
+        if (i < 0) return false;
+        tabActive.put(hit.node.sourceIndex(), i);
+        t.setActive(i);
+        doc.layout(viewW, viewH);
+        selected = hit.node.sourceIndex();
         return true;
     }
 
