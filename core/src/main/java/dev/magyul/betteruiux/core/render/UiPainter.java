@@ -2,47 +2,65 @@ package dev.magyul.betteruiux.core.render;
 
 import dev.magyul.betteruiux.api.TextMetrics;
 import dev.magyul.betteruiux.api.UiGfx;
+import dev.magyul.betteruiux.core.doc.UiElement;
+import dev.magyul.betteruiux.core.doc.UiWidget;
 import dev.magyul.betteruiux.core.layout.Colors;
 import dev.magyul.betteruiux.core.layout.LayoutBox;
 import dev.magyul.betteruiux.core.layout.LayoutEngine;
 import dev.magyul.betteruiux.core.layout.StyleMap;
+import java.util.function.Function;
 
-/** 레이아웃 결과를 {@link UiGfx} 명령으로 그린다. 상태(hover/pressed)는 {@link PaintState} 로 받는다. */
+/** 레이아웃 결과를 {@link UiGfx} 명령으로 그린다. 입력/시간 상태는 {@link PaintState} 로 받는다. */
 public final class UiPainter {
-    /** 호버/눌림 상태 조회. 상태 없는 정적 렌더는 {@link #NONE}. */
+    /** 호버/눌림/마우스/시간 상태 조회. 상태 없는 정적 렌더는 {@link #NONE}. */
     public interface PaintState {
-        PaintState NONE = new PaintState() {
-            @Override public boolean hovered(LayoutBox b) { return false; }
+        PaintState NONE = new PaintState() { };
 
-            @Override public boolean pressed(LayoutBox b) { return false; }
-        };
+        default boolean hovered(LayoutBox b) { return false; }
 
-        boolean hovered(LayoutBox b);
+        default boolean pressed(LayoutBox b) { return false; }
 
-        boolean pressed(LayoutBox b);
+        /** 이 박스를 그릴 때 쓸 스타일(호버/눌림 오버레이, 전환·애니메이션 적용 후). */
+        default StyleMap style(LayoutBox b) { return b.effective(hovered(b), pressed(b)); }
+
+        default int mouseX() { return -1; }
+
+        default int mouseY() { return -1; }
+
+        default long nowMillis() { return 0; }
+
+        /** 커스텀 위젯에 넘길 요소 핸들(문서가 없으면 null). */
+        default UiElement element(LayoutBox b) { return null; }
     }
 
     private final TextMetrics text;
+    private final Function<String, String> interpolator;
 
-    public UiPainter(TextMetrics text) { this.text = text; }
+    public UiPainter(TextMetrics text) { this(text, s -> s); }
 
-    public void paint(LayoutBox root, UiGfx g, PaintState state) {
-        paintBox(root, g, state);
+    /** @param interpolator 텍스트의 {@code {이름}} 바인딩 치환 */
+    public UiPainter(TextMetrics text, Function<String, String> interpolator) {
+        this.text = text;
+        this.interpolator = interpolator;
     }
 
-    private void paintBox(LayoutBox b, UiGfx g, PaintState state) {
+    public void paint(LayoutBox root, UiGfx g, PaintState state) {
+        paintBox(root, g, state, 1f);
+    }
+
+    private void paintBox(LayoutBox b, UiGfx g, PaintState state, float parentOpacity) {
         if (!b.visible()) return;
         boolean hovered = state.hovered(b), pressed = state.pressed(b);
-        // 스타일시트의 :hover/:active 규칙이 반영된 그리기용 스타일 (레이아웃은 상태와 무관한 b.style 사용)
-        StyleMap s = b.effective(hovered, pressed);
-        float opacity = 1f;
-        if (s.has("opacity")) {
-            try {
-                opacity = Math.max(0f, Math.min(1f, Float.parseFloat(s.get("opacity"))));
-            } catch (NumberFormatException ignored) {
-                // 잘못된 값은 불투명으로 처리
-            }
-        }
+        StyleMap s = state.style(b);
+
+        // 불투명도는 자식에게 곱해서 전달한다(CSS 의 opacity 처럼 서브트리 전체가 함께 흐려진다).
+        float opacity = parentOpacity * clamp01(number(s, "opacity", 1f));
+
+        // transform: translate-x/translate-y/scale/rotate(도). 요소의 중심 기준이며 자식에게도 적용된다.
+        float tx = number(s, "translate-x", 0f), ty = number(s, "translate-y", 0f);
+        float scale = number(s, "scale", 1f), rotate = number(s, "rotate", 0f);
+        boolean transformed = tx != 0f || ty != 0f || scale != 1f || rotate != 0f;
+        if (transformed) g.pushTransform(tx, ty, scale, rotate, b.x + b.w / 2f, b.y + b.h / 2f);
 
         boolean button = b.tag().equals("button");
         // 버튼 기본색: 스타일시트/속성에 background 가 있으면 그것이 우선, 없으면 상태별 기본색
@@ -69,15 +87,21 @@ public final class UiPainter {
             case "image" -> paintImage(b, s, g, opacity);
             default -> { }
         }
+        if (b.widget != null) {
+            b.widget.paint(g, b.x, b.y, b.w, b.h, new UiWidget.Frame(
+                    state.mouseX(), state.mouseY(), hovered, state.nowMillis(), state.element(b)));
+        }
 
         boolean clip = "hidden".equals(s.get("overflow"));
         if (clip) g.pushClip(b.x, b.y, b.w, b.h);
-        for (LayoutBox c : b.children) paintBox(c, g, state);
+        for (LayoutBox c : b.children) paintBox(c, g, state, opacity);
         if (clip) g.popClip();
+
+        if (transformed) g.popTransform();
     }
 
     private void paintText(LayoutBox b, StyleMap s, UiGfx g, float opacity, boolean dim) {
-        String t = LayoutEngine.textOf(b);
+        String t = interpolator.apply(LayoutEngine.rawText(b));
         if (t.isEmpty()) return;
         boolean button = b.tag().equals("button");
         int color = s.color("color", dim ? 0xFF888888 : 0xFFFFFFFF);
@@ -118,6 +142,18 @@ public final class UiPainter {
         }
         g.drawTexture(src, b.x, b.y, b.w, b.h, u, v, rw, rh, tw, th, withOpacity(s.color("tint", 0xFFFFFFFF), opacity));
     }
+
+    private static float number(StyleMap s, String key, float def) {
+        String v = s.get(key);
+        if (v == null) return def;
+        try {
+            return Float.parseFloat(v.trim().replace("px", "").replace("deg", ""));
+        } catch (NumberFormatException e) {
+            return def;
+        }
+    }
+
+    private static float clamp01(float v) { return Math.max(0f, Math.min(1f, v)); }
 
     private static int[] ints(String s, int n) {
         if (s == null) return null;

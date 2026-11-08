@@ -23,6 +23,14 @@ public interface UiGfx {
     void popClip();
 
     /**
+     * 이후 그리기에 변환을 적용한다: 이동(tx,ty) → (originX,originY) 기준 확대(scale)·회전(rotateDeg, 시계방향).
+     * 중첩 가능, {@link #popTransform()} 으로 복원. 입력(히트 테스트)에는 반영되지 않는다.
+     */
+    void pushTransform(float tx, float ty, float scale, float rotateDeg, float originX, float originY);
+
+    void popTransform();
+
+    /**
      * 지금까지 그려진 것(월드, 앞서 그린 배경 레이어 등)을 블러 처리한다. 이후에 그리는 것은 블러되지 않는다.
      * 게임의 "메뉴 배경 블러" 옵션이 꺼져 있으면 아무 일도 하지 않을 수 있다.
      */

@@ -1,5 +1,6 @@
 package dev.magyul.betteruiux.core.layout;
 
+import dev.magyul.betteruiux.core.doc.UiWidget;
 import dev.magyul.betteruiux.core.xml.UiNode;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +14,8 @@ public final class LayoutBox {
     /** 렌더되는 형제들 사이에서의 순서(0부터). */
     public int index;
     public int x, y, w, h;
+    /** 커스텀 태그면 그 위젯, 아니면 null. */
+    public UiWidget widget;
 
     /** 레이아웃 기준 스타일(상태 무관). */
     public StyleMap style = new StyleMap();

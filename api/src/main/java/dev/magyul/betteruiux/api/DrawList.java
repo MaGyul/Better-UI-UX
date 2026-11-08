@@ -23,6 +23,9 @@ public final class DrawList implements UiGfx {
                 case DrawCommand.DrawText t -> target.drawText(t.text(), t.x(), t.y(), t.argb(), t.shadow());
                 case DrawCommand.PushClip p -> target.pushClip(p.x(), p.y(), p.w(), p.h());
                 case DrawCommand.PopClip p -> target.popClip();
+                case DrawCommand.PushTransform t ->
+                        target.pushTransform(t.tx(), t.ty(), t.scale(), t.rotateDeg(), t.originX(), t.originY());
+                case DrawCommand.PopTransform t -> target.popTransform();
                 case DrawCommand.BlurBackground b -> target.blurBackground();
             }
         }
@@ -48,6 +51,12 @@ public final class DrawList implements UiGfx {
     @Override public void pushClip(int x, int y, int w, int h) { commands.add(new DrawCommand.PushClip(x, y, w, h)); }
 
     @Override public void popClip() { commands.add(new DrawCommand.PopClip()); }
+
+    @Override public void pushTransform(float tx, float ty, float scale, float rotateDeg, float originX, float originY) {
+        commands.add(new DrawCommand.PushTransform(tx, ty, scale, rotateDeg, originX, originY));
+    }
+
+    @Override public void popTransform() { commands.add(new DrawCommand.PopTransform()); }
 
     @Override public void blurBackground() { commands.add(new DrawCommand.BlurBackground()); }
 }
