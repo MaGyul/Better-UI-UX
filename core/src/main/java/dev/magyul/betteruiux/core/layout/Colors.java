@@ -13,6 +13,14 @@ public final class Colors {
             Map.entry("blue", 0xFF5555FF), Map.entry("yellow", 0xFFFFFF55),
             Map.entry("transparent", 0x00000000), Map.entry("none", 0x00000000));
 
+    /** 색상이 아니면 null (보간 시 색/숫자 구분용). */
+    public static Integer tryParse(String s) {
+        if (s == null) return null;
+        final int sentinel = 0x7E57ED01;
+        int a = parse(s, sentinel), b = parse(s, ~sentinel);
+        return a == b ? Integer.valueOf(a) : null;
+    }
+
     public static int parse(String s, int fallback) {
         if (s == null) return fallback;
         s = s.trim().toLowerCase();

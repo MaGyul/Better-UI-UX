@@ -154,6 +154,11 @@ public final class UiElement {
         return null;
     }
 
+    // ---- 애니메이션 ----
+
+    /** Java 로 이 요소를 움직이는 빌더. CSS 의 transition/@keyframes 와 함께 쓸 수 있다. */
+    public UiAnimation animate() { return new UiAnimation(doc, this); }
+
     // ---- 이벤트 ----
 
     /** @return 핸들러 등록 해제 함수 */

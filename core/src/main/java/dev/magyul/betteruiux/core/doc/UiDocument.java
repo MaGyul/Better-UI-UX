@@ -2,6 +2,8 @@ package dev.magyul.betteruiux.core.doc;
 
 import dev.magyul.betteruiux.api.TextMetrics;
 import dev.magyul.betteruiux.api.UiGfx;
+import dev.magyul.betteruiux.core.anim.AnimationEngine;
+import dev.magyul.betteruiux.core.anim.Easing;
 import dev.magyul.betteruiux.core.layout.LayoutBox;
 import dev.magyul.betteruiux.core.layout.LayoutEngine;
 import dev.magyul.betteruiux.core.layout.StyleMap;
@@ -46,6 +48,8 @@ public final class UiDocument {
     private final UiPainter painter;
     private LayoutEngine layoutEngine;
     private StyleResolver resolver;
+    private AnimationEngine anim;
+    private long frameNow;
 
     private LayoutBox layout;
     private final Map<UiNode, LayoutBox> boxes = new IdentityHashMap<>();
@@ -74,13 +78,15 @@ public final class UiDocument {
             return pressNode != null && b.node.isAncestorOf(pressNode) && hovered(b);
         }
 
-        @Override public StyleMap style(LayoutBox b) { return b.effective(hovered(b), pressed(b)); }
+        @Override public StyleMap style(LayoutBox b) {
+            return anim.apply(b.node, b.effective(hovered(b), pressed(b)), frameNow);
+        }
 
         @Override public int mouseX() { return mouseX; }
 
         @Override public int mouseY() { return mouseY; }
 
-        @Override public long nowMillis() { return clock.nowMillis(); }
+        @Override public long nowMillis() { return frameNow; }
 
         @Override public UiElement element(LayoutBox b) { return UiDocument.this.element(b.node); }
     };
@@ -116,6 +122,7 @@ public final class UiDocument {
 
     private void rebuildEngine() {
         this.resolver = new StyleResolver(sheets);
+        this.anim = new AnimationEngine(name -> resolver.keyframes(name));
         this.layoutEngine = new LayoutEngine(textMetrics, resolver, this::interpolate, this::widgetFor);
     }
 
@@ -253,6 +260,7 @@ public final class UiDocument {
         if (layout == null) return;
         this.mouseX = mouseX;
         this.mouseY = mouseY;
+        this.frameNow = clock.nowMillis();   // 한 프레임 안에서는 같은 시각을 쓴다
         refreshBindings();   // 값이 바뀌었으면 dirty 가 켜져 아래에서 다시 레이아웃된다
         applyDirty();
         updateHover();
@@ -269,6 +277,16 @@ public final class UiDocument {
         hoverNode = now;
         if (old != null) dispatch(UiEvent.Type.HOVER_LEAVE, old, mouseX, mouseY, 0);
         if (now != null) dispatch(UiEvent.Type.HOVER_ENTER, now, mouseX, mouseY, 0);
+    }
+
+    /** UiAnimation.play() 가 호출한다. */
+    AnimationEngine.Imperative startAnimation(UiElement el, java.util.Map<String, String> from,
+                                              java.util.Map<String, String> to, double duration, double delay,
+                                              Easing easing, Runnable onFinish) {
+        long now = clock.nowMillis();
+        frameNow = Math.max(frameNow, now);
+        return anim.start(el.node(), from, to, duration, delay, easing, now,
+                el::style, onFinish, (prop, value) -> el.setStyle(prop, value));
     }
 
     // ---- 조회 ----
