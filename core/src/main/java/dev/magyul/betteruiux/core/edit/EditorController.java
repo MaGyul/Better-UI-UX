@@ -241,7 +241,12 @@ public final class EditorController {
     private void setStatus(String s, boolean error) {
         status = s;
         statusError = error;
+        statusSince = clock.getAsLong();
     }
+
+    private long statusSince;
+    private Rect hintRect = new Rect(0, 0, 0, 0);
+    private static final long FADE_IN = 150_000_000L, FADE_OUT = 450_000_000L, SHOW_OK = 2_200_000_000L, SHOW_ERR = 4_500_000_000L;
 
     // ---- 패널 보이기 상태 ----
 
@@ -265,6 +270,7 @@ public final class EditorController {
     // ---- 툴바 숨기기 / 위쪽 가장자리에 마우스를 올려 두면 잠깐 표시 ----
 
     private static final long PEEK_NANOS = 1_200_000_000L;
+    private static final int PEEK_SLIVER = 6;
     private boolean toolbarHidden, toolbarPeek;
     private long topHoverSince = -1;
     /** 시간 원본(테스트에서 바꿀 수 있다). */
@@ -285,7 +291,7 @@ public final class EditorController {
             if (mouseY >= TOOLBAR_H || mouseY < 0) toolbarPeek = false;      // 마우스가 막대를 벗어나면 다시 숨긴다
             return;
         }
-        if (mouseY >= 0 && mouseY <= 2) {
+        if (mouseY >= 0 && mouseY <= (topHoverSince >= 0 ? PEEK_SLIVER : 2)) {   // 튀어나온 조각 위에서도 계속 기다린다
             if (topHoverSince < 0) topHoverSince = now;
             if (now - topHoverSince >= PEEK_NANOS) toolbarPeek = true;
         } else {
@@ -296,6 +302,7 @@ public final class EditorController {
     // ---- 저장하지 않은 변경이 있을 때 닫기 확인 ----
 
     private boolean exitDialog;
+    private int realMouseX, realMouseY;
 
     /** 에디터를 닫는다. 저장하지 않은 변경이 있으면 먼저 물어본다. */
     public void requestExit() {
@@ -314,6 +321,16 @@ public final class EditorController {
         } else {
             exitDialog = false;               // 저장 실패 메시지를 보여 주고 에디터는 계속 연다
         }
+    }
+
+    /** 숨긴 툴바 위에 마우스를 올려 두면 위쪽 가장자리에서 조금씩 튀어나온다(곧 나타난다는 표시). */
+    private void paintPeekSliver(UiGfx g) {
+        if (!toolbarHidden || toolbarPeek || topHoverSince < 0 || !panelsVisible || dragStarted()) return;
+        float p = Math.min(1f, (clock.getAsLong() - topHoverSince) / (float) PEEK_NANOS);
+        int h = 2 + Math.round(p * (PEEK_SLIVER - 2));
+        int w = 60 + Math.round(p * 40), x = Math.max(0, Math.min(viewW - w, mouseX - w / 2));
+        g.fillRect(x, 0, w, h, C_PANEL | 0xFF000000);
+        g.fillRect(x, h, w, 1, withAlpha(C_SEL, 0.5f + 0.5f * p));
     }
 
     private void paintExitDialog(UiGfx g) {
@@ -341,13 +358,52 @@ public final class EditorController {
         button(g, bx, by, b3, true, () -> exitDialog = false);
     }
 
+    /**
+     * 아래쪽 안내: 작업 영역 가운데에 늘 맨 위로 그린다. 글자가 상자보다 길면 마인크래프트 버튼처럼 좌우로 천천히 스크롤한다.
+     */
     private void paintHint(UiGfx g, String text, int color) {
         Rect view = centerView();
-        String shown = fit(text, view.w() - 16);
-        int w = tm.width(shown) + 12, h = tm.lineHeight() + 6;
-        int x = view.x() + (view.w() - w) / 2, y = view.bottom() - h - 4;
-        g.fillRect(x, y, w, h, 0xD0000000);
-        g.drawText(shown, x + 6, y + 3, color, false);
+        int boxW = Math.min(tm.width(text) + 12, view.w() - 8), h = tm.lineHeight() + 6;
+        int x = view.x() + (view.w() - boxW) / 2, y = view.bottom() - h - 4;
+        hintRect = new Rect(x, y, boxW, h);
+        g.fillRect(x, y, boxW, h, 0xD0000000);
+        int textW = tm.width(text), inner = boxW - 12;
+        g.pushClip(x + 6, y, inner, h);
+        int offset = textW > inner ? marqueeOffset(textW - inner, clock.getAsLong()) : 0;
+        g.drawText(text, x + 6 - offset, y + 3, color, false);
+        g.popClip();
+    }
+
+    /** 처음에 잠깐 멈추고 → 끝까지 천천히 → 잠깐 멈추고 → 되돌아온다. */
+    static int marqueeOffset(int overflow, long nanos) {
+        double sec = nanos / 1e9, travel = Math.max(0.5, overflow / 28.0), pause = 1.0;
+        double period = 2 * (travel + pause), t = sec % period;
+        if (t < pause) return 0;
+        if (t < pause + travel) return (int) Math.round(overflow * (t - pause) / travel);
+        if (t < 2 * pause + travel) return overflow;
+        return (int) Math.round(overflow * (1 - (t - 2 * pause - travel) / travel));
+    }
+
+    private static int withAlpha(int argb, float a) {
+        int base = (argb >>> 24) & 0xFF;
+        return (Math.round(base * Math.max(0f, Math.min(1f, a))) << 24) | (argb & 0xFFFFFF);
+    }
+
+    /** "저장됨" 같은 알림: 오른쪽 아래에 맨 위로 떠서 서서히 나타났다가(fade in) 시간이 지나면 서서히 사라진다(fade out). */
+    private void paintToast(UiGfx g) {
+        if (status.isEmpty()) return;
+        long age = clock.getAsLong() - statusSince, show = statusError ? SHOW_ERR : SHOW_OK;
+        if (age >= show + FADE_OUT) return;
+        float a = age < FADE_IN ? Math.max(0f, age / (float) FADE_IN) : age <= show ? 1f : 1f - (age - show) / (float) FADE_OUT;
+        int w = Math.min(tm.width(status) + 14, viewW - 12), h = tm.lineHeight() + 8;
+        int x = viewW - w - 6, y = viewH - h - 6 + Math.round((1f - Math.min(1f, a * 1.5f)) * 5);   // 아래에서 살짝 올라오며 나타난다
+        if (hintRect.w() > 0 && x < hintRect.right() + 4 && y + h > hintRect.y() - 4) y -= hintRect.h() + 6;   // 안내와 겹치면 위로
+        int color = statusError ? C_ERR : C_OK;
+        g.fillRect(x - 1, y - 1, w + 2, h + 2, withAlpha(color, a * 0.8f));
+        g.fillRect(x, y, w, h, withAlpha(0xFF101018, a * 0.95f));
+        g.pushClip(x + 1, y, w - 2, h);
+        g.drawText(status, x + 7, y + 4, withAlpha(color, a), false);
+        g.popClip();
     }
 
     /** 팬 계산용: 끄는 중이 아닐 때의 "가운데 작업 영역"(패널이 접혀 있으면 그만큼 넓다). */
@@ -1697,18 +1753,29 @@ public final class EditorController {
         if (leftVisible()) paintLeftPanel(g);
         if (rightVisible()) paintProperties(g);
         updateToolbarPeek();
+        realMouseX = mouseX;
+        realMouseY = mouseY;
+        if (exitDialog) {
+            mouseX = -9999;
+            mouseY = -9999;
+        }
         if (selected != lastSelected) {
             lastSelected = selected;
             tempDismissed = false;
         }
         if (toolbarVisible()) paintToolbar(g);
+        else paintPeekSliver(g);
         if (panelsVisible && !dragStarted()) paintTabs(g);
         popupRect = null;
         paintPicker(g);
         paintSuggestions(g);
         paintDndFeedback(g);
-        paintStatus(g);
+        if (exitDialog) {                                    // 메시지 박스 뒤의 것들에는 호버가 전해지지 않게 한다
+            mouseX = realMouseX;
+            mouseY = realMouseY;
+        }
         paintExitDialog(g);
+        paintStatus(g);
         g.requestCursor(cursorNow());
     }
 
@@ -1870,14 +1937,10 @@ public final class EditorController {
     }
 
     private void paintStatus(UiGfx g) {
-        String text = status;
-        boolean error = statusError;
-        if (text.isEmpty()) {
-            if (dnd != null || drag != null || !panelsVisible || !leftVisible()) return;
-            paintHint(g, "블록을 끌어다 놓기 · 끌어서 왼쪽 블록 칸에 놓으면 삭제 · 휠/가운데 버튼으로 화면 이동", 0xFFE0E0EC);
-            return;
-        }
-        paintHint(g, text, error ? C_ERR : C_OK);
+        hintRect = new Rect(0, 0, 0, 0);
+        if (exitDialog) return;
+        paintHint(g, "블록을 끌어다 놓기 · 끌어서 왼쪽 블록 칸에 놓으면 삭제 · 휠/가운데 버튼으로 화면 이동 · F8: 에디터 끄기", 0xFFE0E0EC);
+        paintToast(g);
     }
 
     // ---- 왼쪽: 블록 팔레트 + 구조 트리 ----

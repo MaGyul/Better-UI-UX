@@ -439,4 +439,36 @@ class EditorFeedbackTest {
         e.select(1);
         assertTrue(hasText(paint(e), "너비"), "다시 선택하면 또 임시로 보인다");
     }
+
+    @Test
+    void longHintTextScrollsAndToastsFadeAway() throws Exception {
+        assertEquals(0, EditorController.marqueeOffset(100, 0));
+        assertEquals(100, EditorController.marqueeOffset(100, 4_700_000_000L));
+        EditorController e = editor(COLORED);
+        long[] now = {0};
+        e.clock = () -> now[0];
+        e.select(1);
+        e.keyPressed(EditorKey.RIGHT, false, false);
+        e.save();
+        assertTrue(hasText(paint(e), "저장됨"));
+        now[0] += 1_000_000_000L;
+        assertTrue(hasText(paint(e), "저장됨"));
+        now[0] += 10_000_000_000L;
+        assertFalse(hasText(paint(e), "저장됨"), "시간이 지나면 사라진다");
+    }
+
+    @Test
+    void thingsBehindTheExitDialogGetNoHover() throws Exception {
+        EditorController e = editor(COLORED);
+        e.select(1);
+        e.keyPressed(EditorKey.RIGHT, false, false);
+        e.requestExit();
+        e.mouseMoved(8, 8);                                       // 뒤에 있는 Save 버튼 자리
+        int c = 0;
+        for (DrawCommand d : paint(e).commands()) {
+            if (d instanceof DrawCommand.FillRect f && f.x() == 2 && f.y() == 2) c = f.argb();
+        }
+        e.requestExit();
+        assertNotEquals(0xFF3A3F55 + 0x202020, c, "호버 색이 아니다");
+    }
 }

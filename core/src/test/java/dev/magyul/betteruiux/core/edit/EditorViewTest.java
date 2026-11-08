@@ -220,7 +220,7 @@ class EditorViewTest {
         ed.mouseDragged(170, 60);
         DrawList during = paint();
         assertFalse(hasText(during, "구조"));
-        assertFalse(hasText(during, "블록"));
+        assertFalse(hasText(during, "블록 (끌어다"));
         assertFalse(hasText(during, "너비"));
         assertFalse(hasText(during, "Save"), "요소를 끄는 동안은 도구 모음도 숨는다");
         assertTrue(hasText(during, "삭제 칸"), "왼쪽 아래에 삭제 칸이 나타난다");

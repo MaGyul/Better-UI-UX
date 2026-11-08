@@ -176,7 +176,6 @@ public final class UiScreen extends Screen {
         doc = edited;
         doc.layout(this.width, this.height);
         LOG.info("[better-uiux] editor off ('{}', unsaved={})", id, dirty);
-        if (dirty) UiOpener.say(this.minecraft, "저장하지 않은 변경이 화면에만 남아 있습니다. 파일을 고치면 사라집니다.");
     }
 
     /** 속성 패널 입력 경로를 실제 게임 환경(실제 폰트/좌표)에서 점검한다. 결과는 로그로만 남기고 편집은 되돌린다. */
