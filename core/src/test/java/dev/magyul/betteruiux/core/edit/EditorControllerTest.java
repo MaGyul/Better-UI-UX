@@ -387,14 +387,14 @@ class EditorControllerTest {
     }
 
     @Test
-    void expandedElementsAreNotSelectableButTheirSourceAncestorIs() throws Exception {
+    void expandedTemplateElementsAreSelectedAsTheirUseElement() throws Exception {
         String xml = "<screen>\n<template id=\"t\"><label id=\"x\" text=\"tpl\"/></template>\n"
                 + "<column id=\"c\" x=\"140\" y=\"40\"><use template=\"t\"/></column>\n</screen>";
         EditorController e2 = new EditorController(host, new FixedMetrics(), xml, W, H);
         e2.mousePressed(141, 48, 0);
         e2.mouseReleased(141, 48, 0);
         XmlSource s = XmlSource.parse(xml);
-        assertEquals("column", s.element(e2.selectedIndex()).tag, "템플릿에서 생긴 라벨 대신 원본에 있는 조상 column 이 선택된다");
+        assertEquals("use", s.element(e2.selectedIndex()).tag, "템플릿에서 생긴 라벨은 원본의 <use> 요소로 선택된다");
         assertNotEquals(-1, e2.selectedIndex());
     }
 

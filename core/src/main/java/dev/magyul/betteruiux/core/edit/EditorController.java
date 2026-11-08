@@ -208,6 +208,13 @@ public final class EditorController {
 
     public boolean isEditingField() { return editKey != null; }
 
+    /** 편집 중인 칸의 글자 커서 화면 위치 {x, 칸 위쪽 y, 칸 높이}. 편집 중이 아니면 null. IME 조합창을 띄울 위치. */
+    public int[] caretScreen() {
+        if (editKey == null || editRect == null) return null;
+        int start = Math.min(editViewStart, editBuffer.length()), cur = Math.min(editCursor, editBuffer.length());
+        return new int[] {editTextX + tm.width(editBuffer.substring(Math.min(start, cur), cur)), editRect.y(), editRect.h()};
+    }
+
     public boolean isGridSnap() { return grid; }
 
     public void setView(int w, int h) {
@@ -244,11 +251,16 @@ public final class EditorController {
     private boolean leftVisible() { return panelsVisible && !leftCollapsed && !dragStarted(); }
 
     /** 오른쪽 패널(속성): 접었거나, 무엇이든 끄는 중이면 숨긴다. */
-    private boolean rightVisible() { return panelsVisible && !rightCollapsed && !dragStarted() && dnd == null; }
+    private boolean rightVisible() { return panelsVisible && rightShown() && !dragStarted() && dnd == null; }
+
+    /** 접어 두었어도 요소를 선택하고 있는 동안은 잠깐 펼쳐 보인다(선택이 풀리면 다시 접힘). */
+    private boolean rightShown() { return !rightCollapsed || selected >= 0; }
+
+    private boolean rightTempShown() { return rightCollapsed && selected >= 0; }
 
     /** 팬 계산용: 끄는 중이 아닐 때의 "가운데 작업 영역"(패널이 접혀 있으면 그만큼 넓다). */
     private Rect centerView() {
-        int left = panelsVisible && !leftCollapsed ? LEFT_W : 0, right = panelsVisible && !rightCollapsed ? RIGHT_W : 0;
+        int left = panelsVisible && !leftCollapsed ? LEFT_W : 0, right = panelsVisible && rightShown() ? RIGHT_W : 0;
         int top = panelsVisible ? TOOLBAR_H : 0;
         return new Rect(left, top, Math.max(1, viewW - left - right), Math.max(1, viewH - top));
     }
@@ -363,7 +375,10 @@ public final class EditorController {
 
     private Rect leftTab() { return new Rect(leftCollapsed ? 0 : LEFT_W, tabY(viewH), TAB_W, TAB_H); }
 
-    private Rect rightTab() { return new Rect(rightCollapsed ? viewW - TAB_W : viewW - RIGHT_W - TAB_W, tabY(viewH), TAB_W, TAB_H); }
+    private Rect rightTab() {
+        if (rightTempShown()) return new Rect(-100, -100, 0, 0);   // 임시로 보이는 동안에는 접기 탭을 감춘다
+        return new Rect(rightCollapsed ? viewW - TAB_W : viewW - RIGHT_W - TAB_W, tabY(viewH), TAB_W, TAB_H);
+    }
 
     private boolean overPanel(int x, int y) {
         if (!panelsVisible) return false;
@@ -907,6 +922,7 @@ public final class EditorController {
                 return true;
             }
             case ESCAPE -> {
+                if (selected < 0) host.requestExit();          // 아무것도 선택하지 않았으면 에디터를 닫는다
                 selected = -1;
                 return true;
             }
@@ -1303,6 +1319,7 @@ public final class EditorController {
     private static Function<XmlSource, String> fieldPatch(LayoutBox box, int idx, String key, String raw, String value) {
         return src -> {
             Element el = src.element(idx);
+            if (el.tag.equals("use")) return XmlPatcher.setAttr(src, el, key, value);
             if (key.equals("text")) return EditorOps.setText(src, el, raw);
             if (ATTR_KEYS.contains(key)) return XmlPatcher.setAttr(src, el, key, value);
             return EditorOps.setProp(src, el, key, value, box.style.get(key) != null && box.node.attr(key) == null);
@@ -1415,6 +1432,12 @@ public final class EditorController {
 
     private List<PropRow> rowsFor(LayoutBox b) {
         List<PropRow> rows = new ArrayList<>();
+        Element srcEl = sourceElement(b.node.sourceIndex());
+        if (srcEl != null && srcEl.tag.equals("use")) {         // 템플릿 사용: <use> 의 속성(매개변수)을 그대로 고친다
+            rows.add(new PropRow(label("tag"), "", "use  #" + b.node.sourceIndex(), false));
+            for (XmlSource.Attr a : srcEl.attrs()) rows.add(new PropRow(a.name, a.name, srcSource.attrValue(srcEl, a.name), true));
+            return rows;
+        }
         String tag = b.tag();
         boolean root = b.parent == null;
         rows.add(new PropRow(label("tag"), "", tag + "  #" + b.node.sourceIndex(), false));
@@ -1446,6 +1469,19 @@ public final class EditorController {
         rows.add(style(b, "opacity"));
         if (root) rows.add(style(b, "use"));
         return rows;
+    }
+
+    private String srcText;
+    private XmlSource srcSource;
+
+    private Element sourceElement(int index) {
+        if (index < 0) return null;
+        String t = session.text();
+        if (!t.equals(srcText)) {
+            srcText = t;
+            srcSource = XmlSource.parse(t);
+        }
+        return srcSource.element(index);
     }
 
     private static String label(String key) { return PROP_LABELS.getOrDefault(key, key); }
@@ -1702,8 +1738,10 @@ public final class EditorController {
         x += button(g, x, y, autoAnchor ? "Anchor:auto" : "Anchor:keep", true, () -> autoAnchor = !autoAnchor);
         boolean panned = panX != 0 || panY != 0 || targetPanX != 0 || targetPanY != 0;
         x += button(g, x, y, panned ? "Fit!" : "Fit", panned, this::resetView, C_BTN_HOT);   // 옮겨 둔 상태면 눈에 띄게
+        int exitW = tm.width("Exit") + 8;
+        button(g, viewW - exitW - 2, y, "Exit", true, host::requestExit, 0xFF7A2A2A);   // 에디터 닫기(F8 과 같다)
         String title = host.title() + (session.isDirty() ? " *" : "");
-        g.drawText(title, Math.max(x + 6, viewW - tm.width(title) - 4), 4, C_DIM, false);
+        g.drawText(title, Math.max(x + 6, viewW - exitW - tm.width(title) - 10), 4, C_DIM, false);
     }
 
     /** 패널 가장자리의 접기/펼치기 탭. */

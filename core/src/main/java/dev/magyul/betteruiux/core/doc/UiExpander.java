@@ -160,6 +160,8 @@ public final class UiExpander {
         }
         substitute(holder, params, "template '" + id + "'");
         fillSlots(holder, use.children());
+        // 확장된 요소의 뿌리는 원본의 <use> 요소를 대표하게 한다: 에디터가 구조 트리에서 보여 주고 고를 수 있다(속성은 <use> 의 매개변수).
+        if (use.sourceIndex() >= 0) for (UiNode root : holder.children()) root.setSourceIndex(use.sourceIndex());
         replace(use, new ArrayList<>(holder.children()));
     }
 

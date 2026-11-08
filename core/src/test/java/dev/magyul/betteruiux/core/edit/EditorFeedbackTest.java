@@ -30,13 +30,20 @@ class EditorFeedbackTest {
 
         @Override public String title() { return "t.xml"; }
 
+        int exits;
+
+        @Override public void requestExit() { exits++; }
+
         @Override public List<String> suggestions(String key) {
             return key.equals("onClick") ? List.of("buy_item", "close", "open_shop") : List.of();
         }
     }
 
+    private static Host lastHost;
+
     private static EditorController editor(String xml) throws Exception {
-        return new EditorController(new Host(), new FixedMetrics(), xml, W, H);
+        lastHost = new Host();
+        return new EditorController(lastHost, new FixedMetrics(), xml, W, H);
     }
 
     private static void click(EditorController e, int x, int y) {
@@ -86,9 +93,9 @@ class EditorFeedbackTest {
     @Test
     void anElementUnderTheToolbarCanBePickedAndDraggedOut() throws Exception {
         EditorController e = editor("<screen><panel id=\"a\" x=\"340\" y=\"0\" width=\"55\" height=\"30\" background=\"#FF336699\"/></screen>");
-        click(e, 385, 5);                                          // 상단 바의 빈 곳 = 아래 캔버스를 누른 것
+        click(e, 345, 5);                                          // 상단 바의 빈 곳 = 아래 캔버스를 누른 것
         assertEquals(1, e.selectedIndex());
-        drag(e, 385, 5, 385, 80);
+        drag(e, 345, 5, 345, 80);
         assertEquals(75, rect(e, "a").y(), "바 밑에서 끌어 내릴 수 있다");
     }
 
@@ -304,5 +311,46 @@ class EditorFeedbackTest {
         clickRow(e, BG_ROW);
         e.mouseMoved(FIELD_X, EditorController.TOOLBAR_H + 3 + BG_ROW * (EditorController.ROW_H + 1) + 3);
         assertEquals(Cursor.TEXT, cursor(paint(e)), "편집 중인 칸 위에서는 글자 커서");
+    }
+
+    // ---- 닫기 / 템플릿 / IME ----
+
+    @Test
+    void theEditorCanBeClosedWithTheExitButtonOrEscWithNothingSelected() throws Exception {
+        EditorController e = editor(COLORED);
+        e.select(1);
+        e.keyPressed(EditorKey.ESCAPE, false, false);
+        assertEquals(0, lastHost.exits, "선택이 있으면 Esc 는 선택만 푼다");
+        e.keyPressed(EditorKey.ESCAPE, false, false);
+        assertEquals(1, lastHost.exits);
+        DrawList l = paint(e);
+        DrawCommand.DrawText t = l.commands().stream().filter(c -> c instanceof DrawCommand.DrawText d && d.text().equals("Exit"))
+                .map(c -> (DrawCommand.DrawText) c).findFirst().orElseThrow();
+        click(e, t.x() + 2, t.y() + 2);
+        assertEquals(2, lastHost.exits);
+    }
+
+    @Test
+    void useElementsAppearInTheTreeAndTheirParametersAreEditable() throws Exception {
+        EditorController e = editor("""
+            <screen>
+              <template id="b"><button text="${text}"/></template>
+              <row id="r" x="150" y="40"><use template="b" text="Hello"/></row>
+            </screen>""");
+        e.select(4);                                               // <use>
+        DrawList l = paint(e);
+        assertTrue(hasText(l, "use"), "속성 패널에 use 가 보인다");
+        assertTrue(hasText(l, "Hello"));
+    }
+
+    @Test
+    void caretPositionIsAvailableWhileEditingForTheImeWindow() throws Exception {
+        EditorController e = editor(BUTTON);
+        e.select(1);
+        paint(e);
+        assertEquals(null, e.caretScreen());
+        clickRow(e, 3);
+        paint(e);
+        assertTrue(e.caretScreen() != null);
     }
 }

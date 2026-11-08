@@ -44,6 +44,8 @@ final class EditorBackend {
 
             @Override public String title() { return id + ".xml"; }
 
+            @Override public void requestExit() { screen.exitEditor(); }
+
             /** 채팅창과 같은 시스템 클립보드(Ctrl+C/X/V). */
             @Override public java.util.List<String> suggestions(String key) {
                 return key.equals("onClick") ? dev.magyul.betteruiux.core.doc.UiActions.registeredIds() : java.util.List.of();

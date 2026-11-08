@@ -260,7 +260,10 @@ class EditorViewTest {
         ed.select(A);
         int rightTabX = W - 142 - 10 + 3;
         click(rightTabX, tabY);                                            // 오른쪽 패널 접기
-        assertFalse(hasText(paint(), "너비"));
+        assertTrue(hasText(paint(), "너비"), "요소를 고르고 있는 동안은 잠깐 펼쳐 보인다");
+        ed.select(-1);
+        assertFalse(hasText(paint(), "너비"), "선택이 풀리면 다시 접힌다");
+        ed.select(A);
         click(W - 10 + 3, tabY);
         assertTrue(hasText(paint(), "너비"));
     }

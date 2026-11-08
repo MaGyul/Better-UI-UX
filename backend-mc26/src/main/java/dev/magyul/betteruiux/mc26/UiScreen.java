@@ -161,6 +161,11 @@ public final class UiScreen extends Screen {
         }
     }
 
+    /** 에디터의 Exit 버튼/Esc 에서 부른다. */
+    void exitEditor() {
+        if (editor != null) leaveEditor();
+    }
+
     private void leaveEditor() {
         boolean dirty = editor.isDirty();
         UiDocument edited = editor.document();
@@ -218,6 +223,7 @@ public final class UiScreen extends Screen {
             editor.paintDocument(gfx);   // 편집 중에는 호버/클릭 효과를 끄고, 화면 이동(팬) 위치에 맞춰 그린다
             editor.mouseMoved(mouseX, mouseY);
             editor.paint(gfx);
+            paintPreedit(graphics, mouseX, mouseY, a);
             if (SELFTEST && !selfTestDone) {
                 selfTestDone = true;
                 runEditorSelfTest();
@@ -233,6 +239,29 @@ public final class UiScreen extends Screen {
             loggedFirstFrame = true;
             LOG.info("[better-uiux] first frame painted: {}x{} (warnings={})", this.width, this.height, activeDoc().warnings());
         }
+    }
+
+    // ---- IME 조합창 ----
+
+    private net.minecraft.client.input.PreeditEvent preedit;
+
+    /** SDL 이 보내 주는 IME 조합 중인 글자. 비어 있으면 조합이 끝난 것. */
+    @Override
+    public boolean preeditUpdated(net.minecraft.client.input.PreeditEvent event) {
+        if (editor == null || !editor.isEditingField()) return super.preeditUpdated(event);
+        preedit = event == null || event.fullText().isEmpty() ? null : event;
+        return true;
+    }
+
+    private void paintPreedit(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        int[] caret = editor.caretScreen();
+        if (preedit == null || caret == null) {
+            if (caret == null) preedit = null;
+            return;
+        }
+        var overlay = new net.minecraft.client.gui.components.IMEPreeditOverlay(preedit, this.font, caret[2]);
+        overlay.updateInputPosition(caret[0], caret[1]);
+        overlay.extractRenderState(graphics, mouseX, mouseY, a);
     }
 
     // ---- 입력 ----

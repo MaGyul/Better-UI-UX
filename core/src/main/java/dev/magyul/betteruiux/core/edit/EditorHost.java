@@ -40,6 +40,9 @@ public interface EditorHost {
     /** 시스템 클립보드 쓰기(Ctrl+C / Ctrl+X). */
     default void setClipboard(String text) { }
 
+    /** 에디터를 닫아 달라는 요청(툴바의 Exit 버튼, 아무것도 선택하지 않고 Esc). */
+    default void requestExit() { }
+
     /** true 면 선택한 요소를 가운데로 옮길 때 화면이 부드럽게 미끄러진다(게임 화면용). 테스트는 즉시 이동. */
     default boolean panAnimation() { return false; }
 }
