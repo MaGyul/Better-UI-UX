@@ -45,6 +45,54 @@ public final class UiConfig {
         }
     }
 
+    /**
+     * 설정 파일의 값을 바꾼다(없으면 만든다). 다른 줄과 주석은 그대로 두고, 키는 {@code section.key} 형식이다.
+     * 에디터가 패널 접힘 같은 사용자 상태를 저장하는 데 쓴다.
+     */
+    public static void update(Path file, Map<String, String> changes) throws IOException {
+        String text = Files.exists(file) ? Files.readString(file, StandardCharsets.UTF_8) : DEFAULT_TEXT;
+        Files.createDirectories(file.getParent());
+        AtomicFiles.write(file, applyChanges(text, changes));
+    }
+
+    static String applyChanges(String text, Map<String, String> changes) {
+        java.util.List<String> lines = new java.util.ArrayList<>(java.util.Arrays.asList(text.split("\\R", -1)));
+        for (Map.Entry<String, String> e : changes.entrySet()) {
+            int dot = e.getKey().indexOf('.');
+            String section = dot < 0 ? "" : e.getKey().substring(0, dot), key = dot < 0 ? e.getKey() : e.getKey().substring(dot + 1);
+            String newLine = key + " = " + e.getValue();
+            String current = "";
+            int sectionStart = section.isEmpty() ? 0 : -1, sectionEnd = lines.size(), found = -1;
+            for (int i = 0; i < lines.size(); i++) {
+                String l = lines.get(i).trim();
+                if (l.startsWith("[") && l.endsWith("]")) {
+                    current = l.substring(1, l.length() - 1).trim();
+                    if (current.equals(section) && sectionStart < 0) sectionStart = i + 1;
+                    else if (sectionStart >= 0 && i >= sectionStart && sectionEnd == lines.size() && !section.isEmpty()) sectionEnd = i;
+                    continue;
+                }
+                if (current.equals(section) && sectionStart >= 0 && i >= sectionStart && l.startsWith(key)
+                        && l.substring(key.length()).trim().startsWith("=")) {
+                    found = i;
+                }
+            }
+            if (found >= 0) {
+                lines.set(found, newLine);
+            } else if (sectionStart >= 0) {
+                int at = Math.min(sectionEnd, lines.size());
+                while (at > sectionStart && lines.get(at - 1).trim().isEmpty()) at--;
+                lines.add(at, newLine);
+            } else {
+                while (!lines.isEmpty() && lines.get(lines.size() - 1).trim().isEmpty()) lines.remove(lines.size() - 1);
+                lines.add("");
+                lines.add("[" + section + "]");
+                lines.add(newLine);
+                lines.add("");
+            }
+        }
+        return String.join("\n", lines);
+    }
+
     static Map<String, String> parse(String text) {
         Map<String, String> m = new HashMap<>();
         String section = "";

@@ -40,6 +40,12 @@ public interface EditorHost {
     /** 시스템 클립보드 쓰기(Ctrl+C / Ctrl+X). */
     default void setClipboard(String text) { }
 
+    /** 저장해 둔 에디터 사용자 설정(패널 접힘 등). 키: leftCollapsed, rightCollapsed, toolbarHidden. */
+    default java.util.Map<String, String> loadPrefs() { return java.util.Map.of(); }
+
+    /** 에디터 사용자 설정이 바뀌었을 때 저장한다. */
+    default void savePrefs(java.util.Map<String, String> prefs) { }
+
     /** 에디터를 닫아 달라는 요청(툴바의 Exit 버튼, 아무것도 선택하지 않고 Esc). */
     default void requestExit() { }
 

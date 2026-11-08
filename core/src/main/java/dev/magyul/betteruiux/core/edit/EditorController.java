@@ -191,6 +191,26 @@ public final class EditorController {
         this.doc = host.load(text);
         this.doc.setAnimationsEnabled(false);
         this.doc.layout(viewW, viewH);
+        java.util.Map<String, String> prefs = host.loadPrefs();
+        leftCollapsed = "true".equalsIgnoreCase(prefs.get("leftCollapsed"));
+        rightCollapsed = "true".equalsIgnoreCase(prefs.get("rightCollapsed"));
+        toolbarHidden = "true".equalsIgnoreCase(prefs.get("toolbarHidden"));
+        lastPrefs = currentPrefs();
+    }
+
+    private java.util.Map<String, String> lastPrefs = java.util.Map.of();
+
+    private java.util.Map<String, String> currentPrefs() {
+        return java.util.Map.of("leftCollapsed", Boolean.toString(leftCollapsed),
+                "rightCollapsed", Boolean.toString(rightCollapsed), "toolbarHidden", Boolean.toString(toolbarHidden));
+    }
+
+    /** 패널/툴바 접힘이 바뀌었으면 설정 파일에 저장해 다음에도 유지한다. */
+    private void persistPrefs() {
+        java.util.Map<String, String> cur = currentPrefs();
+        if (cur.equals(lastPrefs)) return;
+        lastPrefs = cur;
+        host.savePrefs(cur);
     }
 
     // ---- 상태 조회 ----
@@ -1803,6 +1823,7 @@ public final class EditorController {
             mouseX = -9999;
             mouseY = -9999;
         }
+        persistPrefs();
         updateToolbarPeek();
         updateSidePeek();
         autoPan();

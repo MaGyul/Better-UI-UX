@@ -44,6 +44,27 @@ final class EditorBackend {
 
             @Override public String title() { return id + ".xml"; }
 
+            /** 패널/툴바 접힘 상태는 config.toml 의 [editor] 에 저장해 다음에도 유지한다. */
+            @Override public java.util.Map<String, String> loadPrefs() {
+                var cfg = dev.magyul.betteruiux.core.doc.UiConfig.load(userDir.getParent().resolve("config.toml"));
+                java.util.Map<String, String> m = new java.util.HashMap<>();
+                for (String k : new String[] {"leftCollapsed", "rightCollapsed", "toolbarHidden"}) {
+                    String v = cfg.get("editor." + k);
+                    if (v != null) m.put(k, v);
+                }
+                return m;
+            }
+
+            @Override public void savePrefs(java.util.Map<String, String> prefs) {
+                java.util.Map<String, String> changes = new java.util.LinkedHashMap<>();
+                prefs.forEach((k, v) -> changes.put("editor." + k, v));
+                try {
+                    dev.magyul.betteruiux.core.doc.UiConfig.update(userDir.getParent().resolve("config.toml"), changes);
+                } catch (IOException ignored) {
+                    // 저장하지 못해도 이번 실행에는 영향이 없다
+                }
+            }
+
             @Override public void requestExit() { screen.exitEditor(); }
 
             /** 채팅창과 같은 시스템 클립보드(Ctrl+C/X/V). */

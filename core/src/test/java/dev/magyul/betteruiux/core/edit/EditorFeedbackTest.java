@@ -34,6 +34,16 @@ class EditorFeedbackTest {
 
         @Override public void requestExit() { exits++; }
 
+        java.util.Map<String, String> prefs = new java.util.HashMap<>();
+        int saves;
+
+        @Override public java.util.Map<String, String> loadPrefs() { return prefs; }
+
+        @Override public void savePrefs(java.util.Map<String, String> p) {
+            prefs = new java.util.HashMap<>(p);
+            saves++;
+        }
+
         @Override public List<String> suggestions(String key) {
             return key.equals("onClick") ? List.of("buy_item", "close", "open_shop") : List.of();
         }
@@ -504,5 +514,19 @@ class EditorFeedbackTest {
         assertTrue(hasText(paint(e), "구조"), "기다리면 나타난다");
         e.mouseMoved(300, 120);
         assertFalse(hasText(paint(e), "구조"), "벗어나면 다시 숨는다");
+    }
+
+    @Test
+    void panelAndToolbarFoldingIsSavedAndRestored() throws Exception {
+        EditorController e = editor(COLORED);
+        click(e, EditorController.LEFT_W + 3, EditorController.tabY(H) + 5);   // 왼쪽 접기
+        paint(e);
+        assertEquals("true", lastHost.prefs.get("leftCollapsed"));
+        assertEquals(1, lastHost.saves);
+        paint(e);
+        assertEquals(1, lastHost.saves, "바뀌지 않으면 다시 쓰지 않는다");
+        Host h = lastHost;
+        EditorController again = new EditorController(h, new FixedMetrics(), COLORED, W, H);
+        assertFalse(hasText(paint(again), "구조"), "다시 열어도 접혀 있다");
     }
 }
