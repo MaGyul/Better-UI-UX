@@ -21,4 +21,6 @@ public sealed interface DrawCommand {
     record PopTransform() implements DrawCommand {}
 
     record BlurBackground() implements DrawCommand {}
+
+    record RequestCursor(Cursor cursor) implements DrawCommand {}
 }

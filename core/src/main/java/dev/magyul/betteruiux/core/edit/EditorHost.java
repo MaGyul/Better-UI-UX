@@ -28,6 +28,12 @@ public interface EditorHost {
      */
     default void textInput(boolean active, int x, int y, int w, int h) { }
 
+    /**
+     * 속성 칸의 자동 완성 후보. {@code key} 가 {@code onClick} 이면 등록된 이벤트(액션) id 목록을 돌려준다.
+     * 후보가 없으면 빈 목록.
+     */
+    default java.util.List<String> suggestions(String key) { return java.util.List.of(); }
+
     /** 시스템 클립보드 읽기(Ctrl+V). 지원하지 않으면 빈 문자열. */
     default String clipboard() { return ""; }
 

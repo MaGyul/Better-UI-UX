@@ -1,5 +1,6 @@
 package dev.magyul.betteruiux.core.edit;
 
+import dev.magyul.betteruiux.api.Cursor;
 import dev.magyul.betteruiux.api.DrawList;
 import dev.magyul.betteruiux.api.TextMetrics;
 import dev.magyul.betteruiux.api.UiGfx;
@@ -7,6 +8,7 @@ import dev.magyul.betteruiux.core.doc.UiDocument;
 import dev.magyul.betteruiux.core.edit.Geometry.Handle;
 import dev.magyul.betteruiux.core.edit.Geometry.Rect;
 import dev.magyul.betteruiux.core.edit.XmlSource.Element;
+import dev.magyul.betteruiux.core.layout.Colors;
 import dev.magyul.betteruiux.core.layout.Insets;
 import dev.magyul.betteruiux.core.layout.LayoutBox;
 import dev.magyul.betteruiux.core.layout.LayoutEngine;
@@ -47,12 +49,14 @@ public final class EditorController {
             "column", "세로", "row", "가로", "image", "이미지", "spacer", "여백");
     /** 속성 이름 → 화면에 보이는 한글 이름. */
     private static final Map<String, String> PROP_LABELS = Map.ofEntries(
-            Map.entry("tag", "종류"), Map.entry("text", "글자"), Map.entry("onClick", "클릭"), Map.entry("src", "이미지"),
+            Map.entry("tag", "종류"), Map.entry("text", "글자"), Map.entry("onClick", "클릭 이벤트"), Map.entry("src", "이미지"),
             Map.entry("width", "너비"), Map.entry("height", "높이"), Map.entry("margin", "바깥여백"),
             Map.entry("padding", "안쪽여백"), Map.entry("anchor", "기준점"), Map.entry("gap", "간격"),
             Map.entry("justify", "정렬"), Map.entry("align", "교차정렬"), Map.entry("background", "배경"),
             Map.entry("color", "글자색"), Map.entry("border", "테두리"), Map.entry("border-color", "테두리색"),
             Map.entry("opacity", "투명도"), Map.entry("use", "배경효과"));
+    private static final java.util.Set<String> COLOR_KEYS = java.util.Set.of("background", "color", "border-color");
+    private static final int SUGGEST_MAX = 6;
     private static final int HANDLE_R = 3, MIN_SIZE = 4, SNAP_THRESHOLD = 4, DRAG_START = 3, GRID = 8, WHEEL_STEP = 16;
     /** 기준점 자동 추론 임계값: 끌어 놓았을 때 / 팔레트에서 놓았을 때(가운데는 놓을 때 추론하지 않는다). */
     private static final int ANCHOR_T = 8, DROP_ANCHOR_T = 6;
@@ -67,7 +71,13 @@ public final class EditorController {
     private static final Set<String> ATTR_KEYS = Set.of("id", "class", "onClick", "src", "text");
     private static final Set<String> CONTAINERS = Set.of("screen", "panel", "row", "column", "stack", "fragment");
 
-    private record Region(Rect rect, Runnable action) {}
+    /**
+     * 화면의 누를 수 있는 영역. {@code cursor} 는 그 위에서의 포인터 모양(없으면 기본), {@code passthrough} 이면 단순 배경이라
+     * 누른 것이 아래의 캔버스로 통과한다(툴바의 빈 곳 아래에 걸친 요소를 잡을 수 있도록).
+     */
+    private record Region(Rect rect, Runnable action, Cursor cursor, boolean passthrough) {
+        Region(Rect rect, Runnable action) { this(rect, action, action == null ? null : Cursor.POINTER, false); }
+    }
 
     private record PropRow(String label, String key, String value, boolean editable) {}
 
@@ -112,6 +122,8 @@ public final class EditorController {
         List<LayoutBox> others = List.of();
         final Map<String, Boolean> definedElsewhere = new HashMap<>();
         int resultIndex;
+        /** 크기를 줄일 수 있는 하한. row/column 은 내용(자식들)보다 작아지지 못한다. */
+        int minW = MIN_SIZE, minH = MIN_SIZE;
     }
 
     private final EditorHost host;
@@ -153,6 +165,17 @@ public final class EditorController {
     private long lastFieldClickNanos;
     private int lastFieldClickIndex = -1;
     private Rect editRect;
+
+    /** 마우스 왼쪽 버튼이 눌린 상태(버튼의 눌림 색 표시용). */
+    private boolean mouseDown;
+    private final ColorPicker picker = new ColorPicker();
+    /** 색 칸을 편집하는 동안 요소에 실시간으로 반영 중인가(Esc 로 취소하면 되돌린다). */
+    private boolean previewActive;
+    /** 지금 펼쳐진 팝업(컬러피커 또는 자동 완성 목록)의 영역. 여기를 눌러도 칸 편집이 확정되지 않는다. */
+    private Rect popupRect;
+    private List<String> suggestions = List.of();
+    private int suggestIndex = -1;
+    private String suggestQuery = "";
 
     private String status = "";
     private boolean statusError;
@@ -335,9 +358,12 @@ public final class EditorController {
 
     private int visibleRows() { return Math.max(1, (viewH - rowsTop()) / ROW_H); }
 
-    private Rect leftTab() { return new Rect(leftCollapsed ? 0 : LEFT_W, TOOLBAR_H + 2, TAB_W, TAB_H); }
+    /** 패널 접기 탭은 가장자리의 세로 중앙에 둔다(위쪽/구석에 놓이는 요소와 겹치지 않도록). */
+    static int tabY(int viewH) { return (TOOLBAR_H + viewH) / 2 - TAB_H / 2; }
 
-    private Rect rightTab() { return new Rect(rightCollapsed ? viewW - TAB_W : viewW - RIGHT_W - TAB_W, TOOLBAR_H + 2, TAB_W, TAB_H); }
+    private Rect leftTab() { return new Rect(leftCollapsed ? 0 : LEFT_W, tabY(viewH), TAB_W, TAB_H); }
+
+    private Rect rightTab() { return new Rect(rightCollapsed ? viewW - TAB_W : viewW - RIGHT_W - TAB_W, tabY(viewH), TAB_W, TAB_H); }
 
     private boolean overPanel(int x, int y) {
         if (!panelsVisible) return false;
@@ -365,21 +391,28 @@ public final class EditorController {
             return true;
         }
         if (button != 0) return true;
+        mouseDown = true;
         refreshRegions();
-        if (editKey != null && (editRect == null || !editRect.contains(x, y))) commitField();
+        boolean inPopup = popupRect != null && popupRect.contains(x, y);
+        if (editKey != null && !inPopup && (editRect == null || !editRect.contains(x, y))) commitField();
         refreshRegions();
+        if (editKey != null && pickerActive() && picker.contains(x, y)) {      // 컬러피커: 색 고르기/드래그
+            String hex = picker.press(x, y);
+            if (hex != null) setBufferFromPicker(hex);
+            return true;
+        }
         if (editKey != null && editRect != null && editRect.contains(x, y)) {   // 편집 중인 칸 안: 커서 찍기/드래그 선택/더블클릭
             onFieldPress(x);
             return true;
         }
         for (int i = regions.size() - 1; i >= 0; i--) {
             Region r = regions.get(i);
-            if (r.rect().contains(x, y)) {
-                if (r.action() != null) r.action().run();
-                return true;
-            }
+            if (r.passthrough() || !r.rect().contains(x, y)) continue;
+            if (r.action() != null) r.action().run();
+            return true;
         }
         int cx = x - panX, cy = y - panY;                   // 이후는 문서 좌표
+        boolean underToolbar = panelsVisible && y < TOOLBAR_H;
         LayoutBox sel = selectedBox();
         if (sel != null && sel.parent != null) {
             Handle h = handleAt(sel, cx, cy);
@@ -393,6 +426,7 @@ public final class EditorController {
             }
         }
         LayoutBox hit = hitSource(cx, cy);
+        if (underToolbar && (hit == null || hit.parent == null)) return true;   // 툴바의 빈 곳을 눌렀을 뿐이면 배경(루트)을 고르지 않는다
         if (hit != null) {
             selected = hit.node.sourceIndex();
             if (hit.parent != null) prepareDrag(hit, Handle.BODY, cx, cy);
@@ -407,6 +441,11 @@ public final class EditorController {
         mouseY = y;
         if (panning) {
             setPanNow(x - panAnchorX, y - panAnchorY);
+            return true;
+        }
+        if (picker.dragging()) {
+            String hex = picker.drag(x, y);
+            if (hex != null) setBufferFromPicker(hex);
             return true;
         }
         if (fieldDragging) {
@@ -432,8 +471,13 @@ public final class EditorController {
     public boolean mouseReleased(int x, int y, int button) {
         mouseX = x;
         mouseY = y;
+        mouseDown = false;
         if (panning) {
             panning = false;
+            return true;
+        }
+        if (picker.dragging()) {
+            picker.release();
             return true;
         }
         if (fieldDragging) {
@@ -534,6 +578,11 @@ public final class EditorController {
         d.parentContent = parent == null ? new Rect(0, 0, viewW, viewH) : contentRect(parent);
         d.curX = b.style.integer("x", 0);
         d.curY = b.style.integer("y", 0);
+        if (isFlow(b)) {                                    // row/column: 내용보다 작게 줄일 수 없다
+            int[] mn = doc.minimumSize(b);
+            d.minW = Math.max(MIN_SIZE, mn[0]);
+            d.minH = Math.max(MIN_SIZE, mn[1]);
+        }
         for (String k : List.of("width", "height", "x", "y", "anchor")) {
             d.definedElsewhere.put(k, b.style.get(k) != null && b.node.attr(k) == null);
         }
@@ -557,7 +606,7 @@ public final class EditorController {
         if (d.handle == Handle.BODY && d.parentFlow) {
             ok = applyReorderDrag(d, mx, my);
         } else {
-            Rect target = snapped(d, Geometry.drag(d.startRect, d.handle, dx, dy, MIN_SIZE));
+            Rect target = snapped(d, Geometry.drag(d.startRect, d.handle, dx, dy, d.minW, d.minH));
             // 가장자리/중심선에 붙인 요소는 그쪽을 기준점으로 삼는다(창 크기가 바뀌어도 그 끝에 붙어 있도록).
             String anchor = Geometry.normalizeAnchor(d.anchor);
             if (autoAnchor && !d.parentFlow) anchor = Geometry.inferAnchor(target, d.parentContent, d.anchor, ANCHOR_T, true);
@@ -617,13 +666,13 @@ public final class EditorController {
             if (mR) rt = edge(rt, d.xTargets, true, g);
             if (mT) t = edge(t, d.yTargets, false, g);
             if (mB) b = edge(b, d.yTargets, false, g);
-            int w = Math.max(MIN_SIZE, rt - l), h = Math.max(MIN_SIZE, b - t);
+            int w = Math.max(d.minW, rt - l), h = Math.max(d.minH, b - t);
             out = new Rect(mL ? rt - w : l, mT ? b - h : t, w, h);
         }
         // 부모(루트의 자식이면 화면) 밖으로는 나갈 수 없다.
         Rect bounded = d.handle == Handle.BODY
                 ? Geometry.clamp(out, d.parentContent)
-                : Geometry.clampEdges(out, d.parentContent, MIN_SIZE, d.handle);
+                : Geometry.clampEdges(out, d.parentContent, d.minW, d.minH, d.handle);
         guides = g;
         return bounded;
     }
@@ -753,7 +802,8 @@ public final class EditorController {
                 text = r.text();
                 revealRequested = true;                                                          // 옮겨진 기존 요소는 가려졌다면 화면으로 불러온다
             }
-            if (applyEdit(s -> text)) selected = r.index();
+            String grown = growToFit(text, r.index());
+            if (applyEdit(s -> grown)) selected = r.index();
         } catch (IllegalArgumentException e) {
             setStatus("여기에는 놓을 수 없습니다", true);
         }
@@ -812,6 +862,7 @@ public final class EditorController {
     public boolean charTyped(char c) {
         if (editKey == null || c < 32 || c == 127) return false;
         insertText(String.valueOf(c));
+        if (COLOR_KEYS.contains(editKey)) previewField();
         return true;
     }
 
@@ -895,8 +946,20 @@ public final class EditorController {
     private boolean editKeyPressed(EditorKey key, boolean ctrl, boolean shift) {
         int len = editBuffer.length();
         switch (key) {
-            case ENTER -> commitField();
+            case ENTER -> {
+                if (suggestIndex >= 0 && suggestIndex < suggestions.size()) acceptSuggestion(suggestions.get(suggestIndex));
+                else commitField();
+            }
             case ESCAPE -> cancelField();
+            case TAB -> {                                   // 채팅처럼 Tab 으로 자동 완성
+                if (!suggestions.isEmpty()) acceptSuggestion(suggestions.get(Math.max(0, suggestIndex)));
+            }
+            case UP -> {
+                if (!suggestions.isEmpty()) suggestIndex = suggestIndex <= 0 ? suggestions.size() - 1 : suggestIndex - 1;
+            }
+            case DOWN -> {
+                if (!suggestions.isEmpty()) suggestIndex = (suggestIndex + 1) % suggestions.size();
+            }
             case BACKSPACE -> {
                 if (hasSelection()) deleteSelection();
                 else if (editCursor > 0) deleteRange(ctrl ? wordLeft(editCursor) : editCursor - 1, editCursor);
@@ -943,6 +1006,7 @@ public final class EditorController {
             }
             default -> { }
         }
+        if (editKey != null && COLOR_KEYS.contains(editKey)) previewField();
         return true;
     }
 
@@ -1057,8 +1121,53 @@ public final class EditorController {
         int parentIdx = target == null || target.node.sourceIndex() < 0 ? 0 : target.node.sourceIndex();
         EditorOps.Added r = EditorOps.addChild(session.text(), parentIdx, Integer.MAX_VALUE, tag);
         int[] c = visibleCenterDoc();                      // 새 요소는 지금 보고 있는 화면 한가운데에 놓는다(패널에 가려진 구석이 아니라)
-        String text = placeAt(r.text(), r.index(), parentIdx, c[0], c[1]);
+        String text = growToFit(placeAt(r.text(), r.index(), parentIdx, c[0], c[1]), r.index());
         if (applyEdit(src -> text)) selected = r.index();
+    }
+
+    /**
+     * 요소를 넣은 뒤, 그 요소를 품은 row/column 이 <b>고정 크기(px)</b>로 지정돼 있고 내용보다 작아졌다면 내용이 들어갈 만큼 키운다.
+     * (자동 크기인 컨테이너는 이미 내용에 맞으므로 건드리지 않는다.) 바깥쪽 컨테이너도 이어서 확인한다.
+     */
+    private String growToFit(String text, int index) {
+        String t = text;
+        for (int guard = 0; guard < 8; guard++) {
+            UiDocument tmp;
+            try {
+                tmp = host.load(t);
+                tmp.layout(viewW, viewH);
+            } catch (UiParseException e) {
+                return t;
+            }
+            LayoutBox b = boxByIndex(tmp.layout(), index);
+            if (b == null) return t;
+            boolean changed = false;
+            for (LayoutBox a = displayParent(b); a != null && !changed; a = displayParent(a)) {
+                if (!isFlow(a)) continue;
+                int[] mn = tmp.minimumSize(a);
+                Map<String, String> props = new LinkedHashMap<>();
+                if (explicitPx(a.style.get("width")) != null && a.w < mn[0]) props.put("width", Integer.toString(mn[0]));
+                if (explicitPx(a.style.get("height")) != null && a.h < mn[1]) props.put("height", Integer.toString(mn[1]));
+                if (props.isEmpty()) continue;
+                final LayoutBox box = a;
+                t = EditorOps.setProps(t, a.node.sourceIndex(), props, p -> box.style.get(p) != null && box.node.attr(p) == null);
+                changed = true;
+            }
+            if (!changed) return t;
+        }
+        return t;
+    }
+
+    /** "120" / "120px" 이면 120, 그 밖(fill, %, auto, 없음)이면 null. */
+    private static Integer explicitPx(String v) {
+        if (v == null) return null;
+        String s = v.trim().toLowerCase();
+        if (s.endsWith("px")) s = s.substring(0, s.length() - 2);
+        try {
+            return Math.round(Float.parseFloat(s));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** 지금 보이는 작업 영역의 한가운데(문서 좌표). */
@@ -1070,7 +1179,8 @@ public final class EditorController {
     public void duplicate() {
         if (selected <= 0) return;
         EditorOps.Added r = EditorOps.duplicate(session.text(), selected);
-        if (applyEdit(src -> r.text())) selected = r.index();
+        String text = growToFit(r.text(), r.index());
+        if (applyEdit(src -> text)) selected = r.index();
     }
 
     public void deleteSelected() { deleteIndex(selected); }
@@ -1136,14 +1246,28 @@ public final class EditorController {
         editAnchor = 0;                         // 칸을 누르면 전체가 선택된다: 바로 입력하면 값이 바뀌고, 방향키/Home/End 로 이어 쓸 수 있다
         editCursor = editBuffer.length();
         editRect = fieldRect;
+        suggestIndex = -1;
+        suggestQuery = null;
+        previewBox = null;
+        if (COLOR_KEYS.contains(key)) picker.open(value);
         // 게임이 SDL 이면 글자 입력(IME 포함)을 따로 켜 줘야 한다. 켜지 않으면 키 이벤트만 오고 글자는 들어오지 않는다.
         host.textInput(true, fieldRect.x(), fieldRect.y(), fieldRect.w(), fieldRect.h());
     }
 
     private void cancelField() {
         boolean wasEditing = editKey != null;
+        if (previewActive) {                    // 색 고르기 미리보기를 되돌린다(확정할 때는 이어서 진짜 편집이 적용된다)
+            previewActive = false;
+            session.cancelTransient();
+            editKey = null;
+            reload();
+        }
         editKey = null;
         editRect = null;
+        popupRect = null;
+        suggestions = List.of();
+        suggestIndex = -1;
+        picker.release();
         fieldDragging = false;
         if (wasEditing) host.textInput(false, 0, 0, 0, 0);
     }
@@ -1158,7 +1282,8 @@ public final class EditorController {
         cancelField();
         LayoutBox box = selectedBox();
         if (key == null || box == null) return;
-        String value = raw.isEmpty() ? null : raw;
+        String value0 = raw.isEmpty() ? null : raw;
+        final String value = clampFlowSize(box, key, value0);
         int idx = selected;
         LayoutBox parentBox = box.parent;
         if (key.equals("anchor") && parentBox != null && !isFlow(parentBox)) {
@@ -1172,12 +1297,120 @@ public final class EditorController {
             });
             return;
         }
-        applyEdit(src -> {
+        applyEdit(fieldPatch(box, idx, key, raw, value));
+    }
+
+    private static Function<XmlSource, String> fieldPatch(LayoutBox box, int idx, String key, String raw, String value) {
+        return src -> {
             Element el = src.element(idx);
             if (key.equals("text")) return EditorOps.setText(src, el, raw);
             if (ATTR_KEYS.contains(key)) return XmlPatcher.setAttr(src, el, key, value);
             return EditorOps.setProp(src, el, key, value, box.style.get(key) != null && box.node.attr(key) == null);
-        });
+        };
+    }
+
+    /** row/column 의 너비/높이를 내용(자식들)보다 작게 지정하면 내용 크기로 맞춘다. */
+    private String clampFlowSize(LayoutBox box, String key, String value) {
+        if (value == null || !isFlow(box) || !(key.equals("width") || key.equals("height"))) return value;
+        Integer px = explicitPx(value);
+        if (px == null) return value;
+        int[] mn = doc.minimumSize(box);
+        int min = key.equals("width") ? mn[0] : mn[1];
+        if (px >= min) return value;
+        setStatus("안의 요소보다 작게는 줄일 수 없어서 " + min + " 으로 맞췄어요", true);
+        return Integer.toString(min);
+    }
+
+    // ---- 색 고르기 / 자동 완성 ----
+
+    private boolean pickerActive() { return editKey != null && COLOR_KEYS.contains(editKey); }
+
+    /** 피커를 만졌을 때: 칸의 글자를 바꾸고 화면에 바로 미리 보여 준다(확정 전에는 되돌릴 수 있는 임시 편집). */
+    private void setBufferFromPicker(String hex) {
+        editBuffer.setLength(0);
+        editBuffer.append(hex);
+        editCursor = editAnchor = editBuffer.length();
+        previewField();
+    }
+
+    private LayoutBox previewBox;
+
+    private void previewField() {
+        LayoutBox box = selectedBox();
+        if (box == null || editKey == null || !COLOR_KEYS.contains(editKey)) return;
+        String raw = editBuffer.toString().trim();
+        if (Colors.tryParse(raw) == null) return;
+        if (!previewActive) {
+            session.beginTransient();
+            previewActive = true;
+            previewBox = box;                    // 인라인/속성 중 어디에 쓸지는 편집을 시작할 때의 상태로 정한다
+        }
+        String key = editKey;
+        if (session.setTransient(fieldPatch(previewBox, selected, key, raw, raw))) {
+            reload();
+            editKey = key;
+        }
+    }
+
+    /** 편집 중인 칸의 자동 완성 후보(onClick 등). */
+    private List<String> currentSuggestions() {
+        if (editKey == null) return List.of();
+        List<String> all = host.suggestions(editKey);
+        if (all.isEmpty()) return List.of();
+        String q = editBuffer.toString().trim().toLowerCase();
+        List<String> out = new ArrayList<>();
+        for (String c : all) {
+            if (c.equalsIgnoreCase(q)) return List.of();     // 이미 완성된 값이면 목록을 닫는다
+            if (q.isEmpty() || c.toLowerCase().contains(q)) out.add(c);
+        }
+        out.sort((a, b) -> Boolean.compare(!a.toLowerCase().startsWith(q), !b.toLowerCase().startsWith(q)));
+        return out.size() > SUGGEST_MAX ? new ArrayList<>(out.subList(0, SUGGEST_MAX)) : out;
+    }
+
+    private void acceptSuggestion(String value) {
+        editBuffer.setLength(0);
+        editBuffer.append(value);
+        editCursor = editAnchor = editBuffer.length();
+        suggestIndex = -1;
+    }
+
+    private void paintSuggestions(UiGfx g) {
+        if (editKey == null || editRect == null || COLOR_KEYS.contains(editKey)) return;
+        String q = editBuffer.toString();
+        if (!q.equals(suggestQuery)) {                     // 글자가 바뀌면 선택을 처음(없음)으로
+            suggestQuery = q;
+            suggestIndex = -1;
+        }
+        suggestions = currentSuggestions();
+        if (suggestions.isEmpty()) return;
+        int w = 0;
+        for (String c : suggestions) w = Math.max(w, tm.width(c));
+        w = Math.max(editRect.w(), Math.min(RIGHT_W - 8, w + 8));
+        int x = Math.min(editRect.x(), viewW - w - 2);
+        int h = suggestions.size() * ROW_H + 2;
+        int y = editRect.bottom() + 1;
+        if (y + h > viewH) y = Math.max(TOOLBAR_H, editRect.y() - h - 1);
+        popupRect = new Rect(x, y, w, h);
+        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
+        g.fillRect(x, y, w, h, 0xFF161820);
+        regions.add(new Region(popupRect, null));
+        for (int i = 0; i < suggestions.size(); i++) {
+            Rect row = new Rect(x, y + 1 + i * ROW_H, w, ROW_H);
+            boolean hot = i == suggestIndex || row.contains(mouseX, mouseY);
+            if (hot) g.fillRect(row.x(), row.y(), row.w(), row.h(), i == suggestIndex ? C_ROW_SEL : C_ROW_HOVER);
+            g.drawText(fit(suggestions.get(i), w - 6), x + 3, row.y() + 1, C_TEXT, false);
+            final String value = suggestions.get(i);
+            regions.add(new Region(row, () -> acceptSuggestion(value)));
+        }
+    }
+
+    private void paintPicker(UiGfx g) {
+        if (!pickerActive() || editRect == null) return;
+        picker.syncFrom(editBuffer.toString().trim());
+        picker.layout(editRect, viewW - RIGHT_W, RIGHT_W, TOOLBAR_H, viewH);
+        popupRect = picker.area();
+        picker.paint(g);
+        regions.add(new Region(picker.area(), null));
     }
 
     private List<PropRow> rowsFor(LayoutBox b) {
@@ -1333,8 +1566,38 @@ public final class EditorController {
         if (rightVisible()) paintProperties(g);
         if (panelsVisible) paintToolbar(g);
         if (panelsVisible && !dragStarted()) paintTabs(g);
+        popupRect = null;
+        paintPicker(g);
+        paintSuggestions(g);
         paintDndFeedback(g);
         paintStatus(g);
+        g.requestCursor(cursorNow());
+    }
+
+    /** 마우스 아래에 있는 것에 맞는 포인터 모양. */
+    private Cursor cursorNow() {
+        if (panning || (drag != null && drag.started) || (dnd != null && dnd.started)) return Cursor.MOVE;
+        if (editKey != null && editRect != null && editRect.contains(mouseX, mouseY)) return Cursor.TEXT;
+        if (pickerActive() && picker.contains(mouseX, mouseY)) return Cursor.CROSSHAIR;
+        for (int i = regions.size() - 1; i >= 0; i--) {
+            Region r = regions.get(i);
+            if (r.passthrough() || !r.rect().contains(mouseX, mouseY)) continue;
+            return r.cursor() == null ? Cursor.DEFAULT : r.cursor();
+        }
+        LayoutBox sel = selectedBox();
+        int cx = mouseX - panX, cy = mouseY - panY;
+        if (sel != null && sel.parent != null) {
+            Handle h = handleAt(sel, cx, cy);
+            if (h != null) {
+                return switch (h) {
+                    case E, W -> Cursor.RESIZE_H;
+                    case N, S -> Cursor.RESIZE_V;
+                    default -> Cursor.MOVE;
+                };
+            }
+            if (sel.contains(cx, cy)) return Cursor.MOVE;
+        }
+        return hoverIndex > 0 ? Cursor.POINTER : Cursor.DEFAULT;
     }
 
     private static int tagColor(String tag) {
@@ -1394,6 +1657,14 @@ public final class EditorController {
         outline(g, new Rect(0, 0, viewW, viewH), SCREEN_FRAME);
     }
 
+    /** 색의 밝기를 delta 만큼 올리거나 내린다(알파 유지). */
+    private static int shade(int argb, int delta) {
+        int r = Math.max(0, Math.min(255, ((argb >> 16) & 0xFF) + delta));
+        int gr = Math.max(0, Math.min(255, ((argb >> 8) & 0xFF) + delta));
+        int b = Math.max(0, Math.min(255, (argb & 0xFF) + delta));
+        return (argb & 0xFF000000) | (r << 16) | (gr << 8) | b;
+    }
+
     private static void outline(UiGfx g, Rect r, int color) {
         g.fillRect(r.x(), r.y(), r.w(), 1, color);
         g.fillRect(r.x(), r.bottom() - 1, r.w(), 1, color);
@@ -1407,7 +1678,10 @@ public final class EditorController {
 
     private int button(UiGfx g, int x, int y, String label, boolean enabled, Runnable action, int bg) {
         int w = tm.width(label) + 8, h = TOOLBAR_H - 4;
-        g.fillRect(x, y, w, h, enabled ? bg : C_BTN_OFF);
+        boolean over = enabled && mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
+        boolean pressed = over && mouseDown;
+        g.fillRect(x, y, w, h, !enabled ? C_BTN_OFF : pressed ? shade(bg, -28) : over ? shade(bg, 32) : bg);
+        if (over) outline(g, new Rect(x, y, w, h), pressed ? C_SEL : 0x80FFFFFF);
         g.drawText(label, x + 4, y + (h - tm.lineHeight()) / 2 + 1, enabled ? C_TEXT : C_DIM, false);
         regions.add(new Region(new Rect(x, y, w, h), enabled ? action : null));
         return w + 2;
@@ -1415,7 +1689,7 @@ public final class EditorController {
 
     private void paintToolbar(UiGfx g) {
         g.fillRect(0, 0, viewW, TOOLBAR_H, C_PANEL);
-        regions.add(new Region(new Rect(0, 0, viewW, TOOLBAR_H), null));
+        regions.add(new Region(new Rect(0, 0, viewW, TOOLBAR_H), null, null, true));   // 버튼이 아닌 빈 곳은 아래 캔버스로 통과
         int x = 2, y = 2;
         x += button(g, x, y, "Save" + (session.isDirty() ? "*" : ""), true, this::save);
         x += button(g, x, y, "Undo", session.canUndo(), this::undo);
@@ -1435,10 +1709,10 @@ public final class EditorController {
     /** 패널 가장자리의 접기/펼치기 탭. */
     private void paintTabs(UiGfx g) {
         Rect lt = leftTab(), rt = rightTab();
-        g.fillRect(lt.x(), lt.y(), lt.w(), lt.h(), C_TAB);
+        g.fillRect(lt.x(), lt.y(), lt.w(), lt.h(), lt.contains(mouseX, mouseY) ? shade(C_TAB, mouseDown ? -20 : 30) : C_TAB);
         g.drawText(leftCollapsed ? ">" : "<", lt.x() + 2, lt.y() + (lt.h() - tm.lineHeight()) / 2, C_TEXT, false);
         regions.add(new Region(lt, () -> leftCollapsed = !leftCollapsed));
-        g.fillRect(rt.x(), rt.y(), rt.w(), rt.h(), C_TAB);
+        g.fillRect(rt.x(), rt.y(), rt.w(), rt.h(), rt.contains(mouseX, mouseY) ? shade(C_TAB, mouseDown ? -20 : 30) : C_TAB);
         g.drawText(rightCollapsed ? "<" : ">", rt.x() + 2, rt.y() + (rt.h() - tm.lineHeight()) / 2, C_TEXT, false);
         regions.add(new Region(rt, () -> rightCollapsed = !rightCollapsed));
     }
@@ -1614,13 +1888,22 @@ public final class EditorController {
             g.drawText(row.label(), x0 + 5, y + 1, C_DIM, false);
             Rect field = new Rect(fieldX, y - 1, fieldW, ROW_H);
             boolean editing = row.key().equals(editKey) && !row.key().isEmpty();
-            g.fillRect(field.x(), field.y(), field.w(), field.h(), C_FIELD);
+            boolean fieldHover = !editing && row.editable() && field.contains(mouseX, mouseY);
+            g.fillRect(field.x(), field.y(), field.w(), field.h(), fieldHover ? (mouseDown ? shade(C_FIELD, -6) : shade(C_FIELD, 22)) : C_FIELD);
+            if (fieldHover) outline(g, field, mouseDown ? C_SEL : 0x80FFFFFF);
+            if (COLOR_KEYS.contains(row.key())) {                      // 색 칸 오른쪽에 현재 색 견본
+                Integer swatch = Colors.tryParse(editing ? editBuffer.toString().trim() : row.value());
+                if (swatch != null) {
+                    g.fillRect(field.right() - 11, field.y() + 2, 9, field.h() - 4, 0xFF2A2D3E);
+                    g.fillRect(field.right() - 11, field.y() + 2, 9, field.h() - 4, swatch);
+                }
+            }
             if (editing) {
                 outline(g, field, C_SEL);
                 editRect = field;
                 paintEditText(g, field);
             } else {
-                g.drawText(fit(row.value(), fieldW - 4), fieldX + 2, y + 1, row.editable() ? C_TEXT : C_DIM, false);
+                g.drawText(fit(row.value(), fieldW - (COLOR_KEYS.contains(row.key()) ? 16 : 4)), fieldX + 2, y + 1, row.editable() ? C_TEXT : C_DIM, false);
                 if (row.editable()) {
                     final String key = row.key(), value = row.value();
                     regions.add(new Region(field, () -> startEdit(key, value, field)));

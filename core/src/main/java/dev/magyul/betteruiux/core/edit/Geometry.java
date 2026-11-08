@@ -37,21 +37,24 @@ public final class Geometry {
     public enum Handle { NW, N, NE, W, E, SW, S, SE, BODY }
 
     /** 손잡이를 (dx,dy) 만큼 끌었을 때의 새 사각형. 최소 크기 {@code min} 아래로는 줄어들지 않는다. */
-    public static Rect drag(Rect start, Handle h, int dx, int dy, int min) {
+    public static Rect drag(Rect start, Handle h, int dx, int dy, int min) { return drag(start, h, dx, dy, min, min); }
+
+    /** 가로/세로 최소 크기를 따로 지정한다(row/column 은 내용보다 작아지지 못한다). */
+    public static Rect drag(Rect start, Handle h, int dx, int dy, int minW, int minH) {
         int x = start.x(), y = start.y(), w = start.w(), hh = start.h();
         if (h == Handle.BODY) return new Rect(x + dx, y + dy, w, hh);
         if (h == Handle.W || h == Handle.NW || h == Handle.SW) {
-            int nw = Math.max(min, w - dx);
+            int nw = Math.max(minW, w - dx);
             x += w - nw;
             w = nw;
         }
-        if (h == Handle.E || h == Handle.NE || h == Handle.SE) w = Math.max(min, w + dx);
+        if (h == Handle.E || h == Handle.NE || h == Handle.SE) w = Math.max(minW, w + dx);
         if (h == Handle.N || h == Handle.NW || h == Handle.NE) {
-            int nh = Math.max(min, hh - dy);
+            int nh = Math.max(minH, hh - dy);
             y += hh - nh;
             hh = nh;
         }
-        if (h == Handle.S || h == Handle.SW || h == Handle.SE) hh = Math.max(min, hh + dy);
+        if (h == Handle.S || h == Handle.SW || h == Handle.SE) hh = Math.max(minH, hh + dy);
         return new Rect(x, y, w, hh);
     }
 
@@ -172,7 +175,9 @@ public final class Geometry {
      * 크기 조절한 사각형에서 <b>끌고 있는 변만</b> 부모 영역 안으로 되돌린다(끌지 않는 변은 건드리지 않는다).
      * 최소 크기 {@code min} 아래로는 줄어들지 않는다.
      */
-    public static Rect clampEdges(Rect r, Rect bounds, int min, Handle h) {
+    public static Rect clampEdges(Rect r, Rect bounds, int min, Handle h) { return clampEdges(r, bounds, min, min, h); }
+
+    public static Rect clampEdges(Rect r, Rect bounds, int minW, int minH, Handle h) {
         boolean mL = h == Handle.W || h == Handle.NW || h == Handle.SW;
         boolean mR = h == Handle.E || h == Handle.NE || h == Handle.SE;
         boolean mT = h == Handle.N || h == Handle.NW || h == Handle.NE;
@@ -182,7 +187,7 @@ public final class Geometry {
         if (mR) rt = Math.min(rt, bounds.right());
         if (mT) t = Math.max(t, bounds.y());
         if (mB) b = Math.min(b, bounds.bottom());
-        int w = Math.max(min, rt - l), hh = Math.max(min, b - t);
+        int w = Math.max(minW, rt - l), hh = Math.max(minH, b - t);
         return new Rect(mL ? rt - w : l, mT ? b - hh : t, w, hh);
     }
 

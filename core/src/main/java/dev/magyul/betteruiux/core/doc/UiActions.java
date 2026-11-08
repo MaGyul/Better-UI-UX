@@ -26,6 +26,13 @@ public final class UiActions {
 
     public static boolean isRegistered(String id) { return ACTIONS.containsKey(id); }
 
+    /** 등록된 액션 id 들(이름순). 에디터의 {@code onClick} 자동 완성에 쓴다. */
+    public static java.util.List<String> registeredIds() {
+        java.util.List<String> ids = new java.util.ArrayList<>(ACTIONS.keySet());
+        java.util.Collections.sort(ids);
+        return ids;
+    }
+
     /** @return 등록된 액션이 있어 실행했으면 true */
     static boolean dispatch(Context ctx) {
         Consumer<Context> h = ACTIONS.get(ctx.action());

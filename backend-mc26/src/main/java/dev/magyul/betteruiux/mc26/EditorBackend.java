@@ -45,6 +45,10 @@ final class EditorBackend {
             @Override public String title() { return id + ".xml"; }
 
             /** 채팅창과 같은 시스템 클립보드(Ctrl+C/X/V). */
+            @Override public java.util.List<String> suggestions(String key) {
+                return key.equals("onClick") ? dev.magyul.betteruiux.core.doc.UiActions.registeredIds() : java.util.List.of();
+            }
+
             @Override public String clipboard() { return Minecraft.getInstance().keyboardHandler.getClipboard(); }
 
             @Override public void setClipboard(String text) { Minecraft.getInstance().keyboardHandler.setClipboard(text); }

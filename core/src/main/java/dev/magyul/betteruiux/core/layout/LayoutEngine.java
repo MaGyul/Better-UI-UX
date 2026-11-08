@@ -137,6 +137,15 @@ public final class LayoutEngine {
         };
     }
 
+    /**
+     * 내용이 잘리지 않는 최소 크기 {너비, 높이} (자식들의 합/최댓값 + 간격 + 안쪽 여백). fill/% 크기의 자식은 0 으로 본다.
+     * 에디터가 row/column 을 내용보다 작게 줄이지 못하게 막는 데 쓴다.
+     */
+    public int[] minimumSize(LayoutBox b) {
+        Insets pad = padding(b);
+        return new int[] {contentW(b) + pad.horizontal(), contentH(b) + pad.vertical()};
+    }
+
     private int outerW(LayoutBox b) { return prefW(b) + margin(b).horizontal(); }
 
     private int outerH(LayoutBox b) { return prefH(b) + margin(b).vertical(); }

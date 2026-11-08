@@ -141,7 +141,7 @@ class EditorBoundsTest {
         assertEquals(W, r.right());
         assertEquals(H, r.bottom());
         e.select(A);
-        drag(e, r.x(), r.y() + r.h() / 2, -900, r.y() + r.h() / 2);      // 서쪽 손잡이(왼쪽 가장자리 탭을 피해 중간 높이에서)
+        drag(e, r.x(), r.y(), -900, r.y());                              // 북서 손잡이(세로 가운데의 가장자리 탭을 피해 모서리에서)
         assertEquals(0, rect(e, "a").x());
         e.select(A);
         Rect r2 = rect(e, "a");

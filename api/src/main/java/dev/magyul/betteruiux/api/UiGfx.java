@@ -35,4 +35,7 @@ public interface UiGfx {
      * 게임의 "메뉴 배경 블러" 옵션이 꺼져 있으면 아무 일도 하지 않을 수 있다.
      */
     void blurBackground();
+
+    /** 이번 프레임의 마우스 포인터 모양을 요청한다. 한 프레임에 여러 번 호출하면 마지막 요청이 적용된다. */
+    void requestCursor(Cursor cursor);
 }

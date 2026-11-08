@@ -27,6 +27,7 @@ public final class DrawList implements UiGfx {
                         target.pushTransform(t.tx(), t.ty(), t.scale(), t.rotateDeg(), t.originX(), t.originY());
                 case DrawCommand.PopTransform t -> target.popTransform();
                 case DrawCommand.BlurBackground b -> target.blurBackground();
+                case DrawCommand.RequestCursor rc -> target.requestCursor(rc.cursor());
             }
         }
     }
@@ -57,6 +58,8 @@ public final class DrawList implements UiGfx {
     }
 
     @Override public void popTransform() { commands.add(new DrawCommand.PopTransform()); }
+
+    @Override public void requestCursor(Cursor cursor) { commands.add(new DrawCommand.RequestCursor(cursor)); }
 
     @Override public void blurBackground() { commands.add(new DrawCommand.BlurBackground()); }
 }

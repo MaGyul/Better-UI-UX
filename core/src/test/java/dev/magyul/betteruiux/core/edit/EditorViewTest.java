@@ -247,7 +247,7 @@ class EditorViewTest {
     @Test
     void sidePanelsCanBeCollapsedFromTheEdgeTabsAndRestored() {
         ed.select(A);
-        int leftTabX = EditorController.LEFT_W + 3, tabY = 16 + 2 + 5;
+        int leftTabX = EditorController.LEFT_W + 3, tabY = EditorController.tabY(H) + 5;
         click(leftTabX, tabY);                                             // 왼쪽 패널 접기
         DrawList l = paint();
         assertFalse(hasText(l, "구조"));
@@ -269,8 +269,8 @@ class EditorViewTest {
     void collapsedPanelsWidenTheWorkAreaForAutoPan() throws Exception {
         String xml = "<screen><panel id=\"p\" x=\"330\" y=\"100\" width=\"40\" height=\"30\" background=\"#FF336699\"/></screen>";
         EditorController e = new EditorController(host, new FixedMetrics(), xml, W, H);
-        e.mousePressed(W - 142 - 10 + 3, 16 + 2 + 5, 0);                   // 오른쪽 패널 접기
-        e.mouseReleased(W - 142 - 10 + 3, 16 + 2 + 5, 0);
+        e.mousePressed(W - 142 - 10 + 3, EditorController.tabY(H) + 5, 0);                   // 오른쪽 패널 접기
+        e.mouseReleased(W - 142 - 10 + 3, EditorController.tabY(H) + 5, 0);
         e.select(1);
         DrawList l = new DrawList();
         e.paint(l);

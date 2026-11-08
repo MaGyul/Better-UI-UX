@@ -1,6 +1,8 @@
 package dev.magyul.betteruiux.mc26;
 
 import dev.magyul.betteruiux.api.UiGfx;
+import com.mojang.blaze3d.platform.cursor.CursorType;
+import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -87,6 +89,24 @@ public final class McGfx implements UiGfx {
      * 이 호출 직전까지 그린 배경(예: block 타일)이 블러 대상이 되도록 먼저 stratum 을 나눈다.
      * 게임의 "메뉴 배경 블러" 옵션이 0 이면 vanilla 와 같이 블러하지 않는다.
      */
+    /**
+     * 26.3 이 지원하는 포인터는 화살표/I빔/십자/손가락/상하·좌우 조절/이동(전체)/금지 뿐이다.
+     * 대각선 조절 포인터는 없으므로 모서리 손잡이는 호출하는 쪽에서 십자(CROSSHAIR)를 요청한다.
+     */
+    @Override
+    public void requestCursor(dev.magyul.betteruiux.api.Cursor cursor) {
+        g.requestCursor(switch (cursor) {
+            case POINTER -> CursorTypes.POINTING_HAND;
+            case TEXT -> CursorTypes.IBEAM;
+            case CROSSHAIR -> CursorTypes.CROSSHAIR;
+            case RESIZE_H -> CursorTypes.RESIZE_EW;
+            case RESIZE_V -> CursorTypes.RESIZE_NS;
+            case MOVE -> CursorTypes.RESIZE_ALL;
+            case NOT_ALLOWED -> CursorTypes.NOT_ALLOWED;
+            case DEFAULT -> CursorType.DEFAULT;
+        });
+    }
+
     @Override
     public void blurBackground() {
         g.nextStratum();

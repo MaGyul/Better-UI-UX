@@ -1,5 +1,6 @@
 package dev.magyul.betteruiux.core.doc;
 
+import dev.magyul.betteruiux.api.Cursor;
 import dev.magyul.betteruiux.api.TextMetrics;
 import dev.magyul.betteruiux.api.UiGfx;
 import dev.magyul.betteruiux.core.anim.AnimationEngine;
@@ -277,7 +278,20 @@ public final class UiDocument {
         updateHover();
         applyDirty();
         painter.paint(layout, gfx, state);
+        gfx.requestCursor(cursorAtHover());
     }
+
+    /** 마우스 아래 요소의 {@code cursor} 스타일(상속). 없으면 활성 버튼 위에서는 손가락, 그 외에는 기본. */
+    private Cursor cursorAtHover() {
+        if (hoverNode == null) return Cursor.DEFAULT;
+        LayoutBox b = boxes.get(hoverNode);
+        Cursor c = b == null ? null : Cursor.parse(b.style.get("cursor"));
+        if (c != null) return c;
+        return hoverButton != null ? Cursor.POINTER : Cursor.DEFAULT;
+    }
+
+    /** 이 박스의 내용이 잘리지 않는 최소 {너비, 높이}. */
+    public int[] minimumSize(LayoutBox b) { return layoutEngine.minimumSize(b); }
 
     private void updateHover() {
         LayoutBox hit = hitTest(mouseX, mouseY);
