@@ -1,4 +1,14 @@
+pluginManagement {
+    repositories {
+        maven("https://maven.fabricmc.net/") { name = "Fabric" }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
 rootProject.name = "better-uiux"
 
-// M0: 마인크래프트 비의존 순수 Java 엔진. api/backend/loader 모듈은 이후 마일스톤에서 추가.
+// core: 마인크래프트 비의존 순수 Java 엔진. 이후 api/backend-mc26/neoforge 모듈 추가 예정.
 include("core")
+include("fabric")
+include("neoforge")

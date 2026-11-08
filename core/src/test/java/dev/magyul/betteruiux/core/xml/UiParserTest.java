@@ -1,4 +1,4 @@
-package dev.betteruiux.core.xml;
+package dev.magyul.betteruiux.core.xml;
 
 import static org.junit.jupiter.api.Assertions.*;
 
