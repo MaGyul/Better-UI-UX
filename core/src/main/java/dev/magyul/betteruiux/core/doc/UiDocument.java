@@ -45,7 +45,9 @@ public final class UiDocument {
     private final TextMetrics textMetrics;
     private final List<Stylesheet> sheets;
     private final List<String> warnings;
-    private final Set<String> runtimeWarnings = new LinkedHashSet<>();
+    /** 실행 중 생긴 경고와 마지막으로 발생한 시각(ms). 일정 시간이 지나면 사라진다(같은 경고가 또 나면 다시 보인다). */
+    private final Map<String, Long> runtimeWarnings = new LinkedHashMap<>();
+    private static final long WARNING_TTL_MS = 6000;
     private final UiPainter painter;
     private LayoutEngine layoutEngine;
     private StyleResolver resolver;
@@ -231,7 +233,9 @@ public final class UiDocument {
     public List<String> warnings() {
         List<String> all = new ArrayList<>(warnings);
         all.addAll(background.warnings());
-        all.addAll(runtimeWarnings);
+        long now = clock.nowMillis();
+        runtimeWarnings.values().removeIf(t -> now - t > WARNING_TTL_MS);
+        all.addAll(runtimeWarnings.keySet());
         return all;
     }
 
@@ -259,7 +263,7 @@ public final class UiDocument {
 
     void markDirty() { dirty = true; }
 
-    private void addRuntimeWarning(String w) { runtimeWarnings.add(w); }
+    private void addRuntimeWarning(String w) { runtimeWarnings.put(w, clock.nowMillis()); }
 
     /** 실행 중 생긴 경고를 문서 경고 목록(오류 오버레이)에 추가한다. */
     public void warn(String message) { addRuntimeWarning(message); }
