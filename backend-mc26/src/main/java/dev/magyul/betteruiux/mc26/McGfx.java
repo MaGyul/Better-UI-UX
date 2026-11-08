@@ -108,6 +108,23 @@ public final class McGfx implements UiGfx {
     }
 
     @Override
+    public void drawItem(String itemId, int x, int y, int count) {
+        Identifier id = Identifier.tryParse(itemId == null ? "" : itemId.trim());
+        if (id == null) {
+            LOG.warn("[better-uiux] invalid item id '{}'", itemId);
+            return;
+        }
+        var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(id);
+        if (item.isEmpty()) {
+            LOG.warn("[better-uiux] unknown item '{}'", itemId);
+            return;
+        }
+        net.minecraft.world.item.ItemStack stack = new net.minecraft.world.item.ItemStack(item.get(), Math.max(1, count));
+        g.item(stack, x, y);
+        if (count > 1) g.itemDecorations(font, stack, x, y);
+    }
+
+    @Override
     public void blurBackground() {
         g.nextStratum();
         if (Minecraft.getInstance().options.getMenuBackgroundBlurriness() >= 1.0F) {

@@ -62,6 +62,11 @@ public final class UiPainter {
         boolean transformed = tx != 0f || ty != 0f || scale != 1f || rotate != 0f;
         if (transformed) g.pushTransform(tx, ty, scale, rotate, b.x + b.w / 2f, b.y + b.h / 2f);
 
+        if (b.tag().equals("dialog")) {                      // 대화상자 뒤를 화면 전체에 걸쳐 어둡게
+            LayoutBox r = b;
+            while (r.parent != null) r = r.parent;
+            fill(g, r.x, r.y, r.w, r.h, s.color("backdrop", 0x90000000), opacity);
+        }
         boolean button = b.tag().equals("button");
         // 버튼 기본색: 스타일시트/속성에 background 가 있으면 그것이 우선, 없으면 상태별 기본색
         int defaultBg = 0;
@@ -85,16 +90,20 @@ public final class UiPainter {
         switch (b.tag()) {
             case "label", "button" -> paintText(b, s, g, opacity, button && !b.enabled());
             case "image" -> paintImage(b, s, g, opacity);
+            case "item" -> {
+                String item = s.get("item");
+                if (item != null && !item.isBlank()) g.drawItem(item.trim(), b.x, b.y, Math.max(1, s.integer("count", 1)));
+            }
             default -> { }
         }
-        if (b.widget != null) {
-            b.widget.paint(g, b.x, b.y, b.w, b.h, new UiWidget.Frame(
-                    state.mouseX(), state.mouseY(), hovered, state.nowMillis(), state.element(b)));
-        }
+        UiWidget.Frame frame = b.widget == null ? null : new UiWidget.Frame(
+                state.mouseX(), state.mouseY(), hovered, state.nowMillis(), state.element(b));
+        if (b.widget != null) b.widget.paint(g, b.x, b.y, b.w, b.h, frame);
 
-        boolean clip = "hidden".equals(s.get("overflow"));
+        boolean clip = "hidden".equals(s.get("overflow")) || b.tag().equals("scroll");
         if (clip) g.pushClip(b.x, b.y, b.w, b.h);
         for (LayoutBox c : b.children) paintBox(c, g, state, opacity);
+        if (b.widget != null) b.widget.paintOver(g, b.x, b.y, b.w, b.h, frame);
         if (clip) g.popClip();
 
         if (transformed) g.popTransform();

@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.core.layout;
 
 import dev.magyul.betteruiux.api.TextMetrics;
+import dev.magyul.betteruiux.core.doc.BuiltinWidgets;
 import dev.magyul.betteruiux.core.doc.UiWidget;
 import dev.magyul.betteruiux.core.style.StyleResolver;
 import dev.magyul.betteruiux.core.xml.UiNode;
@@ -77,14 +78,20 @@ public final class LayoutEngine {
     private void resolveStyles(LayoutBox b) {
         resolver.resolve(b);
         for (LayoutBox c : b.children) resolveStyles(c);
+        if (b.tag().equals("tabs") && b.widget instanceof BuiltinWidgets.Tabs tabs) {   // 선택된 탭만 보인다
+            int active = tabs.active(), i = 0;
+            for (LayoutBox c : b.children) {
+                if (c.tag().equals("tab") && i++ != active) c.style.put("visible", "false");
+            }
+        }
     }
 
     // ---- 내재 크기 (auto) ----
 
     private static boolean isLeaf(LayoutBox b) {
-        if (b.widget != null) return true;
+        if (b.widget != null) return !b.widget.container();
         return switch (b.tag()) {
-            case "label", "button", "image", "spacer" -> true;
+            case "label", "button", "image", "spacer", "item", "separator" -> true;
             default -> false;
         };
     }
@@ -151,11 +158,12 @@ public final class LayoutEngine {
     private int outerH(LayoutBox b) { return prefH(b) + margin(b).vertical(); }
 
     private int contentW(LayoutBox b) {
-        if (b.widget != null) return b.widget.intrinsicWidth();
+        if (b.widget != null && !b.widget.container()) return b.widget.intrinsicWidth();
         switch (b.tag()) {
             case "label", "button": return maxLineWidth(textOf(b));
-            case "image": return 16;
-            case "spacer": return 0;
+            case "image", "item": return 16;
+            case "spacer", "separator": return 0;
+            case "grid": return gridMetrics(b)[0][0];
             default: break;
         }
         List<LayoutBox> kids = visibleChildren(b);
@@ -171,17 +179,18 @@ public final class LayoutEngine {
     }
 
     private int contentH(LayoutBox b) {
-        if (b.widget != null) return b.widget.intrinsicHeight();
+        if (b.widget != null && !b.widget.container()) return b.widget.intrinsicHeight();
         switch (b.tag()) {
             case "label", "button": return lineCount(textOf(b)) * text.lineHeight();
-            case "image": return 16;
-            case "spacer": return 0;
+            case "image", "item": return 16;
+            case "spacer", "separator": return 0;
+            case "grid": return gridMetrics(b)[1][0];
             default: break;
         }
         List<LayoutBox> kids = visibleChildren(b);
         int gap = b.style.integer("gap", 0);
         int v = 0;
-        if (b.tag().equals("column")) {
+        if (b.tag().equals("column") || b.tag().equals("scroll")) {
             for (LayoutBox c : kids) v += outerH(c);
             if (!kids.isEmpty()) v += gap * (kids.size() - 1);
         } else {
@@ -204,7 +213,71 @@ public final class LayoutEngine {
         switch (b.tag()) {
             case "row" -> flow(b, true, cx, cy, cw, ch);
             case "column" -> flow(b, false, cx, cy, cw, ch);
+            case "grid" -> grid(b, cx, cy);
+            case "scroll" -> {
+                int content = contentH(b), bar = 0, offset = 0;
+                if (b.widget instanceof BuiltinWidgets.Scroll sw) {
+                    sw.setContent(content, ch);
+                    offset = sw.scrollY();
+                    if (content > ch) bar = 5;                  // 스크롤 막대 자리
+                }
+                flow(b, false, cx, cy - offset, Math.max(0, cw - bar), Math.max(ch, content));
+            }
+            case "tabs" -> {
+                int header = b.widget instanceof BuiltinWidgets.Tabs t ? t.headerHeight() : 0;
+                stack(b, cx, cy + header, cw, Math.max(0, ch - header));
+            }
             default -> stack(b, cx, cy, cw, ch);
+        }
+    }
+
+    // ---- grid ----
+
+    /** {{열 너비들 합(0번)...}, {행 높이들 합(0번)...}} 대신 [0]=열 너비 배열, [1]=행 높이 배열의 첫 칸에 전체 크기를 담아 돌려준다. */
+    private int[][] gridMetrics(LayoutBox b) {
+        int cols = Math.max(1, b.style.integer("columns", 2)), gap = b.style.integer("gap", 0);
+        List<LayoutBox> items = visibleChildren(b);
+        int usedCols = Math.min(cols, Math.max(1, items.size())), rows = (items.size() + cols - 1) / cols;
+        int[] colW = new int[usedCols], rowH = new int[Math.max(rows, 0)];
+        for (int i = 0; i < items.size(); i++) {
+            LayoutBox c = items.get(i);
+            colW[i % cols] = Math.max(colW[i % cols], outerW(c));
+            rowH[i / cols] = Math.max(rowH[i / cols], outerH(c));
+        }
+        int totalW = 0, totalH = 0;
+        for (int w : colW) totalW += w;
+        for (int h : rowH) totalH += h;
+        if (items.size() > 0) {
+            totalW += gap * (usedCols - 1);
+            totalH += gap * (rows - 1);
+        }
+        return new int[][] {Arrays_prepend(totalW, colW), Arrays_prepend(totalH, rowH)};
+    }
+
+    private static int[] Arrays_prepend(int first, int[] rest) {
+        int[] out = new int[rest.length + 1];
+        out[0] = first;
+        System.arraycopy(rest, 0, out, 1, rest.length);
+        return out;
+    }
+
+    private void grid(LayoutBox b, int cx, int cy) {
+        int cols = Math.max(1, b.style.integer("columns", 2)), gap = b.style.integer("gap", 0);
+        List<LayoutBox> items = visibleChildren(b);
+        int[][] m = gridMetrics(b);
+        int y = cy;
+        for (int r = 0; r * cols < items.size(); r++) {
+            int x = cx, rowH = m[1][r + 1];
+            for (int k = 0; k < cols && r * cols + k < items.size(); k++) {
+                LayoutBox c = items.get(r * cols + k);
+                Insets mg = margin(c);
+                int colW = m[0][k + 1];
+                int w = resolve(c.style.size("width", Size.AUTO), colW - mg.horizontal(), prefW(c));
+                int h = resolve(c.style.size("height", Size.AUTO), rowH - mg.vertical(), prefH(c));
+                place(c, x + mg.left(), y + mg.top(), w, h);
+                x += colW + gap;
+            }
+            y += rowH + gap;
         }
     }
 
