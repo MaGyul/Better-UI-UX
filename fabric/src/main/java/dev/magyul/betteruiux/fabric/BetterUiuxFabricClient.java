@@ -16,13 +16,13 @@ public final class BetterUiuxFabricClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        Path uiDir = FabricLoader.getInstance().getConfigDir().resolve("better-uiux").resolve("ui");
+        Path baseDir = FabricLoader.getInstance().getConfigDir().resolve("better-uiux");
         // 개발용 자동 열기: 타이틀 화면이 뜬 뒤 한 번만 연다(시작 시점에 열면 타이틀 화면이 덮어쓴다).
         boolean[] opened = {false};
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (!opened[0] && client.gui.screen() instanceof TitleScreen) {
                 opened[0] = true;
-                UiOpener.autoOpenIfRequested(uiDir);
+                UiOpener.autoOpenIfRequested(baseDir);
             }
         });
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
@@ -30,7 +30,7 @@ public final class BetterUiuxFabricClient implements ClientModInitializer {
                         .then(ClientCommands.literal("open")
                                 .then(ClientCommands.argument("id", StringArgumentType.word())
                                         .executes(ctx -> {
-                                            UiOpener.open(StringArgumentType.getString(ctx, "id"), uiDir);
+                                            UiOpener.open(StringArgumentType.getString(ctx, "id"), baseDir);
                                             return 1;
                                         })))));
     }

@@ -19,13 +19,13 @@ public final class BetterUiuxNeoForgeClient {
     public static final String MOD_ID = "better_uiux";
 
     public BetterUiuxNeoForgeClient() {
-        Path uiDir = FMLPaths.CONFIGDIR.get().resolve("better-uiux").resolve("ui");
+        Path baseDir = FMLPaths.CONFIGDIR.get().resolve("better-uiux");
         // 개발용 자동 열기: 타이틀 화면이 뜬 뒤 한 번만 연다.
         boolean[] opened = {false};
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
             if (!opened[0] && Minecraft.getInstance().gui.screen() instanceof TitleScreen) {
                 opened[0] = true;
-                UiOpener.autoOpenIfRequested(uiDir);
+                UiOpener.autoOpenIfRequested(baseDir);
             }
         });
         NeoForge.EVENT_BUS.addListener((RegisterClientCommandsEvent e) ->
@@ -33,7 +33,7 @@ public final class BetterUiuxNeoForgeClient {
                         .then(Commands.literal("open")
                                 .then(Commands.argument("id", StringArgumentType.word())
                                         .executes(ctx -> {
-                                            UiOpener.open(StringArgumentType.getString(ctx, "id"), uiDir);
+                                            UiOpener.open(StringArgumentType.getString(ctx, "id"), baseDir);
                                             return 1;
                                         })))));
     }
