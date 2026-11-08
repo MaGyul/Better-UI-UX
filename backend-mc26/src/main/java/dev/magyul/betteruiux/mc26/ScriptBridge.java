@@ -54,8 +54,24 @@ final class ScriptBridge {
         mc.player.connection.sendCommand(line);
     }
 
+    private static final java.util.regex.Pattern SCRIPT_SRC = java.util.regex.Pattern.compile("<script[^>]*\\ssrc\\s*=\\s*[\"']([^\"']+)[\"']");
+    private static final java.util.regex.Pattern FUNCTION = java.util.regex.Pattern.compile("function\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*\\(");
+
+    /** 문서가 불러오는 스크립트들의 함수 이름을 {@code script:이름} 으로 모은다(에디터의 onClick/onChange 자동 완성용). */
+    static java.util.List<String> functionActions(String xml, Path userDir) {
+        java.util.Set<String> out = new java.util.TreeSet<>();
+        java.util.regex.Matcher m = SCRIPT_SRC.matcher(xml);
+        while (m.find()) {
+            String src = read(userDir, m.group(1));
+            if (src == null) continue;
+            java.util.regex.Matcher f = FUNCTION.matcher(src);
+            while (f.find()) if (!f.group(1).equals("onInit")) out.add("script:" + f.group(1));
+        }
+        return new java.util.ArrayList<>(out);
+    }
+
     /** 사용자 폴더, 없으면 기본 제공 리소스에서 스크립트를 읽는다. 폴더 밖으로 나가는 이름은 거부한다. */
-    private static String read(Path userDir, String name) {
+    static String read(Path userDir, String name) {
         if (name.isBlank() || name.length() > 128 || name.contains("..") || name.startsWith("/") || name.startsWith("\\")
                 || !name.matches("[A-Za-z0-9_./-]+")) return null;
         try {

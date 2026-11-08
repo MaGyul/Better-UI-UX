@@ -70,7 +70,17 @@ final class EditorBackend {
             /** 채팅창과 같은 시스템 클립보드(Ctrl+C/X/V). */
             @Override public java.util.List<String> suggestions(String key) {
                 return switch (key) {
-                    case "onClick", "onChange", "onSubmit" -> dev.magyul.betteruiux.core.doc.UiActions.registeredIds();
+                    case "onClick", "onChange", "onSubmit" -> {
+                        java.util.List<String> all = new java.util.ArrayList<>(dev.magyul.betteruiux.core.doc.UiActions.registeredIds());
+                        String text = diskText();
+                        try {
+                            if (text == null) text = UiSources.load(userDir, id).orElse("");
+                        } catch (IOException ignored) {
+                            text = "";
+                        }
+                        all.addAll(ScriptBridge.functionActions(text, userDir));   // script:함수 도 후보에 넣는다
+                        yield all;
+                    }
                     case "item" -> net.minecraft.core.registries.BuiltInRegistries.ITEM.keySet().stream()
                             .map(Object::toString).sorted().toList();
                     default -> java.util.List.of();
