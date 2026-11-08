@@ -300,6 +300,7 @@ public final class EditorController {
 
     /** 에디터를 닫을 때 호출한다(편집 중인 칸을 취소하고 글자 입력을 끈다). */
     public void close() {
+        closeItemPicker();
         cancelField();
         dnd = null;
         drag = null;
@@ -2822,9 +2823,16 @@ public final class EditorController {
         itemFilter.setLength(0);
         itemScrollRow = 0;
         itemIds = host.suggestions("item");
+        // 게임(SDL)은 글자 입력을 켜 줘야 검색어가 들어온다
+        int w = PICK_COLS * PICK_CELL + 10;
+        host.textInput(true, Math.max(2, (near == null ? viewW : near.x()) - w - 4), near == null ? TOOLBAR_H : near.y(), w, 11);
     }
 
-    private void closeItemPicker() { itemPicker = false; }
+    private void closeItemPicker() {
+        if (!itemPicker) return;
+        itemPicker = false;
+        host.textInput(false, 0, 0, 0, 0);
+    }
 
     private List<String> filteredItems() {
         String q = itemFilter.toString().trim().toLowerCase();

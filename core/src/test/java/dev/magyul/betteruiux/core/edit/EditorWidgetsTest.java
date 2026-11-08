@@ -142,6 +142,10 @@ class EditorWidgetsTest {
 
         @Override public String title() { return "t.xml"; }
 
+        final java.util.List<Boolean> textInput = new java.util.ArrayList<>();
+
+        @Override public void textInput(boolean active, int x, int y, int w, int h) { textInput.add(active); }
+
         @Override public java.util.List<String> suggestions(String key) {
             java.util.List<String> ids = new java.util.ArrayList<>();
             for (int i = 0; i < 100; i++) ids.add("minecraft:item_" + i);
@@ -162,7 +166,8 @@ class EditorWidgetsTest {
 
     @Test
     void itemFieldOpensAScrollableSearchableIconGrid() throws Exception {
-        EditorController e = new EditorController(new ItemHost(), new FixedMetrics(),
+        ItemHost host = new ItemHost();
+        EditorController e = new EditorController(host, new FixedMetrics(),
                 "<screen><item id=\"i\" item=\"minecraft:stick\" x=\"150\" y=\"40\"/></screen>", W, H);
         e.select(1);
         paint(e);
@@ -172,6 +177,7 @@ class EditorWidgetsTest {
         e.mouseMoved(row.x() + 2, row.y() + 2);
         e.mousePressed(row.x() + 2, row.y() + 2, 0);
         e.mouseReleased(row.x() + 2, row.y() + 2, 0);
+        assertEquals(java.util.List.of(true), host.textInput, "검색을 위해 글자 입력을 켠다");
         DrawList l = paint(e);
         assertTrue(l.commands().stream().filter(c -> c instanceof DrawCommand.DrawItem).count() >= 8 * 6, "격자(8x6)로 아이콘이 그려진다");
         assertTrue(hasText(l, "101개"));
@@ -190,6 +196,7 @@ class EditorWidgetsTest {
         e.mouseReleased(icon.x() + 3, icon.y() + 3, 0);
         assertTrue(e.text().contains("item=\"minecraft:diamond\""), e.text());
         assertFalse(hasText(paint(e), "1개"), "고르면 상자가 닫힌다");
+        assertEquals(java.util.List.of(true, false), host.textInput, "닫으면 글자 입력을 끈다");
     }
 
     @Test
