@@ -1,5 +1,6 @@
 package dev.magyul.betteruiux.mc26;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.magyul.betteruiux.api.TextMetrics;
 import dev.magyul.betteruiux.core.doc.ErrorOverlay;
 import dev.magyul.betteruiux.core.doc.UiDocument;
@@ -27,6 +28,8 @@ import org.slf4j.LoggerFactory;
 public final class UiScreen extends Screen {
     private static final Logger LOG = LoggerFactory.getLogger("better_uiux");
     private static final long RELOAD_QUIET_MS = 120;
+    /** -Dbetteruiux.debug=true : 입력 이벤트를 로그로 남긴다(개발용). */
+    private static final boolean DEBUG = Boolean.getBoolean("betteruiux.debug");
 
     private final String id;
     private final Path userDir;
@@ -124,12 +127,24 @@ public final class UiScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        return doc.mousePressed((int) event.x(), (int) event.y(), event.button()) || super.mouseClicked(event, doubleClick);
+        boolean used = doc.mousePressed((int) event.x(), (int) event.y(), uiButton(event));
+        if (DEBUG) LOG.info("[better-uiux] press ({}, {}) mc-button={} -> consumed={}", event.x(), event.y(), event.button(), used);
+        return used || super.mouseClicked(event, doubleClick);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        return doc.mouseReleased((int) event.x(), (int) event.y(), event.button()) || super.mouseReleased(event);
+        boolean used = doc.mouseReleased((int) event.x(), (int) event.y(), uiButton(event));
+        if (DEBUG) LOG.info("[better-uiux] release ({}, {}) mc-button={} -> consumed={}", event.x(), event.y(), event.button(), used);
+        return used || super.mouseReleased(event);
+    }
+
+    /**
+     * 마인크래프트 버튼 번호 → 코어 번호(DOM 관례: 0=좌, 1=가운데, 2=우).
+     * 26.x 는 SDL 기반이라 좌클릭이 1 이다(예전 GLFW 는 0). 상수를 기준으로 변환해 번호 체계 변경에 대비한다.
+     */
+    private static int uiButton(MouseButtonEvent event) {
+        return event.button() - InputConstants.MOUSE_BUTTON_LEFT;
     }
 
     @Override

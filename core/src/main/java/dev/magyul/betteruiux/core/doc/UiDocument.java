@@ -119,7 +119,11 @@ public final class UiDocument {
         return null;
     }
 
-    /** @return 입력을 소비했으면 true (버튼 위 좌클릭). */
+    /**
+     * 마우스 버튼 번호는 DOM 관례를 따른다: 0=좌, 1=가운데, 2=우. 백엔드가 게임의 번호를 이 체계로 변환해서 넘긴다.
+     *
+     * @return 입력을 소비했으면 true (버튼 위 좌클릭).
+     */
     public boolean mousePressed(int x, int y, int button) {
         if (button != 0) return false;
         pressed = hitButton(x, y);
