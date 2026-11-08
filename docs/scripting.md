@@ -14,8 +14,12 @@ enabled = true
 commands = "say"        # 스크립트가 실행할 수 있는 명령어의 첫 단어(쉼표로 구분). 비우면 모든 명령 거부
 ```
 
-JavaScript 런타임(GraalJS)은 **선택 모듈 `script-graal`** 이다. 개발 실행(`runClient`)에는 자동으로 들어가고, 배포 jar 에는 들어 있지 않다.
+JavaScript 런타임(GraalJS)은 **선택 모듈 `script-graal`** 이다(약 37MB). 개발 실행(`runClient`)에는 자동으로 들어가고, 배포 jar 에는 들어 있지 않다.
 런타임이 없으면 `<script>` 는 무시되고 경고만 나온다.
+
+**배포/설치**: `./gradlew :script-graal:bundleJar` 가 `script-graal/build/libs/script-graal-<버전>-bundle.jar` 를 만든다
+(GraalJS 의존성 + 우리 런타임 + Fabric/NeoForge 모드 정보가 든 모드 jar 하나, 모드 id `better_uiux_script`).
+Better UI/UX 와 같이 `mods` 폴더에 넣으면 된다. 스크립트가 필요 없는 모드팩은 이 jar 를 빼면 된다.
 
 ## 문서에 연결
 

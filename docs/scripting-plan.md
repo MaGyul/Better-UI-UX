@@ -1,6 +1,6 @@
 # 스크립트 계획 (JavaScript / GraalVM)
 
-> 상태: **S1~S4 구현됨**(사용법은 [scripting.md](scripting.md)). S5(배포 패키징, 추가 보안 점검)와 서버 정책 연동이 남아 있다.
+> 상태: **S1~S4 구현됨**(사용법은 [scripting.md](scripting.md)). S5(배포 묶음, 탈출 시도 테스트)도 구현됨. 서버 정책 연동과 힙 상한(별도 프로세스)이 남아 있다.
 
 ## 목표
 
@@ -94,4 +94,5 @@ function buy(ev) {
 - **S2 완료**: `script-graal`(GraalJS 25.0.5, 샌드박스, 문장 수/시간 한도, 한도 초과 시 컨텍스트 재생성). 게임에서 동작 확인(Fabric).
 - **S3 완료**: 명령 실행(`ScriptBridge` → 플레이어 명령), 허용 목록/레이트 리밋. *서버가 클라이언트의 스크립트를 막는 정책은 M4.5(서버 동기화)와 함께.*
 - **S4 완료**: 에디터의 `onClick`/`onChange`/`onSubmit` 칸에서 `script:함수` 자동 완성. 에디터에서는 스크립트를 실행하지 않는다.
-- **S5 남음**: 배포용 패키징(선택 모듈을 별도 jar/모드로 어떻게 줄지), 탈출 시도 테스트 확대, 힙 상한(별도 프로세스) 검토.
+- **S5 완료**: `:script-graal:bundleJar` 로 모드 jar 하나(약 37MB, Fabric+NeoForge 메타데이터, Truffle 서비스 파일 병합)를 만든다. 탈출 시도 테스트 추가(응답 위조, 요청 폭주, import/Java 접근, Atomics.wait, 재귀/정규식 폭탄).
+- **남음**: 힙 메모리 상한(GraalVM Community 미지원 → 별도 프로세스로 옮길지 검토), 서버 정책(M4.5).
