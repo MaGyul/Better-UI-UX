@@ -47,6 +47,8 @@ public final class ServerSyncCore {
 
     /** 위반이 이 횟수를 넘으면 그 클라이언트의 동기화를 끈다(연결은 끊지 않는다). */
     public static final int MAX_VIOLATIONS = 10;
+    /** 이 시간 동안 위반이 없으면 위반 횟수를 0 으로 되돌린다(실수로 몇 번 틀린 것과 계속되는 공격을 구분한다). */
+    private static final long VIOLATION_DECAY_NANOS = 60_000_000_000L;
     private static final int CHUNKS_PER_TICK = 8;
 
     private volatile ServerBundle bundle = ServerBundle.EMPTY;
@@ -78,6 +80,8 @@ public final class ServerSyncCore {
         private final RateLimiter messages, actionLimiter;
         private boolean active, disabled;
         private int violations;
+        private long lastViolation;
+        private final LongSupplier nanos;
         private final Set<String> openUis = new HashSet<>();
         private final Map<String, Object> state = new LinkedHashMap<>();
         private final Deque<BundleChunk> pending = new ArrayDeque<>();
@@ -87,6 +91,7 @@ public final class ServerSyncCore {
         private ServerSession(String playerId, Outbox out, LongSupplier nanos) {
             this.playerId = playerId;
             this.out = out;
+            this.nanos = nanos;
             this.messages = new RateLimiter(100, 200, nanos);
             this.actionLimiter = new RateLimiter(5, 10, nanos);
         }
@@ -101,6 +106,9 @@ public final class ServerSyncCore {
         public Set<String> openUis() { return Set.copyOf(openUis); }
 
         private void violation(String why) {
+            long now = nanos.getAsLong();
+            if (violations > 0 && now - lastViolation > VIOLATION_DECAY_NANOS) violations = 0;
+            lastViolation = now;
             if (++violations > MAX_VIOLATIONS) disabled = true;
         }
 
@@ -166,10 +174,7 @@ public final class ServerSyncCore {
                 violation("활성화되지 않은 클라이언트의 동작");
                 return;
             }
-            if (!actionLimiter.allow()) {
-                violation("동작을 너무 자주 보냈습니다");
-                return;
-            }
+            if (!actionLimiter.allow()) return;                                 // 연타: 넘치는 것은 조용히 버린다(위반으로 세지 않는다)
             if (!openUis.contains(a.uiId())) {                                  // 그 플레이어에게 그 UI 가 열려 있어야 한다
                 violation("열려 있지 않은 UI 의 동작: " + a.uiId());
                 return;
@@ -179,13 +184,14 @@ public final class ServerSyncCore {
                 violation("등록되지 않은 동작: " + a.actionId());
                 return;
             }
-            String why = e.schema().validate(a.args());
+            Map<String, Object> args = e.schema().coerce(a.args());
+            String why = e.schema().validate(args);
             if (why != null) {
                 violation("동작 인자 오류(" + a.actionId() + "): " + why);
                 return;
             }
             try {
-                e.handler().handle(playerId, a.args());
+                e.handler().handle(playerId, args);
             } catch (RuntimeException ex) {
                 violation("동작 처리 중 오류: " + ex);
             }

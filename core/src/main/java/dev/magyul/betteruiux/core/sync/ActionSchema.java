@@ -32,6 +32,22 @@ public final class ActionSchema {
 
     public static ActionSchema none() { return new ActionSchema(); }
 
+    /**
+     * XML 속성에서 온 값은 형을 추측해 보내므로(예: 문자열 칸에 "123" 이 정수로) 스키마가 기대하는 형으로 맞춰 준다.
+     * 맞출 수 없으면 그대로 두어 {@link #validate} 가 거부한다.
+     */
+    public Map<String, Object> coerce(Map<String, Object> given) {
+        Map<String, Object> out = new LinkedHashMap<>(given);
+        for (Map.Entry<String, Object> e : out.entrySet()) {
+            Arg a = args.get(e.getKey());
+            Object v = e.getValue();
+            if (a == null) continue;
+            if (a.type() == Type.STRING && !(v instanceof String)) e.setValue(String.valueOf(v));
+            else if (a.type() == Type.INT && v instanceof Double d && d == Math.rint(d) && Math.abs(d) < 9e15) e.setValue((long) d.doubleValue());
+        }
+        return out;
+    }
+
     /** @return 거부 사유(올바르면 null) */
     public String validate(Map<String, Object> given) {
         for (String key : given.keySet()) if (!args.containsKey(key)) return "알 수 없는 인자: " + key;

@@ -70,6 +70,27 @@ public final class ServerSync {
 
     public static ServerSyncCore.ServerSession session(ServerPlayer p) { return SESSIONS.get(p.getUUID()); }
 
+    public static ServerSyncCore.ServerSession sessionById(String playerId) {
+        try { return SESSIONS.get(UUID.fromString(playerId)); } catch (IllegalArgumentException e) { return null; }
+    }
+
+    /** 플레이어에게 화면을 연다(그 플레이어 클라이언트에 이 모드와 서버 기능이 켜져 있을 때만). @return 열었으면 true */
+    public static boolean open(ServerPlayer p, String id, Map<String, Object> params) throws SyncException {
+        var s = session(p);
+        return s != null && s.open(id, params);
+    }
+
+    public static boolean close(ServerPlayer p, String id) {
+        var s = session(p);
+        return s != null && s.close(id);
+    }
+
+    /** 플레이어별 값을 설정한다(문서에서 {@code {server.키}} 로 읽는다). */
+    public static void set(ServerPlayer p, String key, Object value) throws SyncException {
+        var s = session(p);
+        if (s != null) s.set(key, value);
+    }
+
     /** 서버 스레드에서 매 틱: 번들 조각을 조금씩 보낸다. */
     public static void tick() {
         for (var s : SESSIONS.values()) s.tick();

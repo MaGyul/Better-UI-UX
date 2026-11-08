@@ -1,7 +1,9 @@
 package dev.magyul.betteruiux.fabric;
 
 import dev.magyul.betteruiux.core.sync.SyncLimits;
+import dev.magyul.betteruiux.mc26.ServerCommands;
 import dev.magyul.betteruiux.mc26.ServerSync;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import dev.magyul.betteruiux.mc26.SyncPayload;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -28,6 +30,8 @@ public final class BetterUiuxFabric implements ModInitializer {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> ServerSync.onJoin(handler.getPlayer()));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> ServerSync.onDisconnect(handler.getPlayer()));
         ServerTickEvents.END_SERVER_TICK.register(server -> ServerSync.tick());
+        ServerCommands.registerDemoActions();
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> ServerCommands.register(dispatcher));
         ServerLifecycleEvents.SERVER_STARTING.register(server -> ServerSync.loadBundle(FabricLoader.getInstance().getConfigDir().resolve("better-uiux")));
     }
 

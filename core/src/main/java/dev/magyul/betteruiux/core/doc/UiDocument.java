@@ -289,6 +289,11 @@ public final class UiDocument {
     /** {@code onClick="script:fn"} 처럼 {@code script:} 로 시작하는 액션을 받을 곳(스크립트 호스트가 등록한다). */
     public void setScriptDispatcher(java.util.function.BiConsumer<UiElement, String> d) { this.scriptDispatcher = d; }
 
+    private java.util.function.BiConsumer<UiElement, String> serverDispatcher;
+
+    /** {@code onClick="server:액션"} 처럼 {@code server:} 로 시작하는 액션을 받을 곳(서버가 연 화면에만 등록된다). */
+    public void setServerDispatcher(java.util.function.BiConsumer<UiElement, String> d) { this.serverDispatcher = d; }
+
     // ---- 바인딩: 텍스트의 {이름} 을 값으로 치환 ----
 
     /** {@code {이름}} 에 쓸 값을 공급한다. 값이 바뀌면 다음 프레임에 자동으로 다시 레이아웃된다. */
@@ -759,6 +764,11 @@ public final class UiDocument {
         if (action.startsWith("script:")) {
             if (scriptDispatcher != null) scriptDispatcher.accept(el, action.substring(7).trim());
             else addRuntimeWarning("스크립트가 꺼져 있습니다: '" + action + "'");
+            return;
+        }
+        if (action.startsWith("server:")) {
+            if (serverDispatcher != null) serverDispatcher.accept(el, action.substring(7).trim());
+            else addRuntimeWarning("서버 동작은 서버가 연 화면에서만 쓸 수 있습니다: '" + action + "'");
             return;
         }
         if (UiActions.dispatch(new UiActions.Context(this, el, action))) return;

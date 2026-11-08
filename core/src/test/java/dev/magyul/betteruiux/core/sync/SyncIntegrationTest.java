@@ -259,7 +259,7 @@ class SyncIntegrationTest {
     }
 
     @Test
-    void abusiveClientIsRateLimitedAndDisabled() throws Exception {
+    void buttonMashingIsDroppedButNotPunished() throws Exception {
         ServerSyncCore s = new ServerSyncCore(0);
         List<Object> got = new ArrayList<>();
         s.registerAction("ping", ActionSchema.none(), (p, a) -> got.add(1));
@@ -271,11 +271,29 @@ class SyncIntegrationTest {
 
         for (int i = 0; i < 100; i++) l.ss.onMessage(new SyncMessage.Action("ui", "ping", Map.of()));
         assertTrue(got.size() <= 10, "burst 한도를 넘어 처리됨: " + got.size());
-        assertTrue(l.ss.disabled());
+        assertFalse(l.ss.disabled());
         int before = got.size();
-        l.now += 10_000_000_000L;
+        l.now += 10_000_000_000L;                 // 시간이 지나면 다시 처리된다
         l.ss.onMessage(new SyncMessage.Action("ui", "ping", Map.of()));
-        assertEquals(before, got.size());      // 비활성이면 시간이 지나도 무시
+        assertEquals(before + 1, got.size());
+    }
+
+    @Test
+    void repeatedInvalidActionsDisableButOldMistakesDecay() throws Exception {
+        ServerSyncCore s = new ServerSyncCore(0);
+        Link l = new Link(s);
+        l.client.connected();
+        l.pump();
+        l.ss.open("ui", Map.of());
+        l.pump();
+
+        for (int i = 0; i < 5; i++) { l.ss.onMessage(new SyncMessage.Action("ui", "nope", Map.of())); l.now += 1_000_000_000L; }
+        assertFalse(l.ss.disabled());
+        l.now += 120_000_000_000L;                // 오래 조용했으면 기록이 지워진다
+        for (int i = 0; i < 5; i++) { l.ss.onMessage(new SyncMessage.Action("ui", "nope", Map.of())); l.now += 1_000_000_000L; }
+        assertFalse(l.ss.disabled());
+        for (int i = 0; i < 20; i++) { l.ss.onMessage(new SyncMessage.Action("ui", "nope", Map.of())); l.now += 100_000_000L; }
+        assertTrue(l.ss.disabled());
     }
 
     @Test
