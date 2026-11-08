@@ -83,8 +83,8 @@ class EditorPanFixTest {
         e.mousePressed(60, rowY(1), 0);              // 구조 트리의 panel#p 행
         e.mouseReleased(60, rowY(1), 0);
         assertEquals(1, e.selectedIndex());
-        // 요소 중심 (265,115) → 작업 영역 중심 (199,128): (-66, +13)
-        assertTrue(pannedBy(paint(e), -66, 13));
+        // 요소(240..290)의 오른쪽 끝이 작업 영역(~258)에 가려져 있다 → 여유 6px 을 두고 보이게 가로로만 -38 이동(세로는 이미 보임)
+        assertTrue(pannedBy(paint(e), -38, 0));
     }
 
     @Test
@@ -93,7 +93,7 @@ class EditorPanFixTest {
         e.mousePressed(60, rowY(1), 0);              // 트리 행을 누른 채(끌기 준비)
         assertTrue(pannedBy(paint(e), 0, 0), "누르고 있는 동안에는 화면이 움직이지 않는다");
         e.mouseReleased(60, rowY(1), 0);
-        assertTrue(pannedBy(paint(e), -66, 13));
+        assertTrue(pannedBy(paint(e), -38, 0));
     }
 
     // ---- 새 요소는 지금 보는 화면 한가운데에 ----
@@ -171,19 +171,19 @@ class EditorPanFixTest {
         EditorController e = editor(true);
         e.select(1);                                 // 가려진 패널을 찾도록 요청
         DrawList first = paint(e);
-        assertFalse(pannedBy(first, -66, 13), "첫 프레임은 아직 목표에 도달하지 않았다");
+        assertFalse(pannedBy(first, -38, 0), "첫 프레임은 아직 목표에 도달하지 않았다");
         assertFalse(pannedBy(first, 0, 0), "하지만 움직이기 시작했다");
         DrawList last = first;
         for (int i = 0; i < 40; i++) last = paint(e);
-        assertTrue(pannedBy(last, -66, 13), "여러 프레임 뒤에는 목표에 정확히 도착한다");
+        assertTrue(pannedBy(last, -38, 0), "여러 프레임 뒤에는 목표에 정확히 도착한다");
         e.mousePressed(150, 200, 0);                 // 빈 곳 → 루트
         e.mouseReleased(150, 200, 0);
         assertEquals(0, e.selectedIndex());
-        e.mousePressed(200, 120, 0);                 // 화면 (200,120) = 문서 (266,107) = 패널 p 안(도착한 뒤의 좌표계)
-        e.mouseReleased(200, 120, 0);
+        e.mousePressed(210, 120, 0);                 // 도착한 뒤의 좌표계: 화면 (210,120) = 문서 (248,120) = 패널 p(240..290) 안
+        e.mouseReleased(210, 120, 0);
         assertEquals(1, e.selectedIndex());
-        e.mousePressed(228, 120, 0);                 // 화면 (228,120) = 문서 (294,107): 패널 p(240..290) 오른쪽 밖 → 루트
-        e.mouseReleased(228, 120, 0);
+        e.mousePressed(160, 120, 0);                 // 화면 (160,120) = 문서 (198,120): 패널 p 왼쪽 밖 → 루트
+        e.mouseReleased(160, 120, 0);
         assertEquals(0, e.selectedIndex());
     }
 }

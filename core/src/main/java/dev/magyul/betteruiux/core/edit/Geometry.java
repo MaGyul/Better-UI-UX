@@ -14,6 +14,9 @@ import java.util.TreeSet;
  * 배치 공식은 {@link LayoutEngine#anchorPosition} 을 그대로 써서 렌더링 결과와 어긋나지 않게 한다.
  */
 public final class Geometry {
+    /** {@link #propsForRect} 의 curX/curY 로 "지금 오프셋을 모른다(새 기준점이라 항상 새로 계산해서 쓴다)" 를 뜻한다. */
+    public static final int UNKNOWN = Integer.MIN_VALUE;
+
     private Geometry() {}
 
     public record Rect(int x, int y, int w, int h) {
@@ -87,8 +90,9 @@ public final class Geometry {
             int[] base = LayoutEngine.anchorPosition(parentContent.x(), parentContent.y(), parentContent.w(),
                     parentContent.h(), margin, anchor, after.w(), after.h());
             int ox = after.x() - base[0], oy = after.y() - base[1];
-            if (ox != curX) out.put("x", ox == 0 ? null : Integer.toString(ox));
-            if (oy != curY) out.put("y", oy == 0 ? null : Integer.toString(oy));
+            // curX/curY 가 UNKNOWN 이면(기준점이 바뀐 경우) 새 기준점 기준으로 항상 다시 쓴다.
+            if (curX == UNKNOWN || ox != curX) out.put("x", ox == 0 ? null : Integer.toString(ox));
+            if (curY == UNKNOWN || oy != curY) out.put("y", oy == 0 ? null : Integer.toString(oy));
         }
         return out;
     }
@@ -152,4 +156,89 @@ public final class Geometry {
     }
 
     public static int toGrid(int v, int grid) { return grid <= 1 ? v : Math.round(v / (float) grid) * grid; }
+
+    // ---- 범위 제한 ----
+
+    /**
+     * 이동한 사각형을 부모 영역 안으로 되돌린다(크기는 그대로). 부모보다 큰 요소는 시작 쪽에 맞춘다.
+     */
+    public static Rect clamp(Rect r, Rect bounds) {
+        int x = r.w() >= bounds.w() ? bounds.x() : Math.max(bounds.x(), Math.min(r.x(), bounds.right() - r.w()));
+        int y = r.h() >= bounds.h() ? bounds.y() : Math.max(bounds.y(), Math.min(r.y(), bounds.bottom() - r.h()));
+        return new Rect(x, y, r.w(), r.h());
+    }
+
+    /**
+     * 크기 조절한 사각형에서 <b>끌고 있는 변만</b> 부모 영역 안으로 되돌린다(끌지 않는 변은 건드리지 않는다).
+     * 최소 크기 {@code min} 아래로는 줄어들지 않는다.
+     */
+    public static Rect clampEdges(Rect r, Rect bounds, int min, Handle h) {
+        boolean mL = h == Handle.W || h == Handle.NW || h == Handle.SW;
+        boolean mR = h == Handle.E || h == Handle.NE || h == Handle.SE;
+        boolean mT = h == Handle.N || h == Handle.NW || h == Handle.NE;
+        boolean mB = h == Handle.S || h == Handle.SW || h == Handle.SE;
+        int l = r.x(), rt = r.right(), t = r.y(), b = r.bottom();
+        if (mL) l = Math.max(l, bounds.x());
+        if (mR) rt = Math.min(rt, bounds.right());
+        if (mT) t = Math.max(t, bounds.y());
+        if (mB) b = Math.min(b, bounds.bottom());
+        int w = Math.max(min, rt - l), hh = Math.max(min, b - t);
+        return new Rect(mL ? rt - w : l, mT ? b - hh : t, w, hh);
+    }
+
+    // ---- 기준점(anchor) 자동 추론 ----
+
+    /** 기준점 문자열을 (세로, 가로) 각각 0=시작(top/left) 1=가운데 2=끝(bottom/right) 로 푼다. null 은 top-left. */
+    static int[] anchorAxes(String anchor) {
+        if (anchor == null) return new int[] {0, 0};
+        String a = anchor.toLowerCase();
+        int h = a.contains("left") ? 0 : a.contains("right") ? 2 : 1;
+        int v = a.contains("top") ? 0 : a.contains("bottom") ? 2 : 1;
+        return new int[] {v, h};
+    }
+
+    /** (세로, 가로) → 기준점 문자열. 예: (0,2) → "top-right", (1,1) → "center", (1,2) → "right". */
+    static String composeAnchor(int v, int h) {
+        String vp = v == 0 ? "top" : v == 2 ? "bottom" : "";
+        String hp = h == 0 ? "left" : h == 2 ? "right" : "";
+        if (vp.isEmpty() && hp.isEmpty()) return "center";
+        if (vp.isEmpty()) return hp;
+        if (hp.isEmpty()) return vp;
+        return vp + "-" + hp;
+    }
+
+    /** 같은 뜻의 기준점을 하나의 표기로 맞춘다(비교용). null → "top-left". */
+    public static String normalizeAnchor(String anchor) {
+        int[] a = anchorAxes(anchor);
+        return composeAnchor(a[0], a[1]);
+    }
+
+    /**
+     * 요소가 놓인 자리로부터 기준점을 정한다. 요소를 부모의 오른쪽/아래쪽 끝(또는 가운데)에 붙여 두면 그 끝을 기준으로 삼아,
+     * 창 크기가 바뀌어도 요소가 그 끝에 붙어 있게 한다.
+     *
+     * <ul>
+     *   <li>축마다 따로 판단한다(가로: left/가운데/right, 세로: top/가운데/bottom).</li>
+     *   <li><b>끈적하게</b>: 지금 기준점이 가리키는 선에서 {@code threshold + 4} 이내면 바꾸지 않는다(조금 움직였다고 기준점이 뒤바뀌지 않게).</li>
+     *   <li>벗어났을 때만: 가운데({@code allowCenter} 일 때 3px 이내), 끝(threshold 이내이고 시작보다 가까움), 시작(threshold 이내)
+     *       중 맞는 쪽으로 옮기고, 어디에도 가깝지 않으면 지금 기준점을 유지한다.</li>
+     * </ul>
+     */
+    public static String inferAnchor(Rect r, Rect bounds, String current, int threshold, boolean allowCenter) {
+        int[] cur = anchorAxes(current);
+        int h = inferAxis(r.x(), r.right(), bounds.x(), bounds.right(), cur[1], threshold, allowCenter);
+        int v = inferAxis(r.y(), r.bottom(), bounds.y(), bounds.bottom(), cur[0], threshold, allowCenter);
+        return composeAnchor(v, h);
+    }
+
+    private static int inferAxis(int lo, int hi, int blo, int bhi, int cur, int threshold, boolean allowCenter) {
+        int dStart = Math.abs(lo - blo), dEnd = Math.abs(bhi - hi);
+        int dCenter = Math.abs((lo + hi) - (blo + bhi)) / 2;
+        int keep = cur == 0 ? dStart : cur == 1 ? dCenter : dEnd;
+        if (keep <= threshold + 4) return cur;
+        if (allowCenter && dCenter <= 3) return 1;
+        if (dEnd <= threshold && dEnd < dStart) return 2;
+        if (dStart <= threshold) return 0;
+        return cur;
+    }
 }

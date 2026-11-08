@@ -136,13 +136,21 @@ class EditorDragDropTest {
     }
 
     @Test
-    void droppingOnEmptyCanvasGoesIntoTheRootAndSidePanelsAreNotDropTargets() {
+    void droppingOnEmptyCanvasGoesIntoTheRootAndTheToolbarIsNotADropTarget() {
         dragBlock("panel", 230, 200);                                    // 빈 캔버스 → screen(루트)
         assertEquals(3, src().root().children().size());
         assertEquals("panel", src().element(ed.selectedIndex()).tag);
         String before = ed.text();
-        dragBlock("label", 300, 120);                                    // 오른쪽 속성 패널 위 → 놓을 곳 없음
+        dragBlock("label", 200, 8);                                      // 도구 모음 위 → 놓을 곳 없음
         assertEquals(before, ed.text());
+    }
+
+    @Test
+    void theAreaUnderTheHiddenPropertyPanelIsDroppableWhileDragging() {
+        // 끄는 동안 오른쪽 속성 패널은 숨겨지므로 그 자리(오른쪽 142px)도 캔버스다. 놓는 순간 패널이 되살아나 무시되면 안 된다.
+        dragBlock("label", 380, 120);
+        assertEquals(3, src().root().children().size());
+        assertEquals("label", src().element(ed.selectedIndex()).tag);
     }
 
     @Test

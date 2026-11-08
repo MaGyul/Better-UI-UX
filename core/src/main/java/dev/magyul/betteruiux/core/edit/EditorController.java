@@ -54,6 +54,10 @@ public final class EditorController {
             Map.entry("color", "글자색"), Map.entry("border", "테두리"), Map.entry("border-color", "테두리색"),
             Map.entry("opacity", "투명도"), Map.entry("use", "배경효과"));
     private static final int HANDLE_R = 3, MIN_SIZE = 4, SNAP_THRESHOLD = 4, DRAG_START = 3, GRID = 8, WHEEL_STEP = 16;
+    /** 기준점 자동 추론 임계값: 끌어 놓았을 때 / 팔레트에서 놓았을 때(가운데는 놓을 때 추론하지 않는다). */
+    private static final int ANCHOR_T = 8, DROP_ANCHOR_T = 6;
+    /** 선택한 요소를 화면으로 불러올 때 작업 영역 가장자리와 띄울 여유. */
+    private static final int REVEAL_MARGIN = 6;
     private static final int C_PANEL = 0xF2161820, C_BTN = 0xFF3A3F55, C_BTN_OFF = 0xFF262838, C_SEL = 0xFFFFFF55,
             C_HOVER = 0x9055FFFF, C_GUIDE = 0xFFFF55FF, C_TEXT = 0xFFFFFFFF, C_DIM = 0xFF9090A0, C_ERR = 0xFFFF6060,
             C_OK = 0xFF80FF80, C_ROW_SEL = 0xFF3A4A80, C_ROW_HOVER = 0xFF2A3050, C_FIELD = 0xFF101018,
@@ -132,6 +136,8 @@ public final class EditorController {
     private final boolean animatePan;
     private boolean panning;
     private int panAnchorX, panAnchorY;
+    /** 요소를 가장자리/가운데에 붙이면 기준점(anchor)을 자동으로 그쪽으로 바꾼다. */
+    private boolean autoAnchor = true;
     private Drag drag;
     private Dnd dnd;
     private List<Geometry.Guide> guides = List.of();
@@ -436,8 +442,12 @@ public final class EditorController {
         }
         if (dnd != null) {
             Dnd d = dnd;
-            dnd = null;
-            finishDnd(d, x, y);
+            try {
+                // 놓는 순간까지 끌기 상태를 유지한다: 끄는 동안 숨겨져 있던 오른쪽 패널 자리에 놓은 것도 캔버스에 놓은 것으로 처리해야 한다.
+                finishDnd(d, x, y);
+            } finally {
+                dnd = null;
+            }
             return true;
         }
         if (drag == null) return true;
@@ -524,7 +534,7 @@ public final class EditorController {
         d.parentContent = parent == null ? new Rect(0, 0, viewW, viewH) : contentRect(parent);
         d.curX = b.style.integer("x", 0);
         d.curY = b.style.integer("y", 0);
-        for (String k : List.of("width", "height", "x", "y")) {
+        for (String k : List.of("width", "height", "x", "y", "anchor")) {
             d.definedElsewhere.put(k, b.style.get(k) != null && b.node.attr(k) == null);
         }
         List<LayoutBox> siblings = new ArrayList<>(parent == null ? List.of() : displayChildren(parent));
@@ -548,8 +558,13 @@ public final class EditorController {
             ok = applyReorderDrag(d, mx, my);
         } else {
             Rect target = snapped(d, Geometry.drag(d.startRect, d.handle, dx, dy, MIN_SIZE));
-            Map<String, String> props = Geometry.propsForRect(d.parentFlow, d.anchor, d.margin, d.parentContent,
-                    d.startRect, target, d.curX, d.curY);
+            // 가장자리/중심선에 붙인 요소는 그쪽을 기준점으로 삼는다(창 크기가 바뀌어도 그 끝에 붙어 있도록).
+            String anchor = Geometry.normalizeAnchor(d.anchor);
+            if (autoAnchor && !d.parentFlow) anchor = Geometry.inferAnchor(target, d.parentContent, d.anchor, ANCHOR_T, true);
+            boolean anchorChanged = !anchor.equals(Geometry.normalizeAnchor(d.anchor));
+            Map<String, String> props = Geometry.propsForRect(d.parentFlow, anchor, d.margin, d.parentContent,
+                    d.startRect, target, anchorChanged ? Geometry.UNKNOWN : d.curX, anchorChanged ? Geometry.UNKNOWN : d.curY);
+            if (anchorChanged) props.put("anchor", anchor.equals("top-left") ? null : anchor);
             ok = session.setTransient(src -> EditorOps.setProps(src.text(), d.index, props,
                     p -> d.definedElsewhere.getOrDefault(p, false)));
             d.resultIndex = d.index;
@@ -605,8 +620,12 @@ public final class EditorController {
             int w = Math.max(MIN_SIZE, rt - l), h = Math.max(MIN_SIZE, b - t);
             out = new Rect(mL ? rt - w : l, mT ? b - h : t, w, h);
         }
+        // 부모(루트의 자식이면 화면) 밖으로는 나갈 수 없다.
+        Rect bounded = d.handle == Handle.BODY
+                ? Geometry.clamp(out, d.parentContent)
+                : Geometry.clampEdges(out, d.parentContent, MIN_SIZE, d.handle);
         guides = g;
-        return out;
+        return bounded;
     }
 
     private int edge(int value, List<Integer> targets, boolean vertical, List<Geometry.Guide> guideOut) {
@@ -751,11 +770,38 @@ public final class EditorController {
             LayoutBox box = boxByIndex(tmp.layout(), index), parent = boxByIndex(tmp.layout(), parentIndex);
             if (box == null || parent == null || isFlow(parent)) return text;
             Rect before = rectOf(box);
-            Rect desired = new Rect(x - before.w() / 2, y - before.h() / 2, before.w(), before.h());
-            Map<String, String> props = Geometry.propsForRect(false, box.style.get("anchor"),
-                    Insets.parse(box.style.get("margin"), Insets.ZERO), contentRect(parent), before, desired,
-                    box.style.integer("x", 0), box.style.integer("y", 0));
+            Rect content = contentRect(parent);
+            // 부모 밖으로는 놓을 수 없다: 놓은 지점이 가장자리 근처면 안쪽으로 당긴다.
+            Rect desired = Geometry.clamp(new Rect(x - before.w() / 2, y - before.h() / 2, before.w(), before.h()), content);
+            // 오른쪽/아래쪽 끝에 붙여 놓았다면 그 끝을 기준점으로 삼는다(놓을 때는 가운데는 추론하지 않는다).
+            String anchor = Geometry.normalizeAnchor(box.style.get("anchor"));
+            if (autoAnchor) anchor = Geometry.inferAnchor(desired, content, box.style.get("anchor"), DROP_ANCHOR_T, false);
+            boolean anchorChanged = !anchor.equals(Geometry.normalizeAnchor(box.style.get("anchor")));
+            Map<String, String> props = Geometry.propsForRect(false, anchor,
+                    Insets.parse(box.style.get("margin"), Insets.ZERO), content, before, desired,
+                    anchorChanged ? Geometry.UNKNOWN : box.style.integer("x", 0),
+                    anchorChanged ? Geometry.UNKNOWN : box.style.integer("y", 0));
+            if (anchorChanged) props.put("anchor", anchor.equals("top-left") ? null : anchor);
             return EditorOps.setProps(text, index, props, p -> false);
+        } catch (UiParseException | IllegalArgumentException e) {
+            return text;
+        }
+    }
+
+    /**
+     * 기준점을 바꾼 편집의 결과 텍스트에서, 요소가 원래 있던 자리({@code desired})에 그대로 있도록 x/y 오프셋을 다시 계산한다.
+     * (기준점만 바꾸면 이전 오프셋이 새 기준점에 적용돼 요소가 엉뚱한 곳으로 가 버리므로.)
+     */
+    private String keepRect(String text, int index, int parentIndex, Rect desired) {
+        try {
+            UiDocument tmp = host.load(text);
+            tmp.layout(viewW, viewH);
+            LayoutBox box = boxByIndex(tmp.layout(), index), parent = boxByIndex(tmp.layout(), parentIndex);
+            if (box == null || parent == null || isFlow(parent)) return text;
+            Map<String, String> props = Geometry.propsForRect(false, box.style.get("anchor"),
+                    Insets.parse(box.style.get("margin"), Insets.ZERO), contentRect(parent), rectOf(box), desired,
+                    Geometry.UNKNOWN, Geometry.UNKNOWN);
+            return EditorOps.setProps(text, index, props, p -> box.style.get(p) != null && box.node.attr(p) == null);
         } catch (UiParseException | IllegalArgumentException e) {
             return text;
         }
@@ -1066,12 +1112,16 @@ public final class EditorController {
             if (k < after.size()) selected = after.get(k).node.sourceIndex();
             return;
         }
-        int curX = b.style.integer("x", 0) + dx * step, curY = b.style.integer("y", 0) + dy * step;
+        // 기준점에 맞는 오프셋으로 한 칸 옮기되, 부모 밖으로는 나가지 않는다.
+        Rect before = rectOf(b);
+        Rect content = contentRect(b.parent);
+        Rect desired = Geometry.clamp(before.translate(dx * step, dy * step), content);
+        if (desired.equals(before)) return;
         int idx = selected;
         LayoutBox box = b;
-        Map<String, String> props = new LinkedHashMap<>();
-        if (dx != 0) props.put("x", curX == 0 ? null : Integer.toString(curX));
-        if (dy != 0) props.put("y", curY == 0 ? null : Integer.toString(curY));
+        Map<String, String> props = Geometry.propsForRect(false, b.style.get("anchor"),
+                Insets.parse(b.style.get("margin"), Insets.ZERO), content, before, desired,
+                b.style.integer("x", 0), b.style.integer("y", 0));
         applyEdit(src -> EditorOps.setProps(src.text(), idx, props,
                 p -> box.style.get(p) != null && box.node.attr(p) == null));
     }
@@ -1110,6 +1160,18 @@ public final class EditorController {
         if (key == null || box == null) return;
         String value = raw.isEmpty() ? null : raw;
         int idx = selected;
+        LayoutBox parentBox = box.parent;
+        if (key.equals("anchor") && parentBox != null && !isFlow(parentBox)) {
+            // 기준점만 바꾸면 요소가 엉뚱한 곳으로 가 버리므로, 같은 자리에 그대로 있도록 x/y 를 새 기준점에 맞게 다시 계산한다.
+            Rect keep = rectOf(box);
+            int parentIdx = parentBox.node.sourceIndex();
+            applyEdit(src -> {
+                String t1 = EditorOps.setProp(src, src.element(idx), "anchor", value,
+                        box.style.get("anchor") != null && box.node.attr("anchor") == null);
+                return keepRect(t1, idx, parentIdx, keep);
+            });
+            return;
+        }
         applyEdit(src -> {
             Element el = src.element(idx);
             if (key.equals("text")) return EditorOps.setText(src, el, raw);
@@ -1223,9 +1285,10 @@ public final class EditorController {
     // ================= 화면 이동(팬) =================
 
     /**
-     * 구조 트리에서 고르는 등 "찾아 달라"는 요청이 있을 때만, 선택한 요소가 양옆 패널에 가려지거나 화면 밖이면 가운데 작업 영역
-     * 중앙으로 보이게 옮긴다(캔버스에서 직접 누른 요소는 이미 눈앞에 있으므로 화면을 흔들지 않는다).
-     * 작업 영역보다 큰 요소(배경 패널, 루트)는 옮기지 않는다. 끄는 중에는 요청을 보류했다가 놓은 뒤에 처리한다.
+     * 구조 트리에서 고르는 등 "찾아 달라"는 요청이 있을 때만, 선택한 요소가 양옆 패널에 가려지거나 화면 밖이면
+     * <b>보이게 되는 데 필요한 만큼만</b> 화면을 옮긴다(작업 영역 가장자리에 여유를 두고). 가운데로 정렬하지 않는 이유:
+     * 화면 구석의 요소를 가운데로 데려오면 게임 화면 전체가 크게 밀려 "screen 위치가 어긋난" 것처럼 보이기 때문이다.
+     * 축마다 따로 판단하고, 작업 영역보다 큰 쪽의 축은 옮기지 않는다. 끄는 중에는 요청을 보류했다가 놓은 뒤에 처리한다.
      */
     private void autoPan() {
         if (!revealRequested || drag != null || dnd != null) return;
@@ -1234,11 +1297,18 @@ public final class EditorController {
         if (sb == null) return;
         Rect v = centerView();
         Rect r = rectOf(sb).translate(targetPanX, targetPanY);
-        if (r.w() > v.w() || r.h() > v.h()) return;
-        boolean inside = r.x() >= v.x() && r.right() <= v.right() && r.y() >= v.y() && r.bottom() <= v.bottom();
-        if (inside) return;
-        targetPanX += v.centerX() - r.centerX();
-        targetPanY += v.centerY() - r.centerY();
+        int m = REVEAL_MARGIN;
+        // 이미 완전히 보이는 축은 건드리지 않는다(가장자리에 딱 붙어 있어도 여유를 맞추려고 밀지 않는다).
+        boolean xVisible = r.x() >= v.x() && r.right() <= v.right();
+        boolean yVisible = r.y() >= v.y() && r.bottom() <= v.bottom();
+        if (!xVisible && r.w() <= v.w() - 2 * m) {
+            if (r.x() < v.x()) targetPanX += v.x() + m - r.x();
+            else targetPanX += v.right() - m - r.right();
+        }
+        if (!yVisible && r.h() <= v.h() - 2 * m) {
+            if (r.y() < v.y()) targetPanY += v.y() + m - r.y();
+            else targetPanY += v.bottom() - m - r.bottom();
+        }
     }
 
     // ================= 그리기 =================
@@ -1355,6 +1425,7 @@ public final class EditorController {
         x += button(g, x, y, "Del", selected > 0, this::deleteSelected);
         x += 4;
         x += button(g, x, y, grid ? "Grid:8" : "Grid:off", true, () -> grid = !grid);
+        x += button(g, x, y, autoAnchor ? "Anchor:auto" : "Anchor:keep", true, () -> autoAnchor = !autoAnchor);
         boolean panned = panX != 0 || panY != 0 || targetPanX != 0 || targetPanY != 0;
         x += button(g, x, y, panned ? "Fit!" : "Fit", panned, this::resetView, C_BTN_HOT);   // 옮겨 둔 상태면 눈에 띄게
         String title = host.title() + (session.isDirty() ? " *" : "");

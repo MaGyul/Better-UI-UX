@@ -136,18 +136,19 @@ class EditorViewTest {
     // ---- 화면 이동(팬) ----
 
     @Test
-    void selectingAnElementHiddenBehindASidePanelCentersItInTheWorkArea() throws Exception {
+    void selectingAnElementHiddenBehindASidePanelBringsItIntoTheWorkAreaWithMinimalMove() throws Exception {
         String xml = "<screen><panel id=\"p\" x=\"330\" y=\"100\" width=\"40\" height=\"30\" background=\"#FF336699\"/></screen>";
         EditorController e = new EditorController(host, new FixedMetrics(), xml, W, H);
         e.select(1);
         DrawList l = new DrawList();
         e.paint(l);
-        // 작업 영역(패널 사이) = x 140..258, y 16..240 → 중심 (199,128). 요소 중심 (350,115) → 이동량 (-151, +13)
-        assertTrue(pannedBy(l, -151, 13), "화면이 가운데로 옮겨진다");
+        // 작업 영역(패널 사이) = x 140..258. 요소(330..370)는 가려져 있으므로 오른쪽 끝이 여유 6px 을 두고 보이도록 -118 만큼만 옮긴다.
+        // 세로(100..130)는 이미 보이므로 건드리지 않는다.
+        assertTrue(pannedBy(l, -118, 0), "필요한 만큼만 옮겨진다(가운데 정렬이 아니라)");
         assertTrue(outlineTop(l, 330, 100, 40), "윤곽은 문서 좌표 그대로(이동 변환이 적용된다)");
         DrawList doc = new DrawList();
         e.paintDocument(doc);
-        assertEquals(new DrawCommand.PushTransform(-151, 13, 1f, 0f, 0f, 0f), doc.commands().get(0), "문서도 같이 옮겨 그린다");
+        assertEquals(new DrawCommand.PushTransform(-118, 0, 1f, 0f, 0f, 0f), doc.commands().get(0), "문서도 같이 옮겨 그린다");
     }
 
     @Test
