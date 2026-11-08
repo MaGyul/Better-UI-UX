@@ -120,6 +120,8 @@ public final class UiDocument {
             return p != null && b.node.isAncestorOf(p) && hovered(b);
         }
 
+        @Override public boolean focused(LayoutBox b) { return focusNode != null && b.node == focusNode; }
+
         @Override public StyleMap style(LayoutBox b) {
             StyleMap s = b.effective(hovered(b), pressed(b));
             return animationsEnabled ? anim.apply(b.node, s, frameNow) : s;
@@ -650,6 +652,11 @@ public final class UiDocument {
             applyDirty();
             return true;
         }
+        if (fb != null && fb.widget == null && fb.tag().equals("button") && (key == UiKey.ENTER || key == UiKey.SPACE)) {
+            fireAction(focusNode);                              // 포커스가 있는 버튼은 Enter/Space 로 누른다
+            applyDirty();
+            return true;
+        }
         if (key == UiKey.TAB) return moveFocus(shift ? -1 : 1);
         if (key == UiKey.ESCAPE && focusNode != null) {
             focus(null);
@@ -679,6 +686,7 @@ public final class UiDocument {
     private void collectFocusable(LayoutBox b, List<LayoutBox> out) {
         if (!b.visible()) return;
         if (b.widget != null && b.widget.focusable() && b.enabled()) out.add(b);
+        else if (b.widget == null && b.tag().equals("button") && b.enabled()) out.add(b);   // 버튼도 Tab 으로 고를 수 있다
         for (LayoutBox c : b.children) collectFocusable(c, out);
     }
 

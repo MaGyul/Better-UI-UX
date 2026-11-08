@@ -23,6 +23,16 @@ class EditorBoundsTest {
           <panel id="a" x="140" y="40" width="50" height="30" background="#FF336699"/>
         </screen>""";
 
+    private static void clickText(EditorController e, String text) {
+        DrawList l = new DrawList();
+        e.paint(l);
+        DrawCommand.DrawText t = l.commands().stream().filter(c -> c instanceof DrawCommand.DrawText d && d.text().equals(text))
+                .map(c -> (DrawCommand.DrawText) c).findFirst().orElseThrow();
+        e.mouseMoved(t.x() + 2, t.y() + 2);
+        e.mousePressed(t.x() + 2, t.y() + 2, 0);
+        e.mouseReleased(t.x() + 2, t.y() + 2, 0);
+    }
+
     private static final class Host implements EditorHost {
         @Override public UiDocument load(String text) throws UiParseException {
             return UiDocument.parse(text, new FixedMetrics());
@@ -214,13 +224,13 @@ class EditorBoundsTest {
         EditorController e = editor(XML);
         DrawList l = new DrawList();
         e.paint(l);
-        int x = l.commands().stream().filter(c -> c instanceof DrawCommand.DrawText t && t.text().equals("Anchor:auto"))
-                .map(c -> ((DrawCommand.DrawText) c).x()).findFirst().orElseThrow();
-        e.mousePressed(x, 5, 0);
-        e.mouseReleased(x, 5, 0);
-        DrawList after = new DrawList();
-        e.paint(after);
-        assertTrue(after.commands().stream().anyMatch(c -> c instanceof DrawCommand.DrawText t && t.text().equals("Anchor:keep")));
+        boolean direct = l.commands().stream().anyMatch(c -> c instanceof DrawCommand.DrawText t && t.text().equals("Anchor:auto"));
+        if (!direct) {                                                   // 좁은 창에서는 "..." 메뉴 안에 있다
+            clickText(e, "...");
+            clickText(e, "Anchor:auto");
+        } else {
+            clickText(e, "Anchor:auto");
+        }
         drag(e, 150, 50, 900, 50);
         assertNull(attr(e, A, "anchor"), "자동 기준점을 끄면 기준점을 바꾸지 않는다");
         assertEquals("350", attr(e, A, "x"));

@@ -68,8 +68,9 @@ public final class EditorController {
             Map.entry("onChange", "변경 이벤트"), Map.entry("onSubmit", "Enter 이벤트"), Map.entry("value", "값"), Map.entry("min", "최소"),
             Map.entry("max", "최대"), Map.entry("step", "단계"), Map.entry("maxlength", "최대길이"), Map.entry("placeholder", "안내글"),
             Map.entry("options", "선택지"), Map.entry("group", "그룹"), Map.entry("columns", "열 수"), Map.entry("title", "제목"),
-            Map.entry("item", "아이템 id"), Map.entry("count", "개수"), Map.entry("tooltip", "툴팁"), Map.entry("modal", "모달"));
-    private static final java.util.Set<String> COLOR_KEYS = java.util.Set.of("background", "color", "border-color");
+            Map.entry("item", "아이템 id"), Map.entry("count", "개수"), Map.entry("size", "크기"),
+            Map.entry("bar-color", "채움색"), Map.entry("fill-color", "채움색"), Map.entry("check-color", "체크색"), Map.entry("tooltip", "툴팁"), Map.entry("modal", "모달"));
+    private static final Set<String> COLOR_KEYS = java.util.Set.of("background", "color", "border-color", "bar-color", "fill-color", "check-color");
     private static final int SUGGEST_MAX = 6;
     private static final int HANDLE_R = 3, MIN_SIZE = 4, SNAP_THRESHOLD = 4, DRAG_START = 3, GRID = 8, WHEEL_STEP = 16;
     /** 기준점 자동 추론 임계값: 끌어 놓았을 때 / 팔레트에서 놓았을 때(가운데는 놓을 때 추론하지 않는다). */
@@ -83,7 +84,7 @@ public final class EditorController {
             SCREEN_OUTSIDE = 0x80000000, SCREEN_FRAME = 0xFF55AAFF, C_BTN_HOT = 0xFF7A6A20, C_SELECTION = 0xFF3A62B0;
 
     private static final Set<String> ATTR_KEYS = Set.of("id", "class", "onClick", "src", "text", "onChange", "onSubmit", "value", "checked",
-            "min", "max", "step", "maxlength", "placeholder", "options", "group", "columns", "title", "item", "count", "tooltip", "enabled", "modal");
+            "min", "max", "step", "maxlength", "placeholder", "options", "group", "columns", "title", "item", "count", "size", "tooltip", "enabled", "modal");
     private static final Set<String> CONTAINERS = Set.of("screen", "panel", "row", "column", "stack", "fragment", "grid", "scroll", "tabs", "tab", "dialog");
 
     /**
@@ -111,7 +112,7 @@ public final class EditorController {
             "overflow", List.of("visible", "hidden"));
     /** 값이 참/거짓인 속성과 그 기본값. */
     private static final Map<String, Boolean> BOOLS = Map.of("checked", false, "enabled", true, "visible", true, "shadow", true, "modal", true);
-    private static final Set<String> NUMBERS = Set.of("width", "height", "gap", "border", "x", "y", "opacity", "min", "max", "step", "maxlength", "columns", "count");
+    private static final Set<String> NUMBERS = Set.of("width", "height", "gap", "border", "x", "y", "opacity", "min", "max", "step", "maxlength", "columns", "count", "size");
 
     private static Kind kindOf(String key) {
         if (ENUMS.containsKey(key)) return Kind.ENUM;
@@ -864,6 +865,10 @@ public final class EditorController {
 
     /** 휠: 왼쪽 구조 트리 위에서는 목록 스크롤, 캔버스에서는 화면 이동. */
     public boolean mouseScrolled(int x, int y, double amount) {
+        if (itemPicker) {
+            itemScrollRow = Math.max(0, itemScrollRow - (int) Math.signum(amount) * 2);
+            return true;
+        }
         if (helpOpen) {
             helpScroll = Math.max(0, helpScroll - (int) Math.signum(amount) * 2);
             return true;
@@ -1220,6 +1225,13 @@ public final class EditorController {
     // ================= 입력: 키보드 =================
 
     public boolean charTyped(char c) {
+        if (itemPicker) {
+            if (c >= 32 && c != 127) {
+                itemFilter.append(c);
+                itemScrollRow = 0;
+            }
+            return true;
+        }
         if (editKey == null && c == '?' && exitDialog == false) {
             helpOpen = !helpOpen;
             return true;
@@ -1238,6 +1250,14 @@ public final class EditorController {
         if (exitDialog) {
             if (key == EditorKey.ESCAPE) exitDialog = false;
             else if (key == EditorKey.ENTER) saveAndExit();
+            return true;
+        }
+        if (itemPicker) {                                          // 아이템 선택 상자: Esc 닫기, Backspace 검색어 지우기
+            if (key == EditorKey.ESCAPE) closeItemPicker();
+            else if (key == EditorKey.BACKSPACE && itemFilter.length() > 0) {
+                itemFilter.setLength(itemFilter.length() - 1);
+                itemScrollRow = 0;
+            }
             return true;
         }
         if (helpOpen) {
@@ -1906,6 +1926,7 @@ public final class EditorController {
     private static void widgetRows(LayoutBox b, String tag, List<PropRow> rows) {
         switch (tag) {
             case "checkbox", "radio" -> {
+                rows.add(style(b, "check-color"));
                 rows.add(attr(b, "text"));
                 rows.add(attr(b, "checked"));
                 if (tag.equals("radio")) rows.add(attr(b, "group"));
@@ -1913,6 +1934,7 @@ public final class EditorController {
                 rows.add(attr(b, "onChange"));
             }
             case "slider" -> {
+                rows.add(style(b, "fill-color"));
                 rows.add(attr(b, "value"));
                 rows.add(numRow(b, "min"));
                 rows.add(numRow(b, "max"));
@@ -1922,6 +1944,7 @@ public final class EditorController {
                 rows.add(attr(b, "onChange"));
             }
             case "progress" -> {
+                rows.add(style(b, "bar-color"));
                 rows.add(attr(b, "value"));
                 rows.add(numRow(b, "min"));
                 rows.add(numRow(b, "max"));
@@ -1944,6 +1967,7 @@ public final class EditorController {
             case "item" -> {
                 rows.add(attr(b, "item"));
                 rows.add(numRow(b, "count"));
+                rows.add(numRow(b, "size"));
             }
             case "grid" -> rows.add(numRow(b, "columns"));
             case "tab" -> rows.add(attr(b, "title"));
@@ -2104,6 +2128,7 @@ public final class EditorController {
         paintToolTip(g);
         tipNow = null;
         paintMenu(g);
+        paintItemPicker(g);
         paintXmlView(g);
         paintHelp(g);
         paintExitDialog(g);
@@ -2235,7 +2260,7 @@ public final class EditorController {
             Map.entry("View", "XML 보기, 상태 미리보기, 도움말"), Map.entry("Grid", "8px 격자에 맞추기 켜고 끄기"),
             Map.entry("Anchor", "끌어 놓을 때 기준점(anchor) 자동 지정 켜고 끄기"), Map.entry("Fit", "화면 이동을 처음 위치로"),
             Map.entry("Hide", "툴바 숨기기 (맨 위에 마우스를 올리면 나타남)"), Map.entry("Pin", "툴바를 항상 보이게"),
-            Map.entry("Exit", "에디터 닫기 (F8)"), Map.entry("?", "도움말 (F1)"));
+            Map.entry("Exit", "에디터 닫기 (F8)"), Map.entry("?", "도움말 (F1)"), Map.entry("...", "창이 좁아 숨겨진 버튼 더 보기"));
 
     private String tipNow, tipPrev;
     private long tipSince;
@@ -2258,39 +2283,61 @@ public final class EditorController {
         g.drawText(tipNow, x + 4, y + 3, C_TEXT, false);
     }
 
+    private record ToolItem(String label, boolean enabled, java.util.function.Consumer<Rect> action, int bg, int gap) {}
+
     private void paintToolbar(UiGfx g) {
         g.fillRect(0, 0, viewW, TOOLBAR_H, C_PANEL);
         regions.add(new Region(new Rect(0, 0, viewW, TOOLBAR_H), null, null, true));   // 버튼이 아닌 빈 곳은 아래 캔버스로 통과
-        int x = 2, y = 2;
-        x += button(g, x, y, "Save" + (session.isDirty() ? "*" : ""), true, this::save);
-        x += button(g, x, y, "Undo", session.canUndo(), this::undo);
-        x += button(g, x, y, "Redo", session.canRedo(), this::redo);
-        x += 4;
-        x += button(g, x, y, "Dup", selected > 0, this::duplicate);
-        x += button(g, x, y, "Del", selected > 0, this::deleteSelected);
-        Rect wrapRect = new Rect(x, y, tm.width("Wrap") + 8, TOOLBAR_H - 4);
-        x += button(g, x, y, "Wrap", selected > 0, () -> openMenu(wrapRect, List.of("row", "column", "panel", "stack", "풀기(Unwrap)"),
-                item -> {
+        int y = 2, h = TOOLBAR_H - 4;
+        boolean panned = panX != 0 || panY != 0 || targetPanX != 0 || targetPanY != 0;
+        List<ToolItem> items = List.of(
+                new ToolItem("Save" + (session.isDirty() ? "*" : ""), true, r -> save(), C_BTN, 0),
+                new ToolItem("Undo", session.canUndo(), r -> undo(), C_BTN, 0),
+                new ToolItem("Redo", session.canRedo(), r -> redo(), C_BTN, 0),
+                new ToolItem("Dup", selected > 0, r -> duplicate(), C_BTN, 4),
+                new ToolItem("Del", selected > 0, r -> deleteSelected(), C_BTN, 0),
+                new ToolItem("Wrap", selected > 0, r -> openMenu(r, List.of("row", "column", "panel", "stack", "풀기(Unwrap)"), item -> {
                     if (item.startsWith("풀기")) unwrapSelected();
                     else wrapSelected(item);
-                }));
-        Rect alignRect = new Rect(x, y, tm.width("Align") + 8, TOOLBAR_H - 4);
-        x += button(g, x, y, "Align", selected > 0, () -> openMenu(alignRect, ALIGN_ITEMS, this::alignSelected));
-        x += 4;
-        x += button(g, x, y, grid ? "Grid:8" : "Grid:off", true, () -> grid = !grid);
-        x += button(g, x, y, autoAnchor ? "Anchor:auto" : "Anchor:keep", true, () -> autoAnchor = !autoAnchor);
-        Rect viewRect = new Rect(x, y, tm.width("View") + 8, TOOLBAR_H - 4);
-        x += button(g, x, y, "View", true, () -> openMenu(viewRect, List.of("XML 보기", "상태 미리보기: 없음", "상태 미리보기: hover", "상태 미리보기: active", "도움말"), item -> {
-            if (item.startsWith("XML")) xmlOpen = true;
-            else if (item.contains("없음")) previewState = 0;
-            else if (item.contains("hover")) previewState = 1;
-            else if (item.contains("active")) previewState = 2;
-            else helpOpen = true;
-        }));
-        boolean panned = panX != 0 || panY != 0 || targetPanX != 0 || targetPanY != 0;
-        x += button(g, x, y, panned ? "Fit!" : "Fit", panned, this::resetView, C_BTN_HOT);   // 옮겨 둔 상태면 눈에 띄게
+                }), C_BTN, 0),
+                new ToolItem("Align", selected > 0, r -> openMenu(r, ALIGN_ITEMS, this::alignSelected), C_BTN, 0),
+                new ToolItem(grid ? "Grid:8" : "Grid:off", true, r -> grid = !grid, C_BTN, 4),
+                new ToolItem(autoAnchor ? "Anchor:auto" : "Anchor:keep", true, r -> autoAnchor = !autoAnchor, C_BTN, 0),
+                new ToolItem("View", true, r -> openMenu(r, List.of("XML 보기", "상태 미리보기: 없음", "상태 미리보기: hover", "상태 미리보기: active", "도움말"), item -> {
+                    if (item.startsWith("XML")) xmlOpen = true;
+                    else if (item.contains("없음")) previewState = 0;
+                    else if (item.contains("hover")) previewState = 1;
+                    else if (item.contains("active")) previewState = 2;
+                    else helpOpen = true;
+                }), C_BTN, 0),
+                new ToolItem(panned ? "Fit!" : "Fit", panned, r -> resetView(), C_BTN_HOT, 0));
         int exitW = tm.width("Exit") + 8;
-        int rx = viewW - exitW - 2;
+        int exitX = viewW - exitW - 2, limit = exitX - 2;
+        int total = 2;
+        for (ToolItem it : items) total += it.gap() + tm.width(it.label()) + 8 + 2;
+        boolean overflow = total - 2 > limit;
+        int ovW = tm.width("...") + 8;
+        int x = 2;
+        List<ToolItem> hidden = new ArrayList<>();
+        for (ToolItem it : items) {
+            int w = tm.width(it.label()) + 8;
+            if (!hidden.isEmpty() || (overflow && x + it.gap() + w + 2 + ovW > limit)) {   // 안 들어가는 버튼은 "..." 메뉴로
+                hidden.add(it);
+                continue;
+            }
+            x += it.gap();
+            Rect r = new Rect(x, y, w, h);
+            x += button(g, x, y, it.label(), it.enabled(), () -> it.action().accept(r), it.bg());
+        }
+        if (!hidden.isEmpty()) {
+            Rect r = new Rect(x, y, ovW, h);
+            List<String> labels = new ArrayList<>();
+            for (ToolItem it : hidden) labels.add(it.label());
+            x += button(g, x, y, "...", true, () -> openMenu(r, labels, label -> {
+                for (ToolItem it : hidden) if (it.label().equals(label) && it.enabled()) it.action().accept(r);
+            }));
+        }
+        int rx = exitX;
         button(g, rx, y, "Exit", true, this::requestExit, 0xFF7A2A2A);                 // 에디터 닫기(F8 과 같다)
         String hideLabel = toolbarHidden ? "Pin" : "Hide";
         int hideW = tm.width(hideLabel) + 8;
@@ -2308,7 +2355,7 @@ public final class EditorController {
             }
         }
         String title = host.title() + (session.isDirty() ? " *" : "");
-        g.drawText(title, Math.max(x + 6, rx - tm.width(title) - 8), 4, C_DIM, false);
+        if (x + 6 + tm.width(title) <= rx - 4) g.drawText(title, Math.max(x + 6, rx - tm.width(title) - 8), 4, C_DIM, false);   // 자리가 없으면 생략
     }
 
     /** 패널 가장자리의 접기/펼치기 탭. */
@@ -2596,7 +2643,12 @@ public final class EditorController {
             }
             default -> {
                 g.drawText(fit(row.value(), fieldW - reserve), fieldX + 2, y + 1, row.editable() ? C_TEXT : C_DIM, false);
-                if (row.editable() && sees(panel, field)) regions.add(new Region(field, () -> startEdit(key, value, field)));
+                if (key.equals("item")) {                              // 아이템 칸: 아이콘 목록에서 고르기
+                    g.drawText("▦", field.right() - 9, y + 1, C_DIM, false);
+                    if (sees(panel, field)) regions.add(new Region(field, () -> openItemPicker(field)));
+                } else if (row.editable() && sees(panel, field)) {
+                    regions.add(new Region(field, () -> startEdit(key, value, field)));
+                }
             }
         }
     }
@@ -2753,6 +2805,88 @@ public final class EditorController {
     }
 
     // ---- 복사 / 붙여넣기 / 감싸기 ----
+
+    // ---- 아이템 선택 상자(격자 + 스크롤 + 검색) ----
+
+    private static final int PICK_COLS = 8, PICK_CELL = 18, PICK_ROWS = 6;
+    private boolean itemPicker;
+    private Rect itemPickerNear;
+    private final StringBuilder itemFilter = new StringBuilder();
+    private int itemScrollRow;
+    private List<String> itemIds = List.of();
+
+    private void openItemPicker(Rect near) {
+        commitFieldQuietly();
+        itemPicker = true;
+        itemPickerNear = near;
+        itemFilter.setLength(0);
+        itemScrollRow = 0;
+        itemIds = host.suggestions("item");
+    }
+
+    private void closeItemPicker() { itemPicker = false; }
+
+    private List<String> filteredItems() {
+        String q = itemFilter.toString().trim().toLowerCase();
+        if (q.isEmpty()) return itemIds;
+        List<String> out = new ArrayList<>();
+        for (String id : itemIds) if (id.toLowerCase().contains(q)) out.add(id);
+        return out;
+    }
+
+    private void paintItemPicker(UiGfx g) {
+        if (!itemPicker) return;
+        regions.add(new Region(new Rect(0, 0, viewW, viewH), this::closeItemPicker));       // 바깥을 누르면 닫는다
+        List<String> items = filteredItems();
+        int w = PICK_COLS * PICK_CELL + 10, h = PICK_ROWS * PICK_CELL + 30;
+        int x = Math.max(2, Math.min((itemPickerNear == null ? viewW : itemPickerNear.x()) - w - 4, viewW - w - 2));
+        int y = Math.max(TOOLBAR_H + 2, Math.min(itemPickerNear == null ? TOOLBAR_H : itemPickerNear.y(), viewH - h - 2));
+        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
+        g.fillRect(x, y, w, h, 0xFF161820);
+        regions.add(new Region(new Rect(x, y, w, h), null));
+        int totalRows = (items.size() + PICK_COLS - 1) / PICK_COLS;
+        itemScrollRow = Math.max(0, Math.min(itemScrollRow, Math.max(0, totalRows - PICK_ROWS)));
+        String q = itemFilter.toString();
+        g.fillRect(x + 4, y + 4, w - 8, 11, C_FIELD);
+        g.drawText(q.isEmpty() ? "검색... (글자를 입력)" : q + "_", x + 7, y + 6, q.isEmpty() ? C_DIM : C_TEXT, false);
+        g.drawText(items.size() + "개", x + w - 6 - tm.width(items.size() + "개"), y + 6, C_DIM, false);
+        int gx = x + 5, gy = y + 20;
+        String current = null;
+        LayoutBox sel = selectedBox();
+        if (sel != null) current = sel.node.attr("item");
+        String hoverId = null;
+        g.pushClip(gx, gy, PICK_COLS * PICK_CELL, PICK_ROWS * PICK_CELL);
+        for (int r = 0; r < PICK_ROWS; r++) {
+            for (int c = 0; c < PICK_COLS; c++) {
+                int i = (itemScrollRow + r) * PICK_COLS + c;
+                if (i >= items.size()) break;
+                String id = items.get(i);
+                Rect cell = new Rect(gx + c * PICK_CELL, gy + r * PICK_CELL, PICK_CELL, PICK_CELL);
+                boolean hot = cell.contains(mouseX, mouseY);
+                if (hot) hoverId = id;
+                g.fillRect(cell.x() + 1, cell.y() + 1, PICK_CELL - 2, PICK_CELL - 2, hot ? 0xFF3A4A80 : id.equals(current) ? 0xFF2E5A3A : 0xFF222536);
+                g.drawItem(id, cell.x() + 1, cell.y() + 1, 1);
+                regions.add(new Region(cell, () -> {
+                    closeItemPicker();
+                    applyValue("item", id);
+                }));
+            }
+        }
+        g.popClip();
+        if (totalRows > PICK_ROWS) {                                 // 스크롤 막대
+            int trackH = PICK_ROWS * PICK_CELL, thumbH = Math.max(8, trackH * PICK_ROWS / totalRows);
+            int thumbY = gy + (trackH - thumbH) * itemScrollRow / Math.max(1, totalRows - PICK_ROWS);
+            g.fillRect(x + w - 4, gy, 2, trackH, 0x30FFFFFF);
+            g.fillRect(x + w - 4, thumbY, 2, thumbH, 0xA0FFFFFF);
+        }
+        if (hoverId != null) {                                       // 마우스 아래 아이템 id
+            int tw = tm.width(hoverId) + 8;
+            int tx = Math.max(2, Math.min(mouseX + 8, viewW - tw - 2)), ty = Math.min(mouseY + 12, viewH - tm.lineHeight() - 8);
+            g.fillRect(tx - 1, ty - 1, tw + 2, tm.lineHeight() + 6, 0xF0300070);
+            g.fillRect(tx, ty, tw, tm.lineHeight() + 4, 0xF0100010);
+            g.drawText(hoverId, tx + 4, ty + 2, C_TEXT, false);
+        }
+    }
 
     private String elementClip = "";
     /** 선택한 요소의 상태 미리보기: 0 없음, 1 :hover, 2 :active. */

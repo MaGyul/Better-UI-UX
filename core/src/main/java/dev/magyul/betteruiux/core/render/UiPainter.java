@@ -20,6 +20,9 @@ public final class UiPainter {
 
         default boolean pressed(LayoutBox b) { return false; }
 
+        /** 키보드 포커스가 있는 박스(Tab 으로 고른 버튼 등). */
+        default boolean focused(LayoutBox b) { return false; }
+
         /** 이 박스를 그릴 때 쓸 스타일(호버/눌림 오버레이, 전환·애니메이션 적용 후). */
         default StyleMap style(LayoutBox b) { return b.effective(hovered(b), pressed(b)); }
 
@@ -87,12 +90,26 @@ public final class UiPainter {
             fill(g, b.x + b.w - borderW, b.y + borderW, borderW, b.h - 2 * borderW, bc, opacity);
         }
 
+        if (button && state.focused(b)) {                    // Tab 으로 고른 버튼 표시
+            int fc = 0xFFFFFF55;
+            fill(g, b.x - 1, b.y - 1, b.w + 2, 1, fc, opacity);
+            fill(g, b.x - 1, b.y + b.h, b.w + 2, 1, fc, opacity);
+            fill(g, b.x - 1, b.y, 1, b.h, fc, opacity);
+            fill(g, b.x + b.w, b.y, 1, b.h, fc, opacity);
+        }
         switch (b.tag()) {
             case "label", "button" -> paintText(b, s, g, opacity, button && !b.enabled());
             case "image" -> paintImage(b, s, g, opacity);
             case "item" -> {
                 String item = s.get("item");
-                if (item != null && !item.isBlank()) g.drawItem(item.trim(), b.x, b.y, Math.max(1, s.integer("count", 1)));
+                if (item != null && !item.isBlank()) {
+                    // 상자 크기에 맞춰 키우고 가운데에 놓는다(아이콘 기본 크기 16)
+                    float iconScale = Math.max(0.1f, Math.min(b.w, b.h) / 16f);
+                    boolean scaled = Math.abs(iconScale - 1f) > 0.01f;
+                    if (scaled) g.pushTransform((b.w - 16 * iconScale) / 2f, (b.h - 16 * iconScale) / 2f, iconScale, 0f, b.x, b.y);
+                    g.drawItem(item.trim(), b.x, b.y, Math.max(1, s.integer("count", 1)));
+                    if (scaled) g.popTransform();
+                }
             }
             default -> { }
         }

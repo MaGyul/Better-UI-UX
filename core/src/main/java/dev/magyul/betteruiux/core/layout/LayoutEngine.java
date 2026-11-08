@@ -161,7 +161,8 @@ public final class LayoutEngine {
         if (b.widget != null && !b.widget.container()) return b.widget.intrinsicWidth();
         switch (b.tag()) {
             case "label", "button": return maxLineWidth(textOf(b));
-            case "image", "item": return 16;
+            case "image": return 16;
+            case "item": return Math.max(1, b.style.integer("size", 16));
             case "spacer", "separator": return 0;
             case "grid": return gridMetrics(b)[0][0];
             default: break;
@@ -182,7 +183,8 @@ public final class LayoutEngine {
         if (b.widget != null && !b.widget.container()) return b.widget.intrinsicHeight();
         switch (b.tag()) {
             case "label", "button": return lineCount(textOf(b)) * text.lineHeight();
-            case "image", "item": return 16;
+            case "image": return 16;
+            case "item": return Math.max(1, b.style.integer("size", 16));
             case "spacer", "separator": return 0;
             case "grid": return gridMetrics(b)[1][0];
             default: break;

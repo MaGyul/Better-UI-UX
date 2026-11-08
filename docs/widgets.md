@@ -16,7 +16,7 @@
 | `select` | `options`(쉼표로 구분) `value` `placeholder` `enabled` `onChange` | 드롭다운. ↑/↓ 로 바로 변경 |
 | `progress` | `value` `min` `max` `text` | 진행 막대. `value="{health}"` 처럼 바인딩 가능 |
 
-공통: Tab / Shift+Tab 으로 포커스 이동, Esc 로 포커스 해제. 색은 스타일로 바꾼다
+공통: Tab / Shift+Tab 으로 포커스 이동(버튼도 Tab 으로 고르고 Enter/Space 로 누름), Esc 로 포커스 해제. 색은 스타일로 바꾼다
 (`fill-color`(slider), `bar-color`(progress), `check-color`(checkbox/radio), `border-color`, `background-color`, `color`).
 
 ## 레이아웃 / 표시
@@ -27,7 +27,7 @@
 | `grid` | `columns` `gap` | 칸 배열. 열 너비/행 높이는 그 칸의 가장 큰 자식에 맞춘다 |
 | `tabs` + `tab` | `tab` 의 `title` | 머리글을 눌러 탭 전환. `tab` 은 기본으로 영역을 가득 채운다 |
 | `separator` | | 구분선. column 안에서는 가로선, row 안에서는 세로선 |
-| `item` | `item`(예: `minecraft:diamond`) `count` | 아이템 아이콘(16×16). 2개 이상이면 개수 표시 |
+| `item` | `item`(예: `minecraft:diamond`) `count` `size`/`width`/`height` | 아이템 아이콘. 상자 크기에 맞춰 커지고 가운데에 놓인다(기본 16). 2개 이상이면 개수 표시 |
 | `dialog` | `modal`(기본 true) | 화면 중앙의 대화상자. 뒤를 어둡게 하고 바깥 클릭을 막는다 |
 
 ## 모든 요소

@@ -44,10 +44,12 @@ class EditorPanFixTest {
         @Override public boolean panAnimation() { return animate; }
     }
 
-    private EditorController editor(boolean animate) throws Exception {
+    private EditorController editor(boolean animate) throws Exception { return editor(animate, W); }
+
+    private EditorController editor(boolean animate, int width) throws Exception {
         Host h = new Host();
         h.animate = animate;
-        return new EditorController(h, new FixedMetrics(), XML, W, H);
+        return new EditorController(h, new FixedMetrics(), XML, width, H);
     }
 
     private static boolean pannedBy(DrawList l, int tx, int ty) {
@@ -136,14 +138,14 @@ class EditorPanFixTest {
 
     @Test
     void screenFrameIsShownOnlyWhenTheViewHasBeenMoved() throws Exception {
-        EditorController e = editor(false);
+        EditorController e = editor(false, 700);                        // Fit 버튼이 "..." 로 숨지 않는 넓은 창
         DrawList normal = paint(e);
         assertTrue(normal.commands().stream().noneMatch(c -> c instanceof DrawCommand.FillRect r && r.argb() == SCREEN_FRAME));
         assertTrue(hasText(normal, "Fit") && !hasText(normal, "Fit!"));
 
         e.mouseScrolled(230, 120, 1.0);
         DrawList moved = paint(e);
-        assertTrue(moved.commands().contains(new DrawCommand.FillRect(0, 0, W, 1, SCREEN_FRAME)), "파란 경계선");
+        assertTrue(moved.commands().contains(new DrawCommand.FillRect(0, 0, 700, 1, SCREEN_FRAME)), "파란 경계선");
         assertTrue(moved.commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect r && r.argb() == OUTSIDE),
                 "경계 밖을 어둡게");
         assertTrue(hasText(moved, "Fit!"), "되돌리기 버튼이 눈에 띈다");
@@ -154,7 +156,7 @@ class EditorPanFixTest {
 
     @Test
     void fitButtonResetsTheView() throws Exception {
-        EditorController e = editor(false);
+        EditorController e = editor(false, 700);
         e.mouseScrolled(230, 120, 1.0);
         DrawList l = paint(e);
         int fitX = l.commands().stream().filter(c -> c instanceof DrawCommand.DrawText t && t.text().equals("Fit!"))
