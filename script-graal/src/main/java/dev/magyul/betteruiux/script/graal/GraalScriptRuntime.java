@@ -7,6 +7,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.EnvironmentAccess;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotAccess;
@@ -81,6 +82,48 @@ public final class GraalScriptRuntime implements ScriptRuntime {
     /** 불러온 스크립트 소스(이름, 내용). 문장 수 한도로 컨텍스트가 닫히면 이것으로 새 컨텍스트를 만든다(스크립트 상태는 초기화). */
     private final java.util.List<String[]> sources = new java.util.ArrayList<>();
 
+    private static Engine engine;
+
+    /**
+     * 모든 런타임이 하나의 엔진을 나눠 쓴다: 엔진(언어 초기화, 파싱 캐시)은 처음 한 번만 비싸고, 컨텍스트는 엔진 위에서 금방 만들어진다.
+     * 컨텍스트끼리는 전역 상태를 공유하지 않는다.
+     */
+    private static synchronized Engine sharedEngine() {
+        if (engine == null) {
+            ClassLoader old = Thread.currentThread().getContextClassLoader();
+            Thread.currentThread().setContextClassLoader(GraalScriptRuntime.class.getClassLoader());
+            try {
+                engine = Engine.newBuilder("js")
+                        .allowExperimentalOptions(true)
+                        .option("engine.WarnInterpreterOnly", "false")
+                        .build();
+            } finally {
+                Thread.currentThread().setContextClassLoader(old);
+            }
+        }
+        return engine;
+    }
+
+    /**
+     * 게임이 켜질 때 백그라운드에서 불러 둔다: 엔진과 JS 언어를 미리 초기화해서, 처음 스크립트 화면을 열 때 기다리지 않게 한다.
+     * 실패해도 조용히 넘어가고 실제로 쓸 때 다시 시도한다.
+     */
+    public static void prewarm() {
+        try {
+            GraalScriptRuntime rt = new GraalScriptRuntime();
+            try {
+                rt.load("prewarm", "function __warm() { return 1; }");
+                rt.call("{\"type\":\"call\",\"fn\":\"__warm\",\"event\":{},\"state\":{}}");
+            } catch (ScriptException ignored) {
+                // 예열이 목적이라 결과는 상관없다
+            } finally {
+                rt.close();
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // 실제 사용할 때 다시 시도된다
+        }
+    }
+
     public GraalScriptRuntime() {
         withLoader(this::create);
     }
@@ -103,6 +146,7 @@ public final class GraalScriptRuntime implements ScriptRuntime {
     private void create() {
         ResourceLimits limits = ResourceLimits.newBuilder().statementLimit(STATEMENT_LIMIT, null).build();
         this.context = Context.newBuilder("js")
+                .engine(sharedEngine())
                 .allowHostAccess(HostAccess.NONE)
                 .allowHostClassLookup(name -> false)
                 .allowIO(IOAccess.NONE)
@@ -113,7 +157,6 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                 .allowPolyglotAccess(PolyglotAccess.NONE)
                 .allowExperimentalOptions(true)                       // 문자열 길이 상한 같은 우리가 정한 옵션을 쓰기 위해(스크립트는 옵션을 바꿀 수 없다)
                 .resourceLimits(limits)
-                .option("engine.WarnInterpreterOnly", "false")
                 .option("js.string-length-limit", Integer.toString(STRING_LIMIT))
                 .build();
         context.eval(Source.create("js", BOOTSTRAP));

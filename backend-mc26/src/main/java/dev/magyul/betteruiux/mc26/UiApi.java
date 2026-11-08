@@ -38,6 +38,7 @@ public final class UiApi {
     public static void init(Path configBaseDir) {
         baseDir = configBaseDir;
         BackendBuiltins.register();
+        ScriptBridge.prewarm(configBaseDir);
     }
 
     /** 화면을 연다(렌더 스레드로 넘겨 실행). id 는 {@code config/better-uiux/ui/<id>.xml} 또는 기본 제공 파일. */

@@ -24,6 +24,28 @@ final class ScriptBridge {
 
     private ScriptBridge() {}
 
+    /**
+     * 게임이 켜질 때(스크립트가 켜져 있고 런타임 모드가 있을 때만) 백그라운드에서 GraalJS 엔진을 미리 데워 둔다.
+     * 낮은 우선순위의 데몬 스레드라 게임 로딩을 거의 방해하지 않고, 스크립트를 안 쓰면 아무 일도 하지 않는다.
+     */
+    static void prewarm(Path baseDir) {
+        try {
+            if (!dev.magyul.betteruiux.core.doc.UiConfig.load(baseDir.resolve("config.toml")).bool("scripting.enabled", false)) return;
+            Class.forName(RUNTIME_CLASS, false, ScriptBridge.class.getClassLoader());   // 설치되어 있는지만 확인(초기화는 하지 않는다)
+        } catch (ClassNotFoundException | LinkageError | RuntimeException e) {
+            return;
+        }
+        LOADER.execute(() -> {
+            long t0 = System.nanoTime();
+            try {
+                Class.forName(RUNTIME_CLASS).getMethod("prewarm").invoke(null);
+                LOG.info("[better-uiux] script runtime warmed up in {} ms", (System.nanoTime() - t0) / 1_000_000);
+            } catch (ReflectiveOperationException | LinkageError e) {
+                LOG.debug("[better-uiux] script prewarm skipped: {}", e.toString());
+            }
+        });
+    }
+
     /** 화면이 닫히거나 문서가 바뀔 때 부르는 핸들. 런타임이 준비되기 전에 닫아도 안전하다. */
     static final class Attached {
         private volatile boolean closed;
