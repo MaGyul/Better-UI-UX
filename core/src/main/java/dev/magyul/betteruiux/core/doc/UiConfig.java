@@ -23,6 +23,12 @@ public final class UiConfig {
             [editor]
             # 인게임 에디터(개발 중). 모드팩 배포 시 false 권장.
             enabled = false
+
+            [scripting]
+            # UI 문서의 <script> (JavaScript, 선택 모듈 script-graal 필요). 신뢰할 수 있는 UI 만 쓰세요.
+            enabled = false
+            # 스크립트가 실행할 수 있는 마인크래프트 명령어의 첫 단어(쉼표로 구분). 비워 두면 명령은 모두 거부됩니다.
+            commands = ""
             """;
 
     private final Map<String, String> values;

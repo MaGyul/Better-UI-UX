@@ -18,6 +18,7 @@ dependencies {
 
     implementation(project(":core"))
     include(project(":core"))
+    // 개발 실행에서만 스크립트 런타임(GraalJS)을 함께 띄운다. 배포 jar 에는 넣지 않는다(선택 모듈).
 }
 
 tasks.processResources {
@@ -29,4 +30,11 @@ tasks.processResources {
 sourceSets.main {
     java.srcDir("../backend-mc26/src/main/java")
     resources.srcDir("../backend-mc26/src/main/resources")
+}
+
+// 개발 실행(runClient)에서만 스크립트 런타임(GraalJS)을 클래스패스에 더한다. 배포 jar 에는 넣지 않는 선택 모듈이고,
+// 일반 의존성으로 걸면 Loom 이 GraalJS jar 를 리맵하려다 실패하므로 실행 태스크에만 붙인다.
+evaluationDependsOn(":script-graal")
+tasks.matching { it.name == "runClient" }.configureEach {
+    (this as JavaExec).classpath(project(":script-graal").extensions.getByType<SourceSetContainer>()["main"].runtimeClasspath)
 }

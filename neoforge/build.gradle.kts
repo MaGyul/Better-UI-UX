@@ -26,6 +26,8 @@ neoForge {
 
 dependencies {
     implementation(project(":core"))
+    // 개발 실행에서만 스크립트 런타임(GraalJS)을 함께 띄운다. 배포 jar 에는 넣지 않는다(선택 모듈).
+    runtimeOnly(project(":script-graal"))
 }
 
 // 배포 jar에 core 클래스를 합친다(M0 단순화; 추후 JarJar로 전환 가능).

@@ -25,6 +25,13 @@ public final class UiOpener {
         if (id != null && !id.isBlank()) open(id, baseDir, Boolean.getBoolean("betteruiux.autoedit"));
     }
 
+    private static java.util.List<String> commaList(String s) {
+        if (s == null || s.isBlank()) return java.util.List.of();
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String part : s.split(",")) if (!part.isBlank()) out.add(part.trim());
+        return out;
+    }
+
     /** @param baseDir {@code <gameDir>/config/better-uiux} (설정 파일 {@code config.toml}, UI 폴더 {@code ui/}) */
     public static void open(String id, Path baseDir) { open(id, baseDir, false); }
 
@@ -35,7 +42,8 @@ public final class UiOpener {
             Path userDir = baseDir.resolve("ui");
             UiConfig config = UiConfig.load(baseDir.resolve("config.toml"));
             UiScreen.Options options = new UiScreen.Options(
-                    config.bool("hotReload.enabled", true), config.bool("editor.enabled", false), editor);
+                    config.bool("hotReload.enabled", true), config.bool("editor.enabled", false), editor,
+                    config.bool("scripting.enabled", false), commaList(config.get("scripting.commands")));
             McTextMetrics metrics = new McTextMetrics(mc.font);
             if (!UiSources.validId(id)) {
                 say(mc, "잘못된 UI id: " + id);

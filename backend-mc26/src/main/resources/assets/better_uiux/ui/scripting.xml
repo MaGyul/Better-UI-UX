@@ -1,0 +1,24 @@
+<screen use="blur,dim">
+  <script src="scripting.js"/>
+  <style>
+    .card { background: #E0181A24; border: 1; border-color: var(--accent, #FF3A3F55); padding: 8; }
+    .hot { color: #FFFFAA00; }
+  </style>
+
+  <panel class="card" anchor="center" width="240" height="170">
+    <column gap="4" width="fill" height="fill">
+      <label text="스크립트(JavaScript) 데모" />
+      <separator />
+      <label id="status" text="..." />
+      <textfield id="name" width="fill" value="Steve" placeholder="이름" />
+      <slider id="volume" width="fill" min="0" max="100" value="30" text="볼륨" onChange="script:volume" />
+      <row gap="4">
+        <button text="인사" onClick="script:greet" />
+        <button text="줄 추가" onClick="script:addRow" />
+        <button text="지우기" onClick="script:clearRows" />
+      </row>
+      <scroll id="list" width="fill" height="fill" gap="1" />
+      <button text="닫기" onClick="close" />
+    </column>
+  </panel>
+</screen>

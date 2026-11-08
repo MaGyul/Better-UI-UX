@@ -36,6 +36,10 @@ public final class ScriptHost {
     private final CommandPolicy policy;
     private final Consumer<String> commandSink;
     private boolean broken;
+    private Consumer<String> logSink = line -> { };
+
+    /** {@code ui.log}/{@code console.log} 로 온 글자를 받을 곳(기본은 버린다). */
+    public void setLogSink(Consumer<String> sink) { this.logSink = sink == null ? line -> { } : sink; }
 
     /**
      * @param commandSink 허용된 명령 한 줄(앞의 / 없이)을 실제로 실행하는 쪽(백엔드가 연결). null 이면 명령은 모두 거부된다.
@@ -184,6 +188,11 @@ public final class ScriptHost {
                 if (bad(var, 64) || !var.matches("(--)?[A-Za-z][A-Za-z0-9_-]*")) return "변수 이름이 올바르지 않습니다";
                 if (value != null && value.length() > MAX_STRING) return "값이 너무 깁니다";
                 doc.setVariable(var, value);
+                return null;
+            }
+            case "log" -> {
+                String text = str(op.get("value"));
+                logSink.accept(text == null ? "" : text.length() > MAX_STRING ? text.substring(0, MAX_STRING) : text);
                 return null;
             }
             case "command" -> {
