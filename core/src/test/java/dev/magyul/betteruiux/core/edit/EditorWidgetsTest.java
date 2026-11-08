@@ -308,4 +308,26 @@ class EditorWidgetsTest {
         var l4 = e.document().query("#l4");
         assertTrue(l4.y() >= 40 && l4.y() + l4.height() <= 40 + 50, "보이는 영역 안으로 스크롤된다");
     }
+
+    @Test
+    void gridCannotBeResizedSmallerThanItsContentButScrollCan() throws Exception {
+        EditorController e = editor("<screen><grid id=\"g\" x=\"150\" y=\"40\" columns=\"2\" width=\"200\" height=\"100\">"
+                + "<panel width=\"60\" height=\"30\"/><panel width=\"60\" height=\"30\"/></grid></screen>");
+        e.select(1);
+        paint(e);
+        int right = 150 + 200, mid = 40 + 50;
+        e.mouseMoved(right, mid);
+        e.mousePressed(right, mid, 0);
+        for (int i = 1; i <= 5; i++) e.mouseDragged(right - i * 40, mid);
+        e.mouseReleased(right - 200, mid, 0);
+        assertTrue(e.document().query("#g").width() >= 120, "내용(60+60)보다 작아지지 않는다: " + e.document().query("#g").width());
+        EditorController s = editor(SCROLL);
+        s.select(1);
+        paint(s);
+        s.mouseMoved(250, 65);
+        s.mousePressed(250, 65, 0);
+        for (int i = 1; i <= 5; i++) s.mouseDragged(250 - i * 20, 65);
+        s.mouseReleased(150, 65, 0);
+        assertTrue(s.document().query("#s").width() < 100, "scroll 은 내용이 넘쳐도 되므로 줄어든다");
+    }
 }

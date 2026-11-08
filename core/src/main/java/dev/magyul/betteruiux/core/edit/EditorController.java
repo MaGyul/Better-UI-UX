@@ -683,9 +683,9 @@ public final class EditorController {
                 || parent.tag().equals("scroll") || parent.tag().equals("grid"));
     }
 
-    /** 내용보다 작게 줄일 수 없는 컨테이너(row/column). scroll 은 내용이 넘쳐도 되므로 제외. */
+    /** 내용보다 작게 줄일 수 없는 컨테이너(row/column/grid). scroll 은 내용이 넘쳐도 스크롤되므로 제외. */
     private static boolean isSizedFlow(LayoutBox b) {
-        return b != null && (b.tag().equals("row") || b.tag().equals("column"));
+        return b != null && (b.tag().equals("row") || b.tag().equals("column") || b.tag().equals("grid"));
     }
 
     private static Rect contentRect(LayoutBox parent) {
