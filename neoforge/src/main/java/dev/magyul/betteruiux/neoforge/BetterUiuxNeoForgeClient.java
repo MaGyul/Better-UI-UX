@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.neoforge;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
+import dev.magyul.betteruiux.mc26.UiApi;
 import dev.magyul.betteruiux.mc26.UiOpener;
 import java.nio.file.Path;
 import net.minecraft.client.Minecraft;
@@ -20,6 +21,7 @@ public final class BetterUiuxNeoForgeClient {
 
     public BetterUiuxNeoForgeClient() {
         Path baseDir = FMLPaths.CONFIGDIR.get().resolve("better-uiux");
+        UiApi.init(baseDir);
         // 개발용 자동 열기: 타이틀 화면이 뜬 뒤 한 번만 연다.
         boolean[] opened = {false};
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
@@ -33,7 +35,7 @@ public final class BetterUiuxNeoForgeClient {
                         .then(Commands.literal("open")
                                 .then(Commands.argument("id", StringArgumentType.word())
                                         .executes(ctx -> {
-                                            UiOpener.open(StringArgumentType.getString(ctx, "id"), baseDir);
+                                            UiApi.open(StringArgumentType.getString(ctx, "id"));
                                             return 1;
                                         })))));
     }

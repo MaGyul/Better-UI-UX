@@ -63,6 +63,26 @@ public final class McGfx implements UiGfx {
     }
 
     /**
+     * 이동 → (origin 기준) 회전 → 확대. GUI 의 행렬 스택(pose)을 쓰므로 이후 그리는 모든 요소와 가위(clip)에 적용된다.
+     * 회전은 양수가 시계방향(GUI 좌표계는 y 가 아래로 증가).
+     */
+    @Override
+    public void pushTransform(float tx, float ty, float scale, float rotateDeg, float originX, float originY) {
+        var pose = g.pose();
+        pose.pushMatrix();
+        pose.translate(tx, ty);
+        pose.translate(originX, originY);
+        pose.rotate((float) Math.toRadians(rotateDeg));
+        pose.scale(scale, scale);
+        pose.translate(-originX, -originY);
+    }
+
+    @Override
+    public void popTransform() {
+        g.pose().popMatrix();
+    }
+
+    /**
      * 앞서 그린 레이어까지 블러한다. 26.x 의 블러는 "이전 stratum(레이어)" 전체에 적용되므로,
      * 이 호출 직전까지 그린 배경(예: block 타일)이 블러 대상이 되도록 먼저 stratum 을 나눈다.
      * 게임의 "메뉴 배경 블러" 옵션이 0 이면 vanilla 와 같이 블러하지 않는다.

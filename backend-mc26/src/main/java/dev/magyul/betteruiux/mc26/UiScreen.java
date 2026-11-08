@@ -53,8 +53,11 @@ public final class UiScreen extends Screen {
         bind(this.doc);
     }
 
+    /** 지금 보여주는 문서(핫리로드 시 교체될 수 있으니 오래 들고 있지 말 것). */
+    public UiDocument document() { return doc; }
+
     private void bind(UiDocument d) {
-        d.setActionHandler((action, source) -> UiActions.dispatch(action, this));
+        d.setOnClose(this::onClose);
     }
 
     @Override
@@ -94,6 +97,7 @@ public final class UiScreen extends Screen {
         try {
             UiDocument next = UiDocumentLoader.load(userDir, id, metrics);
             bind(next);
+            UiApi.fireOpened(id, next);   // 핫리로드로 새 문서가 만들어져도 모드의 초기화 훅을 다시 적용한다
             next.layout(this.width, this.height);
             doc = next;
             error = null;
@@ -132,7 +136,7 @@ public final class UiScreen extends Screen {
 
         if (!loggedFirstFrame) {
             loggedFirstFrame = true;
-            LOG.info("[better-uiux] first frame painted: {}x{}", this.width, this.height);
+            LOG.info("[better-uiux] first frame painted: {}x{} (warnings={})", this.width, this.height, doc.warnings());
         }
     }
 
