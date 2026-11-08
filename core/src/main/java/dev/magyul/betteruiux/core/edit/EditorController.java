@@ -54,7 +54,8 @@ public final class EditorController {
             Map.entry("padding", "안쪽여백"), Map.entry("anchor", "기준점"), Map.entry("gap", "간격"),
             Map.entry("justify", "정렬"), Map.entry("align", "교차정렬"), Map.entry("background", "배경"),
             Map.entry("color", "글자색"), Map.entry("border", "테두리"), Map.entry("border-color", "테두리색"),
-            Map.entry("opacity", "투명도"), Map.entry("use", "배경효과"));
+            Map.entry("opacity", "투명도"), Map.entry("use", "배경효과"), Map.entry("visible", "보임"),
+            Map.entry("enabled", "사용"), Map.entry("checked", "체크됨"), Map.entry("align-self", "자기정렬"));
     private static final java.util.Set<String> COLOR_KEYS = java.util.Set.of("background", "color", "border-color");
     private static final int SUGGEST_MAX = 6;
     private static final int HANDLE_R = 3, MIN_SIZE = 4, SNAP_THRESHOLD = 4, DRAG_START = 3, GRID = 8, WHEEL_STEP = 16;
@@ -79,7 +80,36 @@ public final class EditorController {
         Region(Rect rect, Runnable action) { this(rect, action, action == null ? null : Cursor.POINTER, false); }
     }
 
-    private record PropRow(String label, String key, String value, boolean editable) {}
+    private enum Kind { TEXT, ENUM, BOOL, NUMBER, COLOR, HEADER }
+
+    private record PropRow(String label, String key, String value, boolean editable, Kind kind, List<String> options) {
+        PropRow(String label, String key, String value, boolean editable) {
+            this(label, key, value, editable, Kind.TEXT, List.of());
+        }
+    }
+
+    private static final Map<String, List<String>> ENUMS = Map.of(
+            "anchor", List.of("top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"),
+            "justify", List.of("start", "center", "end", "space-between"),
+            "align", List.of("start", "center", "end", "stretch"),
+            "align-self", List.of("start", "center", "end", "stretch"),
+            "text-align", List.of("left", "center", "right"),
+            "overflow", List.of("visible", "hidden"));
+    /** 값이 참/거짓인 속성과 그 기본값. */
+    private static final Map<String, Boolean> BOOLS = Map.of("checked", false, "enabled", true, "visible", true, "shadow", true);
+    private static final Set<String> NUMBERS = Set.of("width", "height", "gap", "border", "x", "y", "opacity");
+
+    private static Kind kindOf(String key) {
+        if (ENUMS.containsKey(key)) return Kind.ENUM;
+        if (BOOLS.containsKey(key)) return Kind.BOOL;
+        if (COLOR_KEYS.contains(key)) return Kind.COLOR;
+        if (NUMBERS.contains(key)) return Kind.NUMBER;
+        return Kind.TEXT;
+    }
+
+    private static PropRow header(String name) {
+        return new PropRow(name, "§" + name, "", false, Kind.HEADER, List.of());
+    }
 
     private record TreeRow(LayoutBox box, int depth, boolean hasKids, boolean collapsed, String key) {}
 
@@ -497,7 +527,7 @@ public final class EditorController {
             if (selected >= count) selected = -1;
             return true;
         } catch (UiParseException e) {
-            setStatus("XML 오류 (줄 " + e.line() + ")", true);
+            setStatus("XML 오류 (줄 " + e.line() + "): " + e.getMessage() + " — 되돌렸어요", true);
             return false;
         }
     }
@@ -752,6 +782,10 @@ public final class EditorController {
     public boolean mouseScrolled(int x, int y, double amount) {
         if (leftVisible() && x < LEFT_W && y >= rowsTop() - 2) {
             outlinerScroll = Math.max(0, outlinerScroll - (int) Math.signum(amount) * 3);
+            return true;
+        }
+        if (rightVisible() && x >= viewW - RIGHT_W && y >= TOOLBAR_H && propMaxScroll > 0) {
+            propScroll = Math.max(0, Math.min(propMaxScroll, propScroll - (int) Math.signum(amount) * (ROW_H + 1) * 2));
             return true;
         }
         if (overPanel(x, y)) return false;
@@ -1094,6 +1128,10 @@ public final class EditorController {
     // ================= 입력: 키보드 =================
 
     public boolean charTyped(char c) {
+        if (editKey == null && c == '?' && exitDialog == false) {
+            helpOpen = !helpOpen;
+            return true;
+        }
         if (editKey == null || c < 32 || c == 127) return false;
         insertText(String.valueOf(c));
         if (COLOR_KEYS.contains(editKey)) previewField();
@@ -1104,6 +1142,18 @@ public final class EditorController {
         if (exitDialog) {
             if (key == EditorKey.ESCAPE) exitDialog = false;
             else if (key == EditorKey.ENTER) saveAndExit();
+            return true;
+        }
+        if (helpOpen) {
+            if (key == EditorKey.ESCAPE || key == EditorKey.F1) helpOpen = false;
+            return true;
+        }
+        if (menuNear != null) {
+            if (key == EditorKey.ESCAPE) closeMenu();
+            return true;
+        }
+        if (key == EditorKey.F1 && editKey == null) {
+            helpOpen = true;
             return true;
         }
         if (editKey != null) return editKeyPressed(key, ctrl, shift);
@@ -1135,6 +1185,23 @@ public final class EditorController {
                 }
                 case D -> {
                     duplicate();
+                    return true;
+                }
+                case C -> {
+                    copyElement(false);
+                    return true;
+                }
+                case X -> {
+                    copyElement(true);
+                    return true;
+                }
+                case V -> {
+                    pasteElement();
+                    return true;
+                }
+                case G -> {
+                    if (shift) unwrapSelected();
+                    else wrapSelected("column");
                     return true;
                 }
                 default -> { }
@@ -1196,9 +1263,11 @@ public final class EditorController {
             }
             case UP -> {
                 if (!suggestions.isEmpty()) suggestIndex = suggestIndex <= 0 ? suggestions.size() - 1 : suggestIndex - 1;
+                else if (NUMBERS.contains(editKey)) stepEditingNumber(1, shift);
             }
             case DOWN -> {
                 if (!suggestions.isEmpty()) suggestIndex = (suggestIndex + 1) % suggestions.size();
+                else if (NUMBERS.contains(editKey)) stepEditingNumber(-1, shift);
             }
             case BACKSPACE -> {
                 if (hasSelection()) deleteSelection();
@@ -1520,6 +1589,11 @@ public final class EditorController {
         String key = editKey;
         String raw = editBuffer.toString().trim();
         cancelField();
+        if (key != null) applyValue(key, raw);
+    }
+
+    /** 속성 하나를 값으로 바꾼다(빈 값이면 속성 제거). */
+    private void applyValue(String key, String raw) {
         LayoutBox box = selectedBox();
         if (key == null || box == null) return;
         String value0 = raw.isEmpty() ? null : raw;
@@ -1608,6 +1682,13 @@ public final class EditorController {
         return out.size() > SUGGEST_MAX ? new ArrayList<>(out.subList(0, SUGGEST_MAX)) : out;
     }
 
+    /** 숫자 칸을 편집하는 중 ↑/↓ 로 값을 올리고 내린다(Shift 면 8). */
+    private void stepEditingNumber(int dir, boolean big) {
+        String key = editKey, cur = editBuffer.toString().trim();
+        cancelField();
+        adjustNumber(key, cur, dir, big);
+    }
+
     private void acceptSuggestion(String value) {
         editBuffer.setLength(0);
         editBuffer.append(value);
@@ -1670,6 +1751,7 @@ public final class EditorController {
         if (tag.equals("label") || tag.equals("button")) rows.add(new PropRow(label("text"), "text", LayoutEngine.rawText(b), true));
         if (tag.equals("button")) rows.add(attr(b, "onClick"));
         if (tag.equals("image")) rows.add(attr(b, "src"));
+        rows.add(header("레이아웃"));
         if (!root) {
             rows.add(style(b, "width"));
             rows.add(style(b, "height"));
@@ -1686,6 +1768,8 @@ public final class EditorController {
             rows.add(style(b, "justify"));
             rows.add(style(b, "align"));
         }
+        if (!root) rows.add(style(b, "visible"));
+        rows.add(header("모양"));
         rows.add(style(b, "background"));
         if (tag.equals("label") || tag.equals("button")) rows.add(style(b, "color"));
         rows.add(style(b, "border"));
@@ -1712,12 +1796,12 @@ public final class EditorController {
 
     private static PropRow attr(LayoutBox b, String key) {
         String v = b.node.attr(key);
-        return new PropRow(label(key), key, v == null ? "" : v, true);
+        return new PropRow(label(key), key, v == null ? "" : v, true, kindOf(key), ENUMS.getOrDefault(key, List.of()));
     }
 
     private static PropRow style(LayoutBox b, String key) {
         String v = b.style.get(key);
-        return new PropRow(label(key), key, v == null ? "" : v, true);
+        return new PropRow(label(key), key, v == null ? "" : v, true, kindOf(key), ENUMS.getOrDefault(key, List.of()));
     }
 
     // ================= 구조 트리(접기/펼치기) =================
@@ -1836,6 +1920,7 @@ public final class EditorController {
         if (selected != lastSelected) {
             lastSelected = selected;
             tempDismissed = false;
+            propScroll = 0;
         }
         if (toolbarVisible()) paintToolbar(g);
         else paintPeekSliver(g);
@@ -1849,6 +1934,8 @@ public final class EditorController {
             mouseX = realMouseX;
             mouseY = realMouseY;
         }
+        paintMenu(g);
+        paintHelp(g);
         paintExitDialog(g);
         paintStatus(g);
         g.requestCursor(cursorNow());
@@ -1977,6 +2064,12 @@ public final class EditorController {
         x += 4;
         x += button(g, x, y, "Dup", selected > 0, this::duplicate);
         x += button(g, x, y, "Del", selected > 0, this::deleteSelected);
+        Rect wrapRect = new Rect(x, y, tm.width("Wrap") + 8, TOOLBAR_H - 4);
+        x += button(g, x, y, "Wrap", selected > 0, () -> openMenu(wrapRect, List.of("row", "column", "panel", "stack", "풀기(Unwrap)"),
+                item -> {
+                    if (item.startsWith("풀기")) unwrapSelected();
+                    else wrapSelected(item);
+                }));
         x += 4;
         x += button(g, x, y, grid ? "Grid:8" : "Grid:off", true, () -> grid = !grid);
         x += button(g, x, y, autoAnchor ? "Anchor:auto" : "Anchor:keep", true, () -> autoAnchor = !autoAnchor);
@@ -1987,12 +2080,19 @@ public final class EditorController {
         button(g, rx, y, "Exit", true, this::requestExit, 0xFF7A2A2A);                 // 에디터 닫기(F8 과 같다)
         String hideLabel = toolbarHidden ? "Pin" : "Hide";
         int hideW = tm.width(hideLabel) + 8;
-        rx -= hideW + 2;
-        button(g, rx, y, hideLabel, true, () -> {                                      // 툴바 숨기기: 숨기면 위쪽에 마우스를 올려 두어야 보인다
-            toolbarHidden = !toolbarHidden;
-            toolbarPeek = false;
-            topHoverSince = -1;
-        });
+        if (rx - hideW - 2 > x + 2) {                                                  // 좁은 창에서는 겹치는 보조 버튼을 그리지 않는다
+            rx -= hideW + 2;
+            button(g, rx, y, hideLabel, true, () -> {                                  // 툴바 숨기기: 숨기면 위쪽에 마우스를 올려 두어야 보인다
+                toolbarHidden = !toolbarHidden;
+                toolbarPeek = false;
+                topHoverSince = -1;
+            });
+            int helpW = tm.width("?") + 8;
+            if (rx - helpW - 2 > x + 2) {
+                rx -= helpW + 2;
+                button(g, rx, y, "?", true, () -> helpOpen = true);
+            }
+        }
         String title = host.title() + (session.isDirty() ? " *" : "");
         g.drawText(title, Math.max(x + 6, rx - tm.width(title) - 8), 4, C_DIM, false);
     }
@@ -2158,6 +2258,9 @@ public final class EditorController {
 
     // ---- 오른쪽: 속성 패널 ----
 
+    private int propScroll, propMaxScroll;
+    private final Set<String> collapsedSections = new HashSet<>();
+
     private void paintProperties(UiGfx g) {
         int x0 = viewW - RIGHT_W, top = TOOLBAR_H;
         g.fillRect(x0, top, RIGHT_W, viewH - top, C_PANEL);
@@ -2168,38 +2271,295 @@ public final class EditorController {
             g.drawText("요소를 선택하세요", x0 + 6, top + 6, C_DIM, false);
             return;
         }
-        int y = top + 3;
-        int fieldX = x0 + FIELD_OFFSET, fieldW = RIGHT_W - FIELD_OFFSET - 4;
-        g.pushClip(x0, top, RIGHT_W, viewH - top);
+        int fieldX = x0 + FIELD_OFFSET, fieldW = RIGHT_W - FIELD_OFFSET - 7;
+        List<PropRow> vis = new ArrayList<>();
+        boolean skip = false;
         for (PropRow row : rowsFor(sel)) {
-            if (y + ROW_H > viewH) break;
-            g.drawText(row.label(), x0 + 5, y + 1, C_DIM, false);
-            Rect field = new Rect(fieldX, y - 1, fieldW, ROW_H);
-            boolean editing = row.key().equals(editKey) && !row.key().isEmpty();
-            boolean fieldHover = !editing && row.editable() && field.contains(mouseX, mouseY);
-            g.fillRect(field.x(), field.y(), field.w(), field.h(), fieldHover ? (mouseDown ? shade(C_FIELD, -6) : shade(C_FIELD, 22)) : C_FIELD);
-            if (fieldHover) outline(g, field, mouseDown ? C_SEL : 0x80FFFFFF);
-            if (COLOR_KEYS.contains(row.key())) {                      // 색 칸 오른쪽에 현재 색 견본
-                Integer swatch = Colors.tryParse(editing ? editBuffer.toString().trim() : row.value());
-                if (swatch != null) {
-                    g.fillRect(field.right() - 11, field.y() + 2, 9, field.h() - 4, 0xFF2A2D3E);
-                    g.fillRect(field.right() - 11, field.y() + 2, 9, field.h() - 4, swatch);
-                }
+            if (row.kind() == Kind.HEADER) {
+                skip = collapsedSections.contains(row.key());
+                vis.add(row);
+            } else if (!skip) {
+                vis.add(row);
             }
-            if (editing) {
-                outline(g, field, C_SEL);
-                editRect = field;
-                paintEditText(g, field);
-            } else {
-                g.drawText(fit(row.value(), fieldW - (COLOR_KEYS.contains(row.key()) ? 16 : 4)), fieldX + 2, y + 1, row.editable() ? C_TEXT : C_DIM, false);
-                if (row.editable()) {
-                    final String key = row.key(), value = row.value();
-                    regions.add(new Region(field, () -> startEdit(key, value, field)));
-                }
-            }
-            y += ROW_H + 1;
+        }
+        int rowH = ROW_H + 1;
+        propMaxScroll = Math.max(0, vis.size() * rowH + 6 - (viewH - top));
+        propScroll = Math.max(0, Math.min(propScroll, propMaxScroll));
+        int y = top + 3 - propScroll;
+        Rect panel = new Rect(x0, top, RIGHT_W, viewH - top);
+        g.pushClip(x0, top, RIGHT_W, viewH - top);
+        for (PropRow row : vis) {
+            if (y + ROW_H > top && y < viewH) paintPropRow(g, row, panel, x0, y, fieldX, fieldW);
+            y += rowH;
         }
         g.popClip();
+        if (propMaxScroll > 0) {                                   // 스크롤 막대
+            int trackH = viewH - top - 4, thumbH = Math.max(8, trackH * (viewH - top) / (vis.size() * rowH + 6));
+            int thumbY = top + 2 + (trackH - thumbH) * propScroll / propMaxScroll;
+            g.fillRect(viewW - 3, top + 2, 2, trackH, 0x30FFFFFF);
+            g.fillRect(viewW - 3, thumbY, 2, thumbH, 0xA0FFFFFF);
+        }
+    }
+
+    private static boolean sees(Rect panel, Rect r) {
+        return r.y() >= panel.y() && r.bottom() <= panel.bottom();
+    }
+
+    private void paintPropRow(UiGfx g, PropRow row, Rect panel, int x0, int y, int fieldX, int fieldW) {
+        if (row.kind() == Kind.HEADER) {
+            boolean closed = collapsedSections.contains(row.key());
+            Rect r = new Rect(x0 + 1, y - 1, RIGHT_W - 2, ROW_H);
+            g.fillRect(r.x(), r.y(), r.w(), r.h(), r.contains(mouseX, mouseY) ? 0xFF2A2F48 : 0xFF1E2130);
+            g.drawText((closed ? "+ " : "- ") + row.label(), x0 + 5, y + 1, C_TEXT, false);
+            if (sees(panel, r)) {
+                final String key = row.key();
+                regions.add(new Region(r, () -> {
+                    if (!collapsedSections.remove(key)) collapsedSections.add(key);
+                }));
+            }
+            return;
+        }
+        g.drawText(row.label(), x0 + 5, y + 1, C_DIM, false);
+        Rect field = new Rect(fieldX, y - 1, fieldW, ROW_H);
+        boolean editing = row.key().equals(editKey) && !row.key().isEmpty();
+        boolean fieldHover = !editing && row.editable() && field.contains(mouseX, mouseY) && panel.contains(mouseX, mouseY);
+        g.fillRect(field.x(), field.y(), field.w(), field.h(), fieldHover ? (mouseDown ? shade(C_FIELD, -6) : shade(C_FIELD, 22)) : C_FIELD);
+        if (fieldHover) outline(g, field, mouseDown ? C_SEL : 0x80FFFFFF);
+        int reserve = 4;
+        if (row.kind() == Kind.COLOR) {                            // 색 칸 오른쪽에 현재 색 견본
+            reserve = 16;
+            Integer swatch = Colors.tryParse(editing ? editBuffer.toString().trim() : row.value());
+            if (swatch != null) {
+                g.fillRect(field.right() - 11, field.y() + 2, 9, field.h() - 4, 0xFF2A2D3E);
+                g.fillRect(field.right() - 11, field.y() + 2, 9, field.h() - 4, swatch);
+            }
+        }
+        final String key = row.key(), value = row.value();
+        if (row.kind() == Kind.NUMBER && !editing) reserve = 19;
+        if (editing) {
+            outline(g, field, C_SEL);
+            editRect = field;
+            paintEditText(g, field);
+            return;
+        }
+        switch (row.kind()) {
+            case BOOL -> {
+                boolean def = BOOLS.getOrDefault(key, false);
+                boolean on = value.isBlank() ? def : Boolean.parseBoolean(value.trim());
+                Rect box = new Rect(field.x() + 2, field.y() + 2, ROW_H - 4, ROW_H - 4);
+                g.fillRect(box.x(), box.y(), box.w(), box.h(), 0xFF8A8FA8);
+                g.fillRect(box.x() + 1, box.y() + 1, box.w() - 2, box.h() - 2, 0xFF0A0B10);
+                if (on) g.fillRect(box.x() + 2, box.y() + 2, box.w() - 4, box.h() - 4, C_OK);
+                g.drawText(on ? "예" : "아니오", field.x() + ROW_H + 2, y + 1, C_TEXT, false);
+                if (sees(panel, field)) regions.add(new Region(field, () -> toggleBool(key, value)));
+            }
+            case ENUM -> {
+                g.drawText(fit(value.isBlank() ? "(기본)" : value, fieldW - 14), fieldX + 2, y + 1, value.isBlank() ? C_DIM : C_TEXT, false);
+                g.drawText("v", field.right() - 8, y + 1, C_DIM, false);
+                if (sees(panel, field)) regions.add(new Region(field, () -> openMenu(field, row.options(), v -> applyValue(key, v))));
+            }
+            case NUMBER -> {
+                g.drawText(fit(value, fieldW - reserve), fieldX + 2, y + 1, C_TEXT, false);
+                Rect minus = new Rect(field.right() - 18, field.y() + 1, 8, ROW_H - 2), plus = new Rect(field.right() - 9, field.y() + 1, 8, ROW_H - 2);
+                stepper(g, minus, "-");
+                stepper(g, plus, "+");
+                if (sees(panel, field)) {
+                    regions.add(new Region(field, () -> startEdit(key, value, field)));
+                    regions.add(new Region(minus, () -> adjustNumber(key, value, -1, false)));
+                    regions.add(new Region(plus, () -> adjustNumber(key, value, 1, false)));
+                }
+            }
+            default -> {
+                g.drawText(fit(row.value(), fieldW - reserve), fieldX + 2, y + 1, row.editable() ? C_TEXT : C_DIM, false);
+                if (row.editable() && sees(panel, field)) regions.add(new Region(field, () -> startEdit(key, value, field)));
+            }
+        }
+    }
+
+    private void stepper(UiGfx g, Rect r, String label) {
+        boolean over = r.contains(mouseX, mouseY);
+        g.fillRect(r.x(), r.y(), r.w(), r.h(), over ? (mouseDown ? shade(C_BTN, -20) : shade(C_BTN, 30)) : C_BTN);
+        g.drawText(label, r.x() + (r.w() - tm.width(label)) / 2, r.y() + (r.h() - tm.lineHeight()) / 2 + 1, C_TEXT, false);
+    }
+
+    private void toggleBool(String key, String current) {
+        boolean def = BOOLS.getOrDefault(key, false);
+        boolean now = current.isBlank() ? def : Boolean.parseBoolean(current.trim());
+        boolean next = !now;
+        applyValue(key, next == def ? "" : Boolean.toString(next));
+    }
+
+    private void adjustNumber(String key, String current, int dir, boolean big) {
+        LayoutBox box = selectedBox();
+        if (box == null) return;
+        String next;
+        if (key.equals("opacity")) {
+            float v = 1f;
+            try {
+                if (!current.isBlank()) v = Float.parseFloat(current.trim());
+            } catch (NumberFormatException ignored) {
+                // 잘못된 값이면 1 에서 시작
+            }
+            v = Math.max(0f, Math.min(1f, Math.round((v + dir * 0.1f) * 10f) / 10f));
+            next = v >= 1f ? "" : String.format(java.util.Locale.ROOT, "%.1f", v);
+        } else {
+            Integer px = explicitPx(current);
+            int base = px != null ? px : switch (key) {
+                case "width" -> box.w;
+                case "height" -> box.h;
+                default -> 0;
+            };
+            int v = base + dir * (big ? 8 : 1);
+            if (key.equals("width") || key.equals("height")) v = Math.max(1, v);
+            else if (key.equals("gap") || key.equals("border")) v = Math.max(0, v);
+            next = Integer.toString(v);
+        }
+        applyValue(key, next);
+    }
+
+    // ---- 간단한 선택 메뉴(드롭다운) ----
+
+    private Rect menuNear;
+    private List<String> menuItems = List.of();
+    private java.util.function.Consumer<String> menuPick;
+
+    private void openMenu(Rect near, List<String> items, java.util.function.Consumer<String> pick) {
+        menuNear = near;
+        menuItems = items;
+        menuPick = pick;
+    }
+
+    private void closeMenu() {
+        menuNear = null;
+        menuItems = List.of();
+        menuPick = null;
+    }
+
+    private void paintMenu(UiGfx g) {
+        if (menuNear == null || menuItems.isEmpty()) return;
+        regions.add(new Region(new Rect(0, 0, viewW, viewH), this::closeMenu));   // 바깥을 누르면 닫는다
+        int w = menuNear.w();
+        for (String s : menuItems) w = Math.max(w, tm.width(s) + 10);
+        int h = menuItems.size() * ROW_H + 2;
+        int x = Math.max(2, Math.min(menuNear.x(), viewW - w - 2));
+        int y = menuNear.bottom() + 1;
+        if (y + h > viewH) y = Math.max(2, menuNear.y() - h - 1);
+        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
+        g.fillRect(x, y, w, h, 0xFF161820);
+        regions.add(new Region(new Rect(x, y, w, h), null));
+        for (int i = 0; i < menuItems.size(); i++) {
+            String item = menuItems.get(i);
+            Rect row = new Rect(x, y + 1 + i * ROW_H, w, ROW_H);
+            if (row.contains(mouseX, mouseY)) g.fillRect(row.x(), row.y(), row.w(), row.h(), C_ROW_SEL);
+            g.drawText(item, x + 4, row.y() + 1, C_TEXT, false);
+            regions.add(new Region(row, () -> {
+                var pick = menuPick;
+                closeMenu();
+                if (pick != null) pick.accept(item);
+            }));
+        }
+    }
+
+    // ---- 도움말 ----
+
+    private boolean helpOpen;
+
+    private static final String[] HELP = {
+        "[ 만들기 ]  왼쪽 블록을 끌어다 놓기 / 클릭하면 선택한 컨테이너에 추가",
+        "[ 선택 ]  요소 클릭 · 구조 트리 행 클릭 · Esc 선택 해제(한 번 더 누르면 에디터 닫기)",
+        "[ 이동·크기 ]  끌어서 이동 · 손잡이로 크기 · 방향키 1px / Shift+방향키 8px",
+        "[ 복제·복사 ]  Ctrl+D 복제 · Ctrl+C / Ctrl+X / Ctrl+V 복사·잘라내기·붙여넣기",
+        "[ 구조 ]  Ctrl+G 컨테이너로 감싸기(Wrap) · Ctrl+Shift+G 풀기(Unwrap) · Delete 삭제",
+        "[ 실행 취소 ]  Ctrl+Z / Ctrl+Y · 저장 Ctrl+S",
+        "[ 속성 ]  값 클릭 후 입력(Enter 확정 · Esc 취소) · -/+ 로 숫자 조절 · 목록·체크 칸은 클릭",
+        "[ 화면 ]  휠/가운데 버튼으로 화면 이동 · Home/Fit 원위치 · Tab 패널 숨기기",
+        "[ 패널 ]  가장자리 탭으로 접기 · 접힌 패널/툴바는 가장자리에 마우스를 올려 두면 나타남",
+        "[ 기타 ]  F1 또는 ? 이 도움말 · F8 / Exit 에디터 닫기",
+    };
+
+    private void paintHelp(UiGfx g) {
+        if (!helpOpen) return;
+        regions.add(new Region(new Rect(0, 0, viewW, viewH), () -> helpOpen = false));
+        g.fillRect(0, 0, viewW, viewH, 0xB0000000);
+        int w = Math.min(viewW - 16, 330);
+        int lh = tm.lineHeight() + 3;
+        int h = HELP.length * lh + 26;
+        int x = (viewW - w) / 2, y = Math.max(4, (viewH - h) / 2);
+        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
+        g.fillRect(x, y, w, h, 0xFF161820);
+        g.drawText("에디터 도움말  (아무 곳이나 누르면 닫힘)", x + 6, y + 5, C_SEL, false);
+        for (int i = 0; i < HELP.length; i++) {
+            g.pushClip(x + 4, y, w - 8, h);
+            g.drawText(HELP[i], x + 6, y + 18 + i * lh, C_TEXT, false);
+            g.popClip();
+        }
+    }
+
+    // ---- 복사 / 붙여넣기 / 감싸기 ----
+
+    private String elementClip = "";
+
+    private void copyElement(boolean cut) {
+        if (selected <= 0) return;
+        elementClip = EditorOps.elementXml(session.text(), selected);
+        host.setClipboard(elementClip);
+        if (cut) deleteSelected();
+        else setStatus("복사했어요", false);
+    }
+
+    private void pasteElement() {
+        String clip = host.clipboard();
+        String xml = clip != null && clip.strip().startsWith("<") ? clip.strip() : elementClip;
+        if (xml.isBlank()) {
+            setStatus("붙여넣을 요소가 없어요", true);
+            return;
+        }
+        try {
+            XmlSource.parse(xml);
+        } catch (RuntimeException e) {
+            setStatus("붙여넣을 수 없는 내용이에요", true);
+            return;
+        }
+        LayoutBox sel = selectedBox();
+        LayoutBox target = sel == null ? doc.layout() : CONTAINERS.contains(sel.tag()) ? sel : displayParent(sel);
+        int parentIdx = target == null || target.node.sourceIndex() < 0 ? 0 : target.node.sourceIndex();
+        String safe = EditorOps.uniqueIds(session.text(), xml);
+        EditorOps.Added r;
+        try {
+            r = EditorOps.insertXml(session.text(), parentIdx, Integer.MAX_VALUE, safe);
+        } catch (RuntimeException e) {
+            setStatus("여기에는 붙여넣을 수 없어요", true);
+            return;
+        }
+        int[] c = visibleCenterDoc();
+        String text = growToFit(placeAt(r.text(), r.index(), parentIdx, c[0], c[1]), r.index());
+        if (applyEdit(src -> text)) selected = r.index();
+    }
+
+    /** 선택한 요소를 컨테이너(row/column/panel/stack)로 감싼다. */
+    public void wrapSelected(String tag) {
+        if (selected <= 0) return;
+        try {
+            EditorOps.Added r = EditorOps.wrap(session.text(), selected, tag);
+            if (applyEdit(src -> r.text())) selected = r.index();
+        } catch (IllegalArgumentException e) {
+            setStatus(e.getMessage(), true);
+        }
+    }
+
+    /** 선택한 컨테이너를 풀어 자식들을 그 자리로 올린다. */
+    public void unwrapSelected() {
+        LayoutBox b = selectedBox();
+        if (b == null || selected <= 0 || !CONTAINERS.contains(b.tag()) || displayChildren(b).isEmpty()) {
+            setStatus("풀 수 있는 컨테이너를 선택하세요", true);
+            return;
+        }
+        try {
+            EditorOps.Added r = EditorOps.unwrap(session.text(), selected);
+            if (applyEdit(src -> r.text())) selected = r.index();
+        } catch (IllegalArgumentException e) {
+            setStatus(e.getMessage(), true);
+        }
     }
 
     private void paintEditText(UiGfx g, Rect field) {

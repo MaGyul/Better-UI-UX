@@ -95,17 +95,17 @@ class EditorViewTest {
     @Test
     void startingAndEndingFieldEditingTurnsTextInputOnAndOff() {
         ed.select(A);
-        click(fieldX(), fieldY(3));                                       // 너비 칸
+        click(fieldX(), fieldY(4));                                       // 너비 칸
         assertEquals(1, host.textInputCalls.size());
         assertTrue(host.textInputCalls.get(0).startsWith("on@"), host.textInputCalls.toString());
         ed.keyPressed(EditorKey.ENTER, false, false);
         assertEquals("off", host.textInputCalls.get(host.textInputCalls.size() - 1));
 
-        click(fieldX(), fieldY(3));
+        click(fieldX(), fieldY(4));
         ed.keyPressed(EditorKey.ESCAPE, false, false);
         assertEquals("off", host.textInputCalls.get(host.textInputCalls.size() - 1));
 
-        click(fieldX(), fieldY(3));
+        click(fieldX(), fieldY(4));
         click(230, 220);                                                  // 칸 밖을 눌러 확정
         assertEquals("off", host.textInputCalls.get(host.textInputCalls.size() - 1));
         assertEquals(6, host.textInputCalls.size(), "시작 3번, 끝 3번 — 짝이 맞는다");
@@ -114,7 +114,7 @@ class EditorViewTest {
     @Test
     void closingTheEditorWhileEditingStopsTextInputWithoutChangingTheDocument() {
         ed.select(A);
-        click(fieldX(), fieldY(3));
+        click(fieldX(), fieldY(4));
         ed.charTyped('9');
         ed.close();
         assertEquals("off", host.textInputCalls.get(host.textInputCalls.size() - 1));
@@ -128,7 +128,7 @@ class EditorViewTest {
     void charactersAreIgnoredUnlessAFieldIsBeingEdited() {
         assertFalse(ed.charTyped('x'));
         ed.select(A);
-        click(fieldX(), fieldY(3));
+        click(fieldX(), fieldY(4));
         assertTrue(ed.charTyped('7'));
         assertFalse(ed.charTyped('\n'));
     }

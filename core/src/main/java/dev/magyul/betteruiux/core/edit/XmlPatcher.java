@@ -117,7 +117,7 @@ public final class XmlPatcher {
         return insertChild(s, e.parent, at, block);
     }
 
-    private static String uniqueId(XmlSource s, String base) {
+    static String uniqueId(XmlSource s, String base) {
         Set<String> used = new HashSet<>();
         for (Element el : s.all()) {
             String v = s.attrValue(el, "id");
@@ -180,7 +180,7 @@ public final class XmlPatcher {
     }
 
     /** 요소 원문을 꺼내 첫 줄의 들여쓰기만큼 이후 줄에서 덜어낸다(상대 들여쓰기만 남김). */
-    private static String dedentBlock(String t, Element e) {
+    static String dedentBlock(String t, Element e) {
         String raw = t.substring(e.start, e.end);
         String indent = lineIndent(t, e.start);
         String[] lines = raw.split("\n", -1);

@@ -221,7 +221,7 @@ class EditorFeedbackTest {
     // ---- (d) 컬러피커 ----
 
     private static final String COLORED = "<screen><panel id=\"a\" x=\"170\" y=\"40\" width=\"60\" height=\"30\" background=\"#FF336699\"/></screen>";
-    private static final int BG_ROW = 10;
+    private static final int BG_ROW = 13;
 
     @Test
     void colorFieldsOpenAPickerAndTheTextStillWorks() throws Exception {
@@ -403,7 +403,8 @@ class EditorFeedbackTest {
 
     @Test
     void hiddenToolbarShowsAfterHoveringTheTopEdgeForAWhile() throws Exception {
-        EditorController e = editor(COLORED);
+        lastHost = new Host();
+        EditorController e = new EditorController(lastHost, new FixedMetrics(), COLORED, 700, H);   // 좁은 창에서는 Hide 버튼을 생략한다
         long[] now = {0};
         e.clock = () -> now[0];
         Rect hide = textRect(paint(e), "Hide");

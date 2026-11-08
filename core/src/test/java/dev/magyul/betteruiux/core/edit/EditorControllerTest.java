@@ -194,7 +194,7 @@ class EditorControllerTest {
     @Test
     void editingAStylePropertyThroughTheFieldWritesToTheRightPlace() {
         ed.select(A);
-        clickField(3);                          // 행: tag, id, class, width ...
+        clickField(4);                          // 행: tag, id, class, width ...
         assertTrue(ed.isEditingField());
         ed.keyPressed(EditorKey.BACKSPACE, false, false);
         ed.keyPressed(EditorKey.BACKSPACE, false, false);
@@ -209,13 +209,13 @@ class EditorControllerTest {
     @Test
     void escapeCancelsFieldEditingAndEmptyValueRemovesTheAttribute() {
         ed.select(A);
-        clickField(3);
+        clickField(4);
         type("999");
         ed.keyPressed(EditorKey.ESCAPE, false, false);
         assertEquals(XML, ed.text());
         assertFalse(ed.isEditingField());
 
-        clickField(3);
+        clickField(4);
         for (int i = 0; i < 5; i++) ed.keyPressed(EditorKey.BACKSPACE, false, false);
         ed.keyPressed(EditorKey.ENTER, false, false);
         assertNull(attr("a", "width"), "빈 값은 속성 제거");

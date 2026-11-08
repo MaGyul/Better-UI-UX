@@ -109,6 +109,102 @@ public final class EditorOps {
         return new Added(out, p2.children().get(Math.min(clamped, p2.children().size() - 1)).index());
     }
 
+    /** 요소 원문(첫 줄 들여쓰기를 덜어낸 상태). 복사에 쓴다. */
+    public static String elementXml(String text, int index) {
+        XmlSource s = XmlSource.parse(text);
+        return XmlPatcher.dedentBlock(text, s.element(index));
+    }
+
+    /** parent 의 pos 번째 자식 자리에 임의의 요소 XML 을 넣는다. */
+    public static Added insertXml(String text, int parentIndex, int pos, String xml) {
+        XmlSource s = XmlSource.parse(text);
+        Element parent = s.element(parentIndex);
+        int clamped = Math.max(0, Math.min(pos, parent.children().size()));
+        String out = XmlPatcher.insertChild(s, parent, clamped, xml);
+        XmlSource s2 = XmlSource.parse(out);
+        Element p2 = s2.element(parentIndex);
+        return new Added(out, p2.children().get(Math.min(clamped, p2.children().size() - 1)).index());
+    }
+
+    /** 붙여넣을 XML 의 id 가 문서에 이미 있으면 {@code _copy} 를 붙여 겹치지 않게 한다. */
+    public static String uniqueIds(String text, String xml) {
+        XmlSource s = XmlSource.parse(text);
+        java.util.Set<String> used = new java.util.HashSet<>();
+        for (Element el : s.all()) {
+            String v = s.attrValue(el, "id");
+            if (v != null) used.add(v);
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\sid\\s*=\\s*)([\"'])([^\"']*)\\2").matcher(xml);
+        StringBuilder out = new StringBuilder();
+        int last = 0;
+        while (m.find()) {
+            String id = m.group(3);
+            String use = id;
+            if (used.contains(id)) {
+                use = id + "_copy";
+                for (int i = 2; used.contains(use); i++) use = id + "_copy" + i;
+            }
+            used.add(use);
+            out.append(xml, last, m.start()).append(m.group(1)).append(m.group(2)).append(use).append(m.group(2));
+            last = m.end();
+        }
+        return out.append(xml, last, xml.length()).toString();
+    }
+
+    private static final String[] POSITION_ATTRS = {"x", "y", "anchor"};
+
+    /**
+     * 요소를 {@code tag} 컨테이너로 감싼다. 자유 배치 부모 안에서 보이던 자리가 유지되도록 x/y/anchor 는 감싼 컨테이너로 옮긴다.
+     * 감싼 요소의 번호(안쪽 요소가 아니라 컨테이너)를 돌려준다.
+     */
+    public static Added wrap(String text, int index, String tag) {
+        if (!java.util.Set.of("row", "column", "panel", "stack").contains(tag)) throw new IllegalArgumentException("감쌀 수 없는 요소: " + tag);
+        XmlSource s = XmlSource.parse(text);
+        Element e = s.element(index);
+        if (e.parent() == null) throw new IllegalArgumentException("루트 요소는 감쌀 수 없습니다");
+        Element parent = e.parent();
+        int pos = parent.children().indexOf(e);
+        String block = XmlPatcher.dedentBlock(text, e);
+        StringBuilder attrs = new StringBuilder();
+        XmlSource inner = XmlSource.parse(block);
+        String innerXml = block;
+        for (String name : POSITION_ATTRS) {
+            String v = inner.attrValue(inner.root(), name);
+            if (v == null) continue;
+            attrs.append(' ').append(name).append("=\"").append(v).append('"');
+            innerXml = XmlPatcher.setAttr(inner, inner.root(), name, null);
+            inner = XmlSource.parse(innerXml);
+        }
+        StringBuilder wrapped = new StringBuilder("<" + tag + attrs + ">\n");
+        for (String line : innerXml.split("\n", -1)) wrapped.append(line.isBlank() ? line : "  " + line).append('\n');
+        wrapped.append("</").append(tag).append('>');
+        String removed = XmlPatcher.removeElement(s, e);
+        XmlSource s2 = XmlSource.parse(removed);
+        Element p2 = s2.element(parent.index());
+        String out = XmlPatcher.insertChild(s2, p2, pos, wrapped.toString());
+        XmlSource s3 = XmlSource.parse(out);
+        return new Added(out, s3.element(parent.index()).children().get(pos).index());
+    }
+
+    /** 컨테이너를 풀어 자식들을 그 자리에 올린다. 첫 자식의 번호를 돌려준다. */
+    public static Added unwrap(String text, int index) {
+        XmlSource s = XmlSource.parse(text);
+        Element e = s.element(index);
+        if (e.parent() == null) throw new IllegalArgumentException("루트 요소는 풀 수 없습니다");
+        if (e.children().isEmpty()) throw new IllegalArgumentException("자식이 없는 요소는 풀 수 없습니다");
+        Element parent = e.parent();
+        int pos = parent.children().indexOf(e);
+        java.util.List<String> blocks = new java.util.ArrayList<>();
+        for (Element c : e.children()) blocks.add(XmlPatcher.dedentBlock(text, c));
+        String out = XmlPatcher.removeElement(s, e);
+        for (int i = 0; i < blocks.size(); i++) {
+            XmlSource cur = XmlSource.parse(out);
+            out = XmlPatcher.insertChild(cur, cur.element(parent.index()), pos + i, blocks.get(i));
+        }
+        XmlSource fin = XmlSource.parse(out);
+        return new Added(out, fin.element(parent.index()).children().get(pos).index());
+    }
+
     /** 요소를 삭제한 뒤, 선택을 옮길 번호(같은 부모의 이웃, 없으면 부모)를 함께 돌려준다. */
     public static Added delete(String text, int index) {
         XmlSource s = XmlSource.parse(text);

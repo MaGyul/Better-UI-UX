@@ -233,11 +233,14 @@ class EditorBoundsTest {
         EditorController e = editor(XML);
         e.select(A);
         Rect before = rect(e, "a");
-        e.mousePressed(W - 142 + EditorController.FIELD_OFFSET + 6, 16 + 3 + 6 * 12 + 1, 0);   // 기준점 칸
-        e.mouseReleased(W - 142 + EditorController.FIELD_OFFSET + 6, 16 + 3 + 6 * 12 + 1, 0);
-        assertTrue(e.isEditingField());
-        for (char c : "top-right".toCharArray()) e.charTyped(c);
-        e.keyPressed(EditorKey.ENTER, false, false);
+        e.mousePressed(W - 142 + EditorController.FIELD_OFFSET + 6, 16 + 3 + 7 * 12 + 1, 0);   // 기준점 칸
+        e.mouseReleased(W - 142 + EditorController.FIELD_OFFSET + 6, 16 + 3 + 7 * 12 + 1, 0);
+        DrawList menu = new DrawList();
+        e.paint(menu);                                                    // 기준점은 목록 선택 칸: 메뉴가 열린다
+        DrawCommand.DrawText item = menu.commands().stream().filter(c -> c instanceof DrawCommand.DrawText t && t.text().equals("top-right"))
+                .map(c -> (DrawCommand.DrawText) c).findFirst().orElseThrow();
+        e.mousePressed(item.x() + 2, item.y() + 2, 0);
+        e.mouseReleased(item.x() + 2, item.y() + 2, 0);
         assertEquals("top-right", attr(e, A, "anchor"));
         assertEquals(before, rect(e, "a"), "기준점만 바꿨을 뿐 요소는 움직이지 않는다");
         assertEquals("-210", attr(e, A, "x"), "새 기준점(오른쪽 끝) 기준 오프셋으로 다시 계산");
