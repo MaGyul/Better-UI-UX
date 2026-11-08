@@ -183,7 +183,7 @@ public final class UiScreen extends Screen {
         }
         int idx = first.get().node.sourceIndex();
         editor.select(idx);
-        int fx = this.width - 142 + 52 + 6, fy = 16 + 3 + 3 * 12 + 1;   // 속성 패널의 4번째 행(width)
+        int fx = this.width - 142 + 60 + 6, fy = 16 + 3 + 3 * 12 + 1;   // 속성 패널의 4번째 행(너비)
         String before = editor.text();
         editor.mousePressed(fx, fy, 0);
         editor.mouseReleased(fx, fy, 0);
