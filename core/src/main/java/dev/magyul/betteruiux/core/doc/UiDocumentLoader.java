@@ -30,6 +30,7 @@ public final class UiDocumentLoader {
 
         List<Stylesheet> sheets = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
+        UiExpander.expand(root, userDir, warnings);   // include / template / use / slot
         collect(root, userDir, sheets, warnings);
         for (Stylesheet s : sheets) warnings.addAll(s.warnings());
         return new UiDocument(root, text, sheets, warnings);

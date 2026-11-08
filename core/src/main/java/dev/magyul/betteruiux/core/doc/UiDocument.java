@@ -106,7 +106,10 @@ public final class UiDocument {
 
     /** 문서 안의 {@code <style>} 블록만 읽는다(외부 {@code <link>} 까지 읽으려면 {@link UiDocumentLoader}). */
     public static UiDocument parse(String xml, TextMetrics text) throws UiParseException {
-        return new UiDocument(UiParser.parse(xml), text);
+        UiNode root = UiParser.parse(xml);
+        List<String> warnings = new ArrayList<>();
+        UiExpander.expand(root, null, warnings);   // template/use/slot (include 는 기본 제공 파일만)
+        return new UiDocument(root, text, inlineSheets(root), warnings);
     }
 
     static List<Stylesheet> inlineSheets(UiNode root) {
