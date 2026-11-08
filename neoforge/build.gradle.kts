@@ -33,6 +33,11 @@ dependencies {
 // 배포 jar에 core 클래스를 합친다(M0 단순화; 추후 JarJar로 전환 가능).
 tasks.jar {
     from(project(":core").extensions.getByType<SourceSetContainer>()["main"].output)
+    // 영상(mp4/H.264) 해독 라이브러리(JCodec, 순수 Java)도 같은 jar 에 합친다.
+    from(configurations.runtimeClasspath.map { cp -> cp.filter { it.name.startsWith("jcodec") && it.name.endsWith(".jar") }.map { zipTree(it) } }) {
+        exclude("META-INF/MANIFEST.MF", "META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA")
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 tasks.processResources {

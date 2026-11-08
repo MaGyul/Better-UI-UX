@@ -103,13 +103,16 @@ final class ExternalImages {
     record Frame(Identifier id, int width, int height) {}
 
     private static void upload(Entry e, int frame) {
-        int w = e.image.width(), h = e.image.height();
-        int[] px = e.image.frames().get(frame);
-        var pixels = e.texture.getPixels();
+        upload(e.texture, e.image.width(), e.image.height(), e.image.frames().get(frame));
+    }
+
+    /** ARGB 픽셀을 동적 텍스처에 올린다(렌더 스레드). 이미지와 영상이 함께 쓴다. */
+    static void upload(DynamicTexture texture, int w, int h, int[] argb) {
+        var pixels = texture.getPixels();
         for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) pixels.setPixel(x, y, px[y * w + x]);
+            for (int x = 0; x < w; x++) pixels.setPixel(x, y, argb[y * w + x]);
         }
-        e.texture.upload();
+        texture.upload();
     }
 
     private static Entry entry(String name, Runnable onReady) {

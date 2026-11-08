@@ -101,7 +101,7 @@ public final class LayoutEngine {
     private static boolean isLeaf(LayoutBox b) {
         if (b.widget != null) return !b.widget.container();
         return switch (b.tag()) {
-            case "label", "button", "image", "spacer", "item", "separator" -> true;
+            case "label", "button", "image", "video", "spacer", "item", "separator" -> true;
             default -> false;
         };
     }
@@ -171,7 +171,7 @@ public final class LayoutEngine {
         if (b.widget != null && !b.widget.container()) return b.widget.intrinsicWidth();
         switch (b.tag()) {
             case "label", "button": return maxLineWidth(textOf(b));
-            case "image": return naturalSize(b, 0);
+            case "image", "video": return naturalSize(b, 0);
             case "item": return Math.max(1, b.style.integer("size", 16));
             case "spacer", "separator": return 0;
             case "grid": return gridMetrics(b)[0][0];
@@ -193,7 +193,7 @@ public final class LayoutEngine {
         if (b.widget != null && !b.widget.container()) return b.widget.intrinsicHeight();
         switch (b.tag()) {
             case "label", "button": return lineCount(textOf(b)) * text.lineHeight();
-            case "image": return naturalSize(b, 1);
+            case "image", "video": return naturalSize(b, 1);
             case "item": return Math.max(1, b.style.integer("size", 16));
             case "spacer", "separator": return 0;
             case "grid": return gridMetrics(b)[1][0];

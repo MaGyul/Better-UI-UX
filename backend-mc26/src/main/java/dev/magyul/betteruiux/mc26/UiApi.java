@@ -39,6 +39,7 @@ public final class UiApi {
         baseDir = configBaseDir;
         HudManager.init(configBaseDir);
         ExternalImages.init(configBaseDir);
+        ExternalVideos.init(configBaseDir);
         BackendBuiltins.register();
         ScriptBridge.prewarm(configBaseDir);
     }
@@ -75,7 +76,8 @@ public final class UiApi {
 
     static void fireOpened(String id, UiDocument doc) {
         DataSources.bindTo(doc);
-        doc.setImageSizer(src -> ExternalImages.size(src, doc::requestRelayout));      // file: 이미지는 원래 크기로 놓는다                                     // 내장/등록된 데이터 소스 먼저(모드의 훅이 같은 이름을 덮어쓸 수 있다)
+        doc.setImageSizer(src -> ExternalVideos.handles(src) ? ExternalVideos.size(src, doc::requestRelayout)
+                : ExternalImages.size(src, doc::requestRelayout));                        // file: 이미지/영상은 원래 크기로 놓는다                                     // 내장/등록된 데이터 소스 먼저(모드의 훅이 같은 이름을 덮어쓸 수 있다)
         for (BiConsumer<String, UiDocument> l : OPENED) {
             try {
                 l.accept(id, doc);

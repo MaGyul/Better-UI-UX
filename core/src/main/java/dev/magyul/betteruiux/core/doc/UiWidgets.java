@@ -8,7 +8,7 @@ import java.util.function.Function;
 public final class UiWidgets {
     private static final java.util.Set<String> BUILTIN = java.util.Set.of(
             "screen", "hud", "panel", "row", "column", "stack", "label", "button", "image", "spacer",
-            "style", "link", "template", "use", "include", "slot", "fragment", "script");
+            "style", "link", "template", "use", "include", "slot", "fragment", "script", "video");
     private static final Map<String, Function<UiElement, UiWidget>> FACTORIES = new ConcurrentHashMap<>();
 
     private UiWidgets() {}

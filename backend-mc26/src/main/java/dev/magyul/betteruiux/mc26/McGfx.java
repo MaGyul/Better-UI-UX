@@ -39,8 +39,8 @@ public final class McGfx implements UiGfx {
     @Override
     public void drawTexture(String texture, int x, int y, int w, int h,
                             float u, float v, int regionW, int regionH, int texW, int texH, int argb) {
-        if (ExternalImages.handles(texture)) {                       // file:이름.png — 외부 이미지(동적 텍스처)
-            ExternalImages.Frame f = ExternalImages.texture(texture);
+        if (ExternalImages.handles(texture)) {                       // file:이름.png / .gif / .mp4 — 외부 이미지·영상(동적 텍스처)
+            ExternalImages.Frame f = ExternalVideos.handles(texture) ? ExternalVideos.texture(texture) : ExternalImages.texture(texture);
             if (f == null) return;                                   // 아직 불러오는 중이거나 실패: 그 자리는 비워 둔다
             boolean fitWhole = u == 0 && v == 0 && regionW == w && regionH == h && texW == w && texH == h;   // uv/tex 를 따로 안 줬으면 이미지 전체를 상자에 맞춘다
             if (fitWhole) g.blit(RenderPipelines.GUI_TEXTURED, f.id(), x, y, 0, 0, w, h, f.width(), f.height(), f.width(), f.height(), argb);
