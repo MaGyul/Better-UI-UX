@@ -97,6 +97,23 @@ class StyleTextTest {
     }
 
     @Test
+    void linkedSheetsAreFoundInDocumentOrder() {
+        XmlSource s = src("<screen><link rel=\"style\" href=\"a.uicss\"/><link href=\"b.uicss\"/><link rel=\"icon\" href=\"x.png\"/><link rel=\"style\" href=\"a.uicss\"/></screen>");
+        assertEquals(List.of("a.uicss", "b.uicss"), StyleText.linkedSheets(s));
+    }
+
+    @Test
+    void externalKeysEditAddAndCreateRules() {
+        String css = ".card { padding: 8; }\n#z { width: 1; }\n";
+        assertEquals(".card { padding: 12; }\n#z { width: 1; }\n", StyleText.applyExternal(css, "xcss:t.uicss:0:padding", "12"));
+        assertEquals(".card { padding: 8; color: #FFFFFF; }\n#z { width: 1; }\n", StyleText.applyExternal(css, "xcss+:t.uicss:0", "color: #FFFFFF"));
+        assertEquals(css + "#new { opacity: 0.5; }\n", StyleText.applyExternal(css, "xcss*:t.uicss:#new", "opacity: 0.5"));
+        assertEquals("#new { opacity: 0.5; }\n", StyleText.applyExternal("", "xcss*:t.uicss:#new", "opacity: 0.5"));
+        assertEquals("t.uicss", StyleText.externalHref("xcss:t.uicss:0:padding"));
+        assertThrows(IllegalArgumentException.class, () -> StyleText.applyExternal(css, "xcss+:t.uicss:0", "엉터리"));
+    }
+
+    @Test
     void matchingRulesForAnElement() throws Exception {
         UiDocument d = UiDocument.parse(XML, new FixedMetrics());
         d.layout(400, 240);

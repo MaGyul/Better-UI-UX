@@ -40,6 +40,13 @@ final class StyleText {
         return out;
     }
 
+    /** 외부 스타일시트(.uicss) 글 전체의 규칙들. */
+    static List<Rule> cssRules(String css) {
+        List<Rule> out = new ArrayList<>();
+        scan(css, 0, css.length(), out);
+        return out;
+    }
+
     private static void scan(String text, int from, int to, List<Rule> out) {
         char[] m = mask(text, from, to);
         int i = from;
@@ -125,8 +132,9 @@ final class StyleText {
     // ---- 선택한 요소에 적용되는 규칙 ----
 
     /** 이 요소에 맞는 규칙들(문서 순서)과 그 번호(= {@link #rules} 목록의 위치). */
-    static List<Integer> matching(XmlSource src, LayoutBox box) {
-        List<Rule> rules = rules(src);
+    static List<Integer> matching(XmlSource src, LayoutBox box) { return matchingIn(rules(src), box); }
+
+    static List<Integer> matchingIn(List<Rule> rules, LayoutBox box) {
         List<Integer> hits = new ArrayList<>();
         for (int n = 0; n < rules.size(); n++) {
             for (String one : rules.get(n).selector().split(",")) {
@@ -151,20 +159,97 @@ final class StyleText {
         List<PropRow> rows = new ArrayList<>();
         List<Integer> hits = matching(src, box);
         rows.add(PropertyModel.header("스타일 규칙"));
-        for (int n : hits) {
-            Rule r = rules.get(n);
-            rows.add(new PropRow(r.selector(), "§rule" + n, "", false, Kind.HEADER, List.of()));
-            for (Decl d : r.decls()) {
-                String v = src.text().substring(d.valueStart(), d.valueEnd());
-                rows.add(new PropRow(d.prop(), KEY + n + ":" + d.prop(), v, true));
-            }
-            rows.add(new PropRow("+ 추가", ADD_KEY + n, "", true));
-        }
+        for (int n : hits) ruleRows(rows, src.text(), rules.get(n), "§rule" + n, KEY + n + ":", ADD_KEY + n);
         rows.add(new PropRow("+ 새 규칙",NEW_KEY + selectorFor(box), "", true));   // 맞는 규칙이 없어도 첫 규칙을 만들 수 있다
         return rows;
     }
 
+    private static void ruleRows(List<PropRow> rows, String text, Rule r, String headerKey, String declPrefix, String addKey) {
+        rows.add(new PropRow(r.selector(), headerKey, "", false, Kind.HEADER, List.of()));
+        for (Decl d : r.decls()) rows.add(new PropRow(d.prop(), declPrefix + d.prop(), text.substring(d.valueStart(), d.valueEnd()), true));
+        rows.add(new PropRow("+ 추가", addKey, "", true));
+    }
+
     static final String NEW_KEY = "css*:";
+
+    // ---- 외부 스타일시트({@code <link href="x.uicss"/>}) ----
+
+    static final String X_KEY = "xcss:", X_ADD_KEY = "xcss+:", X_NEW_KEY = "xcss*:";
+
+    /** 문서가 불러오는 외부 스타일시트 하나: 파일 이름과 그 내용. */
+    record Sheet(String href, String text) {}
+
+    /** 문서의 {@code <link>} 가 가리키는 스타일시트 파일 이름들(문서 순서, 중복 없음). */
+    static List<String> linkedSheets(XmlSource src) {
+        List<String> out = new ArrayList<>();
+        for (XmlSource.Element el : src.all()) {
+            if (!el.tag.equals("link")) continue;
+            XmlSource.Attr rel = el.attr("rel"), href = el.attr("href");
+            String r = rel == null ? null : src.text().substring(rel.valueStart, rel.valueEnd);
+            if (href == null || (r != null && !r.equals("style") && !r.equals("stylesheet"))) continue;
+            String h = src.text().substring(href.valueStart, href.valueEnd);
+            if (!h.isEmpty() && !out.contains(h)) out.add(h);
+        }
+        return out;
+    }
+
+    /** 외부 스타일시트마다 "스타일시트: 파일" 구역(맞는 규칙이 없으면 새 규칙 칸만). */
+    static List<PropRow> externalRows(LayoutBox box, List<Sheet> sheets) {
+        List<PropRow> rows = new ArrayList<>();
+        for (Sheet sh : sheets) {
+            List<Rule> rules = cssRules(sh.text());
+            rows.add(PropertyModel.header("스타일시트: " + sh.href()));
+            for (int n : matchingIn(rules, box)) {
+                ruleRows(rows, sh.text(), rules.get(n), "§xrule" + sh.href() + ":" + n, X_KEY + sh.href() + ":" + n + ":", X_ADD_KEY + sh.href() + ":" + n);
+            }
+            rows.add(new PropRow("+ 새 규칙", X_NEW_KEY + sh.href() + ":" + selectorFor(box), "", true));
+        }
+        return rows;
+    }
+
+    /** 외부 스타일시트용 키({@code xcss:파일:규칙:속성} 등)에서 파일 이름을 꺼낸다(아니면 null). */
+    static String externalHref(String key) {
+        for (String p : new String[] {X_KEY, X_ADD_KEY, X_NEW_KEY}) {
+            if (key.startsWith(p)) {
+                int c = key.indexOf(':', p.length());
+                return c < 0 ? null : key.substring(p.length(), c);
+            }
+        }
+        return null;
+    }
+
+    /** 외부 스타일시트 {@code css} 에 키가 가리키는 수정을 반영한 새 글. 잘못된 입력이면 IllegalArgumentException. */
+    static String applyExternal(String css, String key, String raw) {
+        String href = externalHref(key);
+        if (href == null) throw new IllegalArgumentException("알 수 없는 키: " + key);
+        String prefix = key.startsWith(X_KEY) ? X_KEY : key.startsWith(X_ADD_KEY) ? X_ADD_KEY : X_NEW_KEY;
+        String rest = key.substring(prefix.length() + href.length() + 1);
+        List<Rule> rules = cssRules(css);
+        if (prefix.equals(X_NEW_KEY)) {
+            if (raw == null || raw.isBlank()) return css;
+            String[] d = parseDecl(raw);
+            String sep = css.isEmpty() || css.endsWith("\n") ? "" : "\n";
+            return css + sep + rest + " { " + d[0] + ": " + d[1] + "; }\n";
+        }
+        if (prefix.equals(X_ADD_KEY)) {
+            if (raw == null || raw.isBlank()) return css;
+            String[] d = parseDecl(raw);
+            return setDeclIn(css, rules, Integer.parseInt(rest), d[0], d[1]);
+        }
+        int colon = rest.indexOf(':');
+        return setDeclIn(css, rules, Integer.parseInt(rest.substring(0, colon)), rest.substring(colon + 1), raw);
+    }
+
+    /** {@code 속성: 값} 글을 {속성, 값} 으로 쪼갠다. 형식이 틀리면 IllegalArgumentException. */
+    static String[] parseDecl(String raw) {
+        String s = raw == null ? "" : raw.trim();
+        int c = s.indexOf(':');
+        if (c < 0) c = s.indexOf(' ');
+        if (c <= 0) throw new IllegalArgumentException("속성: 값 형태로 입력하세요");
+        String prop = s.substring(0, c).trim(), value = s.substring(c + 1).trim();
+        if (!prop.matches("[A-Za-z-][A-Za-z0-9-]*") || value.isEmpty()) throw new IllegalArgumentException("속성: 값 형태로 입력하세요");
+        return new String[] {prop, value};
+    }
 
     /** 새 규칙의 선택자: id 가 있으면 #id, 없으면 첫 class, 둘 다 없으면 태그 이름. */
     static String selectorFor(LayoutBox box) {
@@ -211,11 +296,12 @@ final class StyleText {
      *
      * @throws IllegalArgumentException 규칙이 없을 때
      */
-    static String setDecl(XmlSource src, int ruleNo, String prop, String value) {
-        List<Rule> rules = rules(src);
+    static String setDecl(XmlSource src, int ruleNo, String prop, String value) { return setDeclIn(src.text(), rules(src), ruleNo, prop, value); }
+
+    /** {@link #setDecl} 의 일반형: 규칙 목록과 그 글을 직접 받는다(문서 안 &lt;style&gt; 이든 외부 파일이든). */
+    static String setDeclIn(String t, List<Rule> rules, int ruleNo, String prop, String value) {
         if (ruleNo < 0 || ruleNo >= rules.size()) throw new IllegalArgumentException("규칙이 없습니다: " + ruleNo);
         Rule r = rules.get(ruleNo);
-        String t = src.text();
         boolean remove = value == null || value.isBlank();
         for (Decl d : r.decls()) {
             if (!d.prop().equalsIgnoreCase(prop)) continue;
@@ -260,14 +346,9 @@ final class StyleText {
         }
         if (key.startsWith(ADD_KEY)) {
             int n = Integer.parseInt(key.substring(ADD_KEY.length()));
-            String s = raw == null ? "" : raw.trim();
-            if (s.isEmpty()) return src.text();
-            int c = s.indexOf(':');
-            if (c < 0) c = s.indexOf(' ');
-            if (c <= 0) throw new IllegalArgumentException("속성: 값 형태로 입력하세요");
-            String prop = s.substring(0, c).trim(), value = s.substring(c + 1).trim();
-            if (!prop.matches("[A-Za-z-][A-Za-z0-9-]*") || value.isEmpty()) throw new IllegalArgumentException("속성: 값 형태로 입력하세요");
-            return setDecl(src, n, prop, value);
+            if (raw == null || raw.isBlank()) return src.text();
+            String[] d = parseDecl(raw);
+            return setDecl(src, n, d[0], d[1]);
         }
         String rest = key.substring(KEY.length());
         int colon = rest.indexOf(':');

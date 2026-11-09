@@ -153,6 +153,61 @@ public final class EditorController {
 
     private String editKey;
     private final FieldText fieldText = new FieldText();
+
+    // ---- 외부 스타일시트(.uicss) 편집: 파일에 바로 쓰고, 되돌리기는 문서 편집과 순서를 맞춘다 ----
+    private record ExtEdit(String href, String before, String after) {}
+
+    /** 되돌리기 순서: true = 외부 파일 편집, false = 문서(XML) 편집. */
+    private final java.util.ArrayDeque<Boolean> hist = new java.util.ArrayDeque<>(), redoHist = new java.util.ArrayDeque<>();
+    private final java.util.ArrayDeque<ExtEdit> extUndo = new java.util.ArrayDeque<>(), extRedo = new java.util.ArrayDeque<>();
+    private final Map<String, String> sheetCache = new HashMap<>();
+
+    private String sheetText(String href) {
+        if (!sheetCache.containsKey(href)) sheetCache.put(href, host.readFile(href));
+        return sheetCache.get(href);
+    }
+
+    private void applyExternalEdit(String href, String key, String raw) {
+        String before = sheetText(href);
+        if (before == null) {
+            setStatus("스타일시트 '" + href + "' 를 읽을 수 없어요", true);
+            return;
+        }
+        String next;
+        try {
+            next = StyleText.applyExternal(before, key, raw);
+        } catch (IllegalArgumentException e) {
+            setStatus(e.getMessage(), true);
+            return;
+        }
+        if (next.equals(before)) {
+            setStatus("바뀐 것이 없어요", false);
+            return;
+        }
+        try {
+            host.writeFile(href, next);
+        } catch (IOException e) {
+            setStatus("스타일시트를 저장하지 못했어요: " + e.getMessage(), true);
+            return;
+        }
+        hist.push(true);
+        extUndo.push(new ExtEdit(href, before, next));
+        redoHist.clear();
+        extRedo.clear();
+        session.clearRedo();
+        reload();
+        setStatus(href + " 에 바로 저장했어요", false);
+    }
+
+    private boolean writeExt(ExtEdit e, String text) {
+        try {
+            host.writeFile(e.href(), text);
+            return true;
+        } catch (IOException ex) {
+            setStatus("스타일시트를 저장하지 못했어요: " + ex.getMessage(), true);
+            return false;
+        }
+    }
     /** 칸 안에서 글자가 그려지기 시작하는 문자 번호와 x 위치(마우스로 커서를 찍을 때 쓴다). */
     private int editViewStart, editTextX;
     private boolean fieldDragging;
@@ -599,6 +654,7 @@ public final class EditorController {
 
     private boolean reload() {
         try {
+            sheetCache.clear();
             UiDocument d = host.load(session.text());
             d.setAnimationsEnabled(false);
             d.layout(docW(), docH());
@@ -713,6 +769,9 @@ public final class EditorController {
             reload();
             return false;
         }
+        hist.push(false);
+        redoHist.clear();
+        extRedo.clear();
         setStatus("", false);
         return true;
     }
@@ -1032,6 +1091,9 @@ public final class EditorController {
                 return true;
             }
             session.commitTransient();
+            hist.push(false);
+            redoHist.clear();
+            extRedo.clear();
             selected = d.resultIndex;
             reload();
             setStatus("", false);
@@ -1680,9 +1742,26 @@ public final class EditorController {
 
     // ================= 명령 =================
 
+    private boolean canUndoAny() { return Boolean.TRUE.equals(hist.peek()) || session.canUndo(); }
+
+    private boolean canRedoAny() { return Boolean.TRUE.equals(redoHist.peek()) || session.canRedo(); }
+
     public void undo() {
         multi.clear();
+        if (Boolean.TRUE.equals(hist.peek())) {                    // 가장 최근이 외부 스타일시트 편집이면 그 파일을 되돌린다
+            ExtEdit e = extUndo.peek();
+            if (!writeExt(e, e.before())) return;
+            extUndo.pop();
+            hist.pop();
+            extRedo.push(e);
+            redoHist.push(true);
+            reload();
+            setStatus("실행 취소 (" + e.href() + ")", false);
+            return;
+        }
         if (session.undo()) {
+            if (!hist.isEmpty()) hist.pop();
+            redoHist.push(false);
             reload();
             setStatus("실행 취소", false);
         }
@@ -1690,7 +1769,20 @@ public final class EditorController {
 
     public void redo() {
         multi.clear();
+        if (Boolean.TRUE.equals(redoHist.peek())) {
+            ExtEdit e = extRedo.peek();
+            if (!writeExt(e, e.after())) return;
+            extRedo.pop();
+            redoHist.pop();
+            extUndo.push(e);
+            hist.push(true);
+            reload();
+            setStatus("다시 실행 (" + e.href() + ")", false);
+            return;
+        }
         if (session.redo()) {
+            if (!redoHist.isEmpty()) redoHist.pop();
+            hist.push(false);
             reload();
             setStatus("다시 실행", false);
         }
@@ -1938,6 +2030,11 @@ public final class EditorController {
         }
         LayoutBox box = selectedBox();
         if (key == null || box == null) return;
+        String sheetHref = StyleText.externalHref(key);
+        if (sheetHref != null) {                                                  // 외부 스타일시트 규칙
+            applyExternalEdit(sheetHref, key, raw);
+            return;
+        }
         if (key.startsWith(StyleText.KEY) || key.startsWith(StyleText.ADD_KEY) || key.startsWith(StyleText.NEW_KEY)) {       // <style> 규칙의 선언 편집
             try {
                 String next = StyleText.apply(session.source(), key, raw);
@@ -2102,6 +2199,12 @@ public final class EditorController {
         List<PropRow> rows = PropertyModel.rows(b, sourceElement(b.node.sourceIndex()), srcSource);
         if (b.node.sourceIndex() >= 0 && srcSource != null) {                    // 이 요소에 적용되는 <style> 규칙(고칠 수 있다)
             List<PropRow> extra = StyleText.propRows(b, srcSource);
+            List<StyleText.Sheet> sheets = new ArrayList<>();
+            for (String href : StyleText.linkedSheets(srcSource)) {
+                String css = sheetText(href);
+                if (css != null) sheets.add(new StyleText.Sheet(href, css));
+            }
+            extra.addAll(StyleText.externalRows(b, sheets));
             if (!extra.isEmpty()) {
                 rows = new ArrayList<>(rows);
                 rows.addAll(extra);
@@ -2448,8 +2551,8 @@ public final class EditorController {
         List<ToolItem> items = List.of(
                 new ToolItem("File", true, r -> openFileMenu(r), C_BTN, 0),
                 new ToolItem("Save" + (session.isDirty() ? "*" : ""), true, r -> save(), C_BTN, 0),
-                new ToolItem("Undo", session.canUndo(), r -> undo(), C_BTN, 0),
-                new ToolItem("Redo", session.canRedo(), r -> redo(), C_BTN, 0),
+                new ToolItem("Undo", canUndoAny(), r -> undo(), C_BTN, 0),
+                new ToolItem("Redo", canRedoAny(), r -> redo(), C_BTN, 0),
                 new ToolItem("Dup", selected > 0, r -> duplicate(), C_BTN, 4),
                 new ToolItem("Del", selected > 0, r -> deleteSelected(), C_BTN, 0),
                 new ToolItem("Wrap", selected > 0, r -> openMenu(r, List.of("row", "column", "panel", "stack", "풀기(Unwrap)"), item -> {
