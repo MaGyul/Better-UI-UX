@@ -64,6 +64,19 @@ public interface EditorHost {
     /** 자동 저장본을 지운다(저장했거나 버렸을 때). */
     default void clearAutosave() { }
 
+    /** 열 수 있는 다른 UI id 목록(지금 편집 중인 것은 제외). */
+    default java.util.List<String> screens() { return java.util.List.of(); }
+
+    /** 같은 에디터에서 다른 UI 로 전환한다(저장하지 않은 변경이 없을 때만 부른다). */
+    default void switchTo(String id) { }
+
+    /**
+     * 새 UI 파일을 만들고 id 를 돌려준다.
+     *
+     * @param kind 0 빈 화면, 1 대화상자(패널+글자+닫기 버튼)
+     */
+    default String createScreen(int kind) throws IOException { return null; }
+
     /** 에디터를 닫아 달라는 요청(툴바의 Exit 버튼, 아무것도 선택하지 않고 Esc). */
     default void requestExit() { }
 

@@ -102,10 +102,17 @@ class EditorFeedbackTest {
 
     @Test
     void anElementUnderTheToolbarCanBePickedAndDraggedOut() throws Exception {
-        EditorController e = editor("<screen><panel id=\"a\" x=\"90\" y=\"0\" width=\"40\" height=\"30\" background=\"#FF336699\"/></screen>");
-        click(e, 105, 5);                                          // 상단 바의 빈 곳 = 아래 캔버스를 누른 것
+        EditorController probe = editor("<screen/>");
+        int bx = -1;                                               // 툴바 버튼이 없는 빈 곳을 찾는다(버튼 수가 바뀌어도 시험이 깨지지 않게)
+        for (int x = 4; x < W - 70 && bx < 0; x++) {
+            probe.mouseMoved(x, 5);
+            if (cursor(paint(probe)) != Cursor.POINTER) bx = x;
+        }
+        assertTrue(bx > 0, "빈 곳이 있어야 한다");
+        EditorController e = editor("<screen><panel id=\"a\" x=\"" + (bx - 15) + "\" y=\"0\" width=\"40\" height=\"30\" background=\"#FF336699\"/></screen>");
+        click(e, bx, 5);                                           // 상단 바의 빈 곳 = 아래 캔버스를 누른 것
         assertEquals(1, e.selectedIndex());
-        drag(e, 105, 5, 105, 80);
+        drag(e, bx, 5, bx, 80);
         assertEquals(75, rect(e, "a").y(), "바 밑에서 끌어 내릴 수 있다");
     }
 

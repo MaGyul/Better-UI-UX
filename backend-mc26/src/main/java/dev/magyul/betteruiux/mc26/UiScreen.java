@@ -200,6 +200,13 @@ public final class UiScreen extends Screen {
         this.onClose();   // 열린 화면으로 돌아가지 않고 그대로 닫는다
     }
 
+    /** 에디터의 File 메뉴에서 다른 UI 를 같은 에디터로 연다(저장하지 않은 변경이 없을 때만 불린다). */
+    void switchEditor(String otherId) {
+        if (editor == null || !dev.magyul.betteruiux.core.doc.UiSources.validId(otherId)) return;
+        leaveEditor();
+        UiOpener.open(otherId, userDir.getParent(), true);
+    }
+
     private void leaveEditor() {
         boolean dirty = editor.isDirty();
         UiDocument edited = editor.document();

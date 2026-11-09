@@ -2466,7 +2466,7 @@ public final class EditorController {
     }
 
     private static final Map<String, String> TIPS = Map.ofEntries(
-            Map.entry("Save", "저장 (Ctrl+S)"), Map.entry("Pub", "서버로 발행 (저장 후, 서버 권한 레벨 4 필요)"), Map.entry("Undo", "실행 취소 (Ctrl+Z)"), Map.entry("Redo", "다시 실행 (Ctrl+Y)"),
+            Map.entry("File", "다른 UI 열기 / 새 UI 만들기"), Map.entry("Save", "저장 (Ctrl+S)"), Map.entry("Pub", "서버로 발행 (저장 후, 서버 권한 레벨 4 필요)"), Map.entry("Undo", "실행 취소 (Ctrl+Z)"), Map.entry("Redo", "다시 실행 (Ctrl+Y)"),
             Map.entry("Dup", "선택한 요소 복제 (Ctrl+D)"), Map.entry("Del", "선택한 요소 삭제 (Delete)"),
             Map.entry("Wrap", "선택을 컨테이너로 감싸기 / 풀기 (Ctrl+G)"), Map.entry("Align", "부모 안에서 정렬(기준점 지정)"),
             Map.entry("View", "XML 보기, 상태 미리보기, 도움말"), Map.entry("Grid", "8px 격자에 맞추기 켜고 끄기"),
@@ -2503,6 +2503,7 @@ public final class EditorController {
         int y = 2, h = TOOLBAR_H - 4;
         boolean panned = panX != 0 || panY != 0 || targetPanX != 0 || targetPanY != 0;
         List<ToolItem> items = List.of(
+                new ToolItem("File", true, r -> openFileMenu(r), C_BTN, 0),
                 new ToolItem("Save" + (session.isDirty() ? "*" : ""), true, r -> save(), C_BTN, 0),
                 new ToolItem("Undo", session.canUndo(), r -> undo(), C_BTN, 0),
                 new ToolItem("Redo", session.canRedo(), r -> redo(), C_BTN, 0),
@@ -2929,6 +2930,33 @@ public final class EditorController {
     private Rect menuNear;
     private List<String> menuItems = List.of();
     private java.util.function.Consumer<String> menuPick;
+
+    private static final String OPEN_PREFIX = "열기: ", NEW_PREFIX = "새 화면: ";
+    private static final List<String> NEW_KINDS = List.of("빈 화면", "대화상자");
+
+    /** File 메뉴: 다른 UI 열기, 새 UI 만들기. 저장하지 않은 변경이 있으면 전환하지 않고 먼저 저장하라고 알린다. */
+    private void openFileMenu(Rect near) {
+        List<String> items = new ArrayList<>();
+        List<String> screens = host.screens();
+        for (int i = 0; i < screens.size() && i < 24; i++) items.add(OPEN_PREFIX + screens.get(i));
+        for (String k : NEW_KINDS) items.add(NEW_PREFIX + k);
+        openMenu(near, items, item -> {
+            if (session.isDirty()) {
+                setStatus("저장하지 않은 변경이 있어요 — 저장(Ctrl+S)한 뒤 다른 화면으로 전환하세요", true);
+                return;
+            }
+            if (item.startsWith(OPEN_PREFIX)) {
+                host.switchTo(item.substring(OPEN_PREFIX.length()));
+            } else if (item.startsWith(NEW_PREFIX)) {
+                try {
+                    String id = host.createScreen(NEW_KINDS.indexOf(item.substring(NEW_PREFIX.length())));
+                    if (id != null) host.switchTo(id);
+                } catch (IOException e) {
+                    setStatus("새 화면을 만들지 못했습니다: " + e.getMessage(), true);
+                }
+            }
+        });
+    }
 
     private void openMenu(Rect near, List<String> items, java.util.function.Consumer<String> pick) {
         menuNear = near;

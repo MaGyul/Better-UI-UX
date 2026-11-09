@@ -71,6 +71,42 @@ final class EditorBackend {
 
             @Override public void requestExit() { screen.exitEditor(); }
 
+            /** 사용자 폴더의 .xml 화면들(지금 것 제외). */
+            @Override public java.util.List<String> screens() {
+                try (var s = java.nio.file.Files.list(userDir)) {
+                    return s.map(p -> p.getFileName().toString()).filter(n -> n.endsWith(".xml"))
+                            .map(n -> n.substring(0, n.length() - 4)).filter(n -> !n.equals(id) && UiSources.validId(n)).sorted().toList();
+                } catch (IOException e) {
+                    return java.util.List.of();
+                }
+            }
+
+            @Override public void switchTo(String other) { screen.switchEditor(other); }
+
+            @Override public String createScreen(int kind) throws IOException {
+                String body = kind == 1 ? """
+                        <screen use="blur,dim">
+                          <panel anchor="center" width="200" height="100" padding="8" background="#E0181A24">
+                            <column gap="6" width="fill" height="fill">
+                              <label text="제목" />
+                              <button text="닫기" onClick="close" />
+                            </column>
+                          </panel>
+                        </screen>
+                        """ : """
+                        <screen>
+                        </screen>
+                        """;
+                java.nio.file.Files.createDirectories(userDir);
+                for (int n = 1; n < 1000; n++) {
+                    String nid = "new_" + n;
+                    if (java.nio.file.Files.exists(userDir.resolve(nid + ".xml"))) continue;
+                    AtomicFiles.write(userDir.resolve(nid + ".xml"), body);
+                    return nid;
+                }
+                throw new IOException("new_1..new_999 가 모두 사용 중입니다");
+            }
+
             /** 채팅창과 같은 시스템 클립보드(Ctrl+C/X/V). */
             @Override public java.util.List<String> suggestions(String key) {
                 return switch (key) {
