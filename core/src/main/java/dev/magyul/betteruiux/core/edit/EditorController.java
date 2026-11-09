@@ -2042,6 +2042,15 @@ public final class EditorController {
         }
         LayoutBox box = selectedBox();
         if (key == null || box == null) return;
+        if (key.startsWith(StyleText.KEY) || key.startsWith(StyleText.ADD_KEY)) {       // <style> 규칙의 선언 편집
+            try {
+                String next = StyleText.apply(session.source(), key, raw);
+                if (!applyEdit(src -> next)) setStatus("바뀐 것이 없어요", false);
+            } catch (IllegalArgumentException e) {
+                setStatus(e.getMessage(), true);
+            }
+            return;
+        }
         String value0 = raw.isEmpty() ? null : raw;
         final String value = clampFlowSize(box, key, value0);
         int idx = selected;
@@ -2196,7 +2205,15 @@ public final class EditorController {
     }
 
     private List<PropRow> rowsFor(LayoutBox b) {
-        return PropertyModel.rows(b, sourceElement(b.node.sourceIndex()), srcSource);
+        List<PropRow> rows = PropertyModel.rows(b, sourceElement(b.node.sourceIndex()), srcSource);
+        if (b.node.sourceIndex() >= 0 && srcSource != null) {                    // 이 요소에 적용되는 <style> 규칙(고칠 수 있다)
+            List<PropRow> extra = StyleText.propRows(b, srcSource);
+            if (!extra.isEmpty()) {
+                rows = new ArrayList<>(rows);
+                rows.addAll(extra);
+            }
+        }
+        return rows;
     }
 
     // ================= 구조 트리(접기/펼치기) =================
