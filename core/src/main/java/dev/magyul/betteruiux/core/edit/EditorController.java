@@ -187,13 +187,92 @@ public final class EditorController {
         this.viewH = viewH;
         this.doc = host.load(text);
         this.doc.setAnimationsEnabled(false);
-        this.doc.layout(viewW, viewH);
+        this.doc.layout(docW(), docH());
         java.util.Map<String, String> prefs = host.loadPrefs();
         leftCollapsed = "true".equalsIgnoreCase(prefs.get("leftCollapsed"));
         rightCollapsed = "true".equalsIgnoreCase(prefs.get("rightCollapsed"));
         toolbarHidden = "true".equalsIgnoreCase(prefs.get("toolbarHidden"));
         lastPrefs = currentPrefs();
         diskBase = host.diskText();
+        String rec = host.readAutosave();
+        if (rec != null && !rec.equals(text)) {                      // 지난번에 저장하지 못하고 끝난 편집이 있다
+            recovery = rec;
+            dialogRecover = true;
+            exitDialog = true;
+        }
+    }
+
+    // ---- 자동 저장 / 복구 ----
+
+    private static final long AUTOSAVE_NANOS = 5_000_000_000L;
+    private String recovery;
+    private boolean dialogRecover;
+    private String autosavedText;
+    private long autosavedAt;
+
+    /** 저장하지 않은 편집이 있으면 몇 초마다 임시 파일에 남기고, 없으면 지운다. 복구 여부를 묻는 동안에는 덮어쓰지 않는다. */
+    private void autosaveTick() {
+        if (dialogRecover) return;
+        if (!session.isDirty()) {
+            if (autosavedText != null) {
+                host.clearAutosave();
+                autosavedText = null;
+            }
+            return;
+        }
+        long now = clock.getAsLong();
+        String t = session.text();
+        if (session.inTransient() || t.equals(autosavedText) || now - autosavedAt < AUTOSAVE_NANOS) return;
+        host.autosave(t);
+        autosavedText = t;
+        autosavedAt = now;
+    }
+
+    private void recoverNow() {
+        String r = recovery;
+        recovery = null;
+        dialogRecover = false;
+        exitDialog = false;
+        if (r != null && applyEdit(src -> r)) setStatus("자동 저장본을 복구했습니다 — 저장하면 적용됩니다", false);
+        else setStatus("복구할 변경이 없습니다", false);
+    }
+
+    // ---- 해상도(GUI 크기) 미리보기 ----
+
+    /** 0 이면 창 크기 그대로, 아니면 이 크기(GUI 단위)로 화면을 배치해 본다. */
+    private int previewW, previewH;
+
+    private static final List<String> SIZE_ITEMS = List.of("크기: 창 그대로", "크기: 960x540 (1080p·2x)", "크기: 640x360 (1080p·3x)",
+            "크기: 480x270 (1080p·4x)", "크기: 427x240 (480p·2x)", "크기: 320x180");
+
+    int docW() { return previewW > 0 ? previewW : viewW; }
+
+    int docH() { return previewW > 0 ? previewH : viewH; }
+
+    /** "크기: 960x540 (…)" 형태의 항목을 적용한다(창 그대로는 해제). */
+    private void applySizeItem(String item) {
+        previewW = previewH = 0;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("([0-9]+)x([0-9]+)").matcher(item);
+        if (m.find()) {
+            previewW = Integer.parseInt(m.group(1));
+            previewH = Integer.parseInt(m.group(2));
+        }
+        reload();
+        setStatus(previewW > 0 ? "배치 크기: " + previewW + "x" + previewH : "배치 크기: 창 그대로", false);
+    }
+
+    /** 외부(테스트/백엔드)에서 미리보기 크기를 정한다. 0,0 이면 해제. */
+    public void setPreviewSize(int w, int h) {
+        previewW = Math.max(0, w);
+        previewH = previewW > 0 ? Math.max(1, h) : 0;
+        reload();
+    }
+
+    private void discardRecovery() {
+        recovery = null;
+        dialogRecover = false;
+        exitDialog = false;
+        host.clearAutosave();
     }
 
     private java.util.Map<String, String> lastPrefs = java.util.Map.of();
@@ -240,7 +319,7 @@ public final class EditorController {
     public void setView(int w, int h) {
         this.viewW = w;
         this.viewH = h;
-        doc.layout(w, h);
+        doc.layout(docW(), docH());
     }
 
     /** 구조 트리 등에서 요소를 고른다. 요소가 가려져 있으면 가운데로 화면을 옮긴다. */
@@ -386,6 +465,7 @@ public final class EditorController {
     /** 에디터를 닫는다. 저장하지 않은 변경이 있으면 먼저 물어본다. */
     public void requestExit() {
         if (!session.isDirty()) {
+            host.clearAutosave();
             host.requestExit();
             return;
         }
@@ -415,6 +495,10 @@ public final class EditorController {
         Rect full = new Rect(0, 0, viewW, viewH);
         g.fillRect(0, 0, viewW, viewH, 0xB0000000);
         regions.add(new Region(full, null));                  // 뒤의 모든 것을 막는다
+        if (dialogRecover) {
+            paintRecoverDialog(g);
+            return;
+        }
         String l1 = "저장하지 않은 변경이 있습니다.", l2 = "저장하고 닫을까요?";
         String b1 = "저장 후 닫기", b2 = "저장 안 함", b3 = "취소";
         int bw1 = tm.width(b1) + 8, bw2 = tm.width(b2) + 8, bw3 = tm.width(b3) + 8;
@@ -430,9 +514,32 @@ public final class EditorController {
         bx += button(g, bx, by, b1, true, this::saveAndExit, 0xFF2A6A3A);
         bx += button(g, bx, by, b2, true, () -> {
             exitDialog = false;
+            host.clearAutosave();
             host.requestExit();
         }, 0xFF7A2A2A);
         button(g, bx, by, b3, true, () -> exitDialog = false);
+    }
+
+    private void paintRecoverDialog(UiGfx g) {
+        String l1 = "저장하지 못하고 끝난 편집 내용이 남아 있습니다.", l2 = "복구할까요?";
+        String b1 = "복구", b2 = "버리기", b3 = "나중에";
+        int bw1 = tm.width(b1) + 8, bw2 = tm.width(b2) + 8, bw3 = tm.width(b3) + 8;
+        int w = Math.max(Math.max(tm.width(l1), tm.width(l2)) + 24, bw1 + bw2 + bw3 + 6 + 24);
+        int h = tm.lineHeight() * 2 + TOOLBAR_H + 26;
+        int x = (viewW - w) / 2, y = (viewH - h) / 2;
+        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
+        g.fillRect(x, y, w, h, 0xFF161820);
+        g.drawText(l1, x + (w - tm.width(l1)) / 2, y + 8, C_TEXT, false);
+        g.drawText(l2, x + (w - tm.width(l2)) / 2, y + 10 + tm.lineHeight(), C_DIM, false);
+        int by = y + h - TOOLBAR_H - 4;
+        int bx = x + (w - (bw1 + bw2 + bw3 + 6)) / 2;
+        bx += button(g, bx, by, b1, true, this::recoverNow, 0xFF2A6A3A);
+        bx += button(g, bx, by, b2, true, this::discardRecovery, 0xFF7A2A2A);
+        button(g, bx, by, b3, true, () -> {              // 자동 저장본은 그대로 두고 지금 파일로 계속한다(다음에 다시 묻지 않도록 이번엔 덮어쓰지 않음)
+            dialogRecover = false;
+            exitDialog = false;
+            recovery = null;
+        });
     }
 
     /**
@@ -496,9 +603,9 @@ public final class EditorController {
         try {
             UiDocument d = host.load(session.text());
             d.setAnimationsEnabled(false);
-            d.layout(viewW, viewH);
-            if (applyTabs(d)) d.layout(viewW, viewH);
-            if (applyScrolls(d)) d.layout(viewW, viewH);
+            d.layout(docW(), docH());
+            if (applyTabs(d)) d.layout(docW(), docH());
+            if (applyScrolls(d)) d.layout(docW(), docH());
             doc = d;
             int count = XmlSource.parse(session.text()).all().size();
             if (selected >= count) selected = -1;
@@ -558,7 +665,7 @@ public final class EditorController {
                 changed = true;
             }
         }
-        if (changed) doc.layout(viewW, viewH);
+        if (changed) doc.layout(docW(), docH());
     }
 
     /** 마우스 아래의 스크롤 요소를 휠로 스크롤한다. 스크롤할 수 있는 요소가 없으면 false. */
@@ -567,7 +674,7 @@ public final class EditorController {
             if (b.widget instanceof BuiltinWidgets.Scroll sw && sw.canScroll()) {
                 if (sw.scrollBy(-(int) Math.signum(amount) * 12) || true) {
                     scrollPos.put(b.node.sourceIndex(), sw.scrollY());
-                    doc.layout(viewW, viewH);
+                    doc.layout(docW(), docH());
                 }
                 return true;
             }
@@ -592,7 +699,7 @@ public final class EditorController {
                 int i = tabIndex(x.parent, x);
                 tabActive.put(x.parent.node.sourceIndex(), i);
                 t.setActive(i);
-                doc.layout(viewW, viewH);
+                doc.layout(docW(), docH());
                 return;
             }
         }
@@ -893,7 +1000,7 @@ public final class EditorController {
         if (i < 0) return false;
         tabActive.put(hit.node.sourceIndex(), i);
         t.setActive(i);
-        doc.layout(viewW, viewH);
+        doc.layout(docW(), docH());
         selected = hit.node.sourceIndex();
         return true;
     }
@@ -1069,7 +1176,7 @@ public final class EditorController {
         d.parentIndex = parent == null ? 0 : parent.node.sourceIndex();
         d.anchor = b.style.get("anchor");
         d.margin = Insets.parse(b.style.get("margin"), Insets.ZERO);
-        d.parentContent = parent == null ? new Rect(0, 0, viewW, viewH) : contentRect(parent);
+        d.parentContent = parent == null ? new Rect(0, 0, docW(), docH()) : contentRect(parent);
         d.curX = b.style.integer("x", 0);
         d.curY = b.style.integer("y", 0);
         if (isSizedFlow(b) || isScroll(b)) {                // row/column/grid: 내용보다 작게 줄일 수 없다(scroll 은 너비만)
@@ -1333,7 +1440,7 @@ public final class EditorController {
     private String placeAt(String text, int index, int parentIndex, int x, int y) {
         try {
             UiDocument tmp = host.load(text);
-            tmp.layout(viewW, viewH);
+            tmp.layout(docW(), docH());
             LayoutBox box = boxByIndex(tmp.layout(), index), parent = boxByIndex(tmp.layout(), parentIndex);
             if (box == null || parent == null || isFlow(parent)) return text;
             Rect before = rectOf(box);
@@ -1362,7 +1469,7 @@ public final class EditorController {
     private String keepRect(String text, int index, int parentIndex, Rect desired) {
         try {
             UiDocument tmp = host.load(text);
-            tmp.layout(viewW, viewH);
+            tmp.layout(docW(), docH());
             LayoutBox box = boxByIndex(tmp.layout(), index), parent = boxByIndex(tmp.layout(), parentIndex);
             if (box == null || parent == null || isFlow(parent)) return text;
             Map<String, String> props = Geometry.propsForRect(false, box.style.get("anchor"),
@@ -1397,6 +1504,14 @@ public final class EditorController {
 
     public boolean keyPressed(EditorKey key, boolean ctrl, boolean shift) {
         if (exitDialog) {
+            if (dialogRecover) {
+                if (key == EditorKey.ESCAPE) {
+                    dialogRecover = false;
+                    exitDialog = false;
+                    recovery = null;
+                } else if (key == EditorKey.ENTER) recoverNow();
+                return true;
+            }
             if (key == EditorKey.ESCAPE) exitDialog = false;
             else if (key == EditorKey.ENTER) saveAndExit();
             return true;
@@ -1695,6 +1810,8 @@ public final class EditorController {
             diskBase = host.diskText();
             overwriteArmed = false;
             session.markSaved();
+            host.clearAutosave();
+            autosavedText = null;
             setStatus("저장됨: " + host.title(), false);
             return true;
         } catch (IOException e) {
@@ -1724,7 +1841,7 @@ public final class EditorController {
             UiDocument tmp;
             try {
                 tmp = host.load(t);
-                tmp.layout(viewW, viewH);
+                tmp.layout(docW(), docH());
             } catch (UiParseException e) {
                 return t;
             }
@@ -1925,6 +2042,17 @@ public final class EditorController {
         }
         LayoutBox box = selectedBox();
         if (key == null || box == null) return;
+        if (key.startsWith(StyleText.KEY) || key.startsWith(StyleText.ADD_KEY) || key.startsWith(StyleText.NEW_KEY)) {       // <style> 규칙의 선언 편집
+            try {
+                String next = StyleText.apply(session.source(), key, raw);
+                int before = session.source().all().size();
+                if (!applyEdit(src -> next)) setStatus("바뀐 것이 없어요", false);
+                else if (selected > 0 && session.source().all().size() > before) selected += session.source().all().size() - before;   // <style> 블록이 새로 생기면 뒤 요소 번호가 밀린다
+            } catch (IllegalArgumentException e) {
+                setStatus(e.getMessage(), true);
+            }
+            return;
+        }
         String value0 = raw.isEmpty() ? null : raw;
         final String value = clampFlowSize(box, key, value0);
         int idx = selected;
@@ -2079,7 +2207,15 @@ public final class EditorController {
     }
 
     private List<PropRow> rowsFor(LayoutBox b) {
-        return PropertyModel.rows(b, sourceElement(b.node.sourceIndex()), srcSource);
+        List<PropRow> rows = PropertyModel.rows(b, sourceElement(b.node.sourceIndex()), srcSource);
+        if (b.node.sourceIndex() >= 0 && srcSource != null) {                    // 이 요소에 적용되는 <style> 규칙(고칠 수 있다)
+            List<PropRow> extra = StyleText.propRows(b, srcSource);
+            if (!extra.isEmpty()) {
+                rows = new ArrayList<>(rows);
+                rows.addAll(extra);
+            }
+        }
+        return rows;
     }
 
     // ================= 구조 트리(접기/펼치기) =================
@@ -2215,6 +2351,7 @@ public final class EditorController {
             mouseY = -9999;
         }
         persistPrefs();
+        autosaveTick();
         updateToolbarPeek();
         updateSidePeek();
         autoPan();
@@ -2338,13 +2475,14 @@ public final class EditorController {
      * (옮기지 않았을 때는 경계가 창 가장자리와 같으므로 아무것도 그리지 않는다.)
      */
     private void paintScreenFrame(UiGfx g) {
-        if (panX == 0 && panY == 0) return;
-        int far = 4000;
-        g.fillRect(-far, -far, 2 * far + viewW, far, SCREEN_OUTSIDE);                    // 위
-        g.fillRect(-far, viewH, 2 * far + viewW, far, SCREEN_OUTSIDE);                   // 아래
-        g.fillRect(-far, 0, far, viewH, SCREEN_OUTSIDE);                                 // 왼쪽
-        g.fillRect(viewW, 0, far, viewH, SCREEN_OUTSIDE);                                // 오른쪽
-        outline(g, new Rect(0, 0, viewW, viewH), SCREEN_FRAME);
+        if (panX == 0 && panY == 0 && previewW == 0) return;
+        int far = 4000, dw = docW(), dh = docH();
+        g.fillRect(-far, -far, 2 * far + dw, far, SCREEN_OUTSIDE);                       // 위
+        g.fillRect(-far, dh, 2 * far + dw, far, SCREEN_OUTSIDE);                         // 아래
+        g.fillRect(-far, 0, far, dh, SCREEN_OUTSIDE);                                    // 왼쪽
+        g.fillRect(dw, 0, far, dh, SCREEN_OUTSIDE);                                      // 오른쪽
+        outline(g, new Rect(0, 0, dw, dh), SCREEN_FRAME);
+        if (previewW > 0) g.drawText(dw + "x" + dh, 3, dh - tm.lineHeight() - 2, C_DIM, false);   // 미리보기 크기 표시
     }
 
     /** 색의 밝기를 delta 만큼 올리거나 내린다(알파 유지). */
@@ -2379,7 +2517,7 @@ public final class EditorController {
     }
 
     private static final Map<String, String> TIPS = Map.ofEntries(
-            Map.entry("Save", "저장 (Ctrl+S)"), Map.entry("Pub", "서버로 발행 (저장 후, 서버 권한 레벨 4 필요)"), Map.entry("Undo", "실행 취소 (Ctrl+Z)"), Map.entry("Redo", "다시 실행 (Ctrl+Y)"),
+            Map.entry("File", "다른 UI 열기 / 새 UI 만들기"), Map.entry("Save", "저장 (Ctrl+S)"), Map.entry("Pub", "서버로 발행 (저장 후, 서버 권한 레벨 4 필요)"), Map.entry("Undo", "실행 취소 (Ctrl+Z)"), Map.entry("Redo", "다시 실행 (Ctrl+Y)"),
             Map.entry("Dup", "선택한 요소 복제 (Ctrl+D)"), Map.entry("Del", "선택한 요소 삭제 (Delete)"),
             Map.entry("Wrap", "선택을 컨테이너로 감싸기 / 풀기 (Ctrl+G)"), Map.entry("Align", "부모 안에서 정렬(기준점 지정)"),
             Map.entry("View", "XML 보기, 상태 미리보기, 도움말"), Map.entry("Grid", "8px 격자에 맞추기 켜고 끄기"),
@@ -2416,6 +2554,7 @@ public final class EditorController {
         int y = 2, h = TOOLBAR_H - 4;
         boolean panned = panX != 0 || panY != 0 || targetPanX != 0 || targetPanY != 0;
         List<ToolItem> items = List.of(
+                new ToolItem("File", true, r -> openFileMenu(r), C_BTN, 0),
                 new ToolItem("Save" + (session.isDirty() ? "*" : ""), true, r -> save(), C_BTN, 0),
                 new ToolItem("Undo", session.canUndo(), r -> undo(), C_BTN, 0),
                 new ToolItem("Redo", session.canRedo(), r -> redo(), C_BTN, 0),
@@ -2428,8 +2567,9 @@ public final class EditorController {
                 new ToolItem("Align", selected > 0, r -> openMenu(r, ALIGN_ITEMS, this::alignSelected), C_BTN, 0),
                 new ToolItem(grid ? "Grid:8" : "Grid:off", true, r -> grid = !grid, C_BTN, 4),
                 new ToolItem(autoAnchor ? "Anchor:auto" : "Anchor:keep", true, r -> autoAnchor = !autoAnchor, C_BTN, 0),
-                new ToolItem("View", true, r -> openMenu(r, List.of("XML 보기", "상태 미리보기: 없음", "상태 미리보기: hover", "상태 미리보기: active", "도움말"), item -> {
-                    if (item.startsWith("XML")) xmlView.open = true;
+                new ToolItem("View", true, r -> openMenu(r, viewItems(), item -> {
+                    if (item.startsWith("크기:")) applySizeItem(item);
+                    else if (item.startsWith("XML")) xmlView.open = true;
                     else if (item.contains("없음")) previewState = 0;
                     else if (item.contains("hover")) previewState = 1;
                     else if (item.contains("active")) previewState = 2;
@@ -2786,9 +2926,9 @@ public final class EditorController {
             }
             default -> {
                 g.drawText(fit(row.value(), fieldW - reserve), fieldX + 2, y + 1, row.editable() ? C_TEXT : C_DIM, false);
-                if (key.equals("item")) {                              // 아이템 칸: 아이콘 목록에서 고르기
+                if (key.equals("item") || (key.equals("src") && isMediaTag())) {   // 아이템/이미지·영상 칸: 목록에서 고르기
                     g.drawText("▦", field.right() - 9, y + 1, C_DIM, false);
-                    if (sees(panel, field)) regions.add(new Region(field, () -> openItemPicker(field)));
+                    if (sees(panel, field)) regions.add(new Region(field, () -> openItemPicker(field, key)));
                 } else if (row.editable() && sees(panel, field)) {
                     regions.add(new Region(field, () -> startEdit(key, value, field)));
                 }
@@ -2843,6 +2983,39 @@ public final class EditorController {
     private List<String> menuItems = List.of();
     private java.util.function.Consumer<String> menuPick;
 
+    private static List<String> viewItems() {
+        List<String> l = new ArrayList<>(List.of("XML 보기", "상태 미리보기: 없음", "상태 미리보기: hover", "상태 미리보기: active", "도움말"));
+        l.addAll(SIZE_ITEMS);
+        return l;
+    }
+
+    private static final String OPEN_PREFIX = "열기: ", NEW_PREFIX = "새 화면: ";
+    private static final List<String> NEW_KINDS = List.of("빈 화면", "대화상자");
+
+    /** File 메뉴: 다른 UI 열기, 새 UI 만들기. 저장하지 않은 변경이 있으면 전환하지 않고 먼저 저장하라고 알린다. */
+    private void openFileMenu(Rect near) {
+        List<String> items = new ArrayList<>();
+        List<String> screens = host.screens();
+        for (int i = 0; i < screens.size() && i < 24; i++) items.add(OPEN_PREFIX + screens.get(i));
+        for (String k : NEW_KINDS) items.add(NEW_PREFIX + k);
+        openMenu(near, items, item -> {
+            if (session.isDirty()) {
+                setStatus("저장하지 않은 변경이 있어요 — 저장(Ctrl+S)한 뒤 다른 화면으로 전환하세요", true);
+                return;
+            }
+            if (item.startsWith(OPEN_PREFIX)) {
+                host.switchTo(item.substring(OPEN_PREFIX.length()));
+            } else if (item.startsWith(NEW_PREFIX)) {
+                try {
+                    String id = host.createScreen(NEW_KINDS.indexOf(item.substring(NEW_PREFIX.length())));
+                    if (id != null) host.switchTo(id);
+                } catch (IOException e) {
+                    setStatus("새 화면을 만들지 못했습니다: " + e.getMessage(), true);
+                }
+            }
+        });
+    }
+
     private void openMenu(Rect near, List<String> items, java.util.function.Consumer<String> pick) {
         menuNear = near;
         menuItems = items;
@@ -2886,9 +3059,18 @@ public final class EditorController {
 
     private final ItemPickerOverlay itemPicker = new ItemPickerOverlay();
 
-    private void openItemPicker(Rect near) {
+    /** 지금 열린 선택 상자가 채우는 속성("item" 또는 "src"). */
+    private String pickerKey = "item";
+
+    private boolean isMediaTag() {
+        LayoutBox b = selectedBox();
+        return b != null && (b.tag().equals("image") || b.tag().equals("video"));
+    }
+
+    private void openItemPicker(Rect near, String key) {
         commitFieldQuietly();
-        itemPicker.open(near, host.suggestions("item"));
+        pickerKey = key;
+        itemPicker.open(near, host.suggestions(key), key.equals("src"));
         Rect search = itemPicker.searchArea(viewW, TOOLBAR_H);                  // 게임(SDL)은 글자 입력을 켜 줘야 검색어가 들어온다
         host.textInput(true, search.x(), search.y(), search.w(), search.h());
     }
@@ -2902,10 +3084,10 @@ public final class EditorController {
     private void paintItemPicker(UiGfx g) {
         if (!itemPicker.isOpen()) return;
         LayoutBox sel = selectedBox();
-        itemPicker.paint(g, tm, viewW, viewH, TOOLBAR_H, mouseX, mouseY, regions, sel == null ? null : sel.node.attr("item"),
+        itemPicker.paint(g, tm, viewW, viewH, TOOLBAR_H, mouseX, mouseY, regions, sel == null ? null : sel.node.attr(pickerKey),
                 id -> {
                     closeItemPicker();
-                    applyValue("item", id);
+                    applyValue(pickerKey, id);
                 }, this::closeItemPicker);
     }
 

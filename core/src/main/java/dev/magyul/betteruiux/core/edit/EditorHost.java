@@ -55,6 +55,28 @@ public interface EditorHost {
     /** 현재 문서(저장된 파일)를 서버로 발행한다. 권한은 서버가 확인하고 결과는 채팅 메시지로 알린다. */
     default void publish() { }
 
+    /** 저장하지 않은 편집 내용을 임시로 보관한다(게임이 죽어도 복구할 수 있게). 실제 파일은 건드리지 않는다. */
+    default void autosave(String text) { }
+
+    /** 이전 실행에서 남은 자동 저장본(없으면 null). */
+    default String readAutosave() { return null; }
+
+    /** 자동 저장본을 지운다(저장했거나 버렸을 때). */
+    default void clearAutosave() { }
+
+    /** 열 수 있는 다른 UI id 목록(지금 편집 중인 것은 제외). */
+    default java.util.List<String> screens() { return java.util.List.of(); }
+
+    /** 같은 에디터에서 다른 UI 로 전환한다(저장하지 않은 변경이 없을 때만 부른다). */
+    default void switchTo(String id) { }
+
+    /**
+     * 새 UI 파일을 만들고 id 를 돌려준다.
+     *
+     * @param kind 0 빈 화면, 1 대화상자(패널+글자+닫기 버튼)
+     */
+    default String createScreen(int kind) throws IOException { return null; }
+
     /** 에디터를 닫아 달라는 요청(툴바의 Exit 버튼, 아무것도 선택하지 않고 Esc). */
     default void requestExit() { }
 

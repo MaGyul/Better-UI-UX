@@ -14,7 +14,11 @@ import java.util.function.Consumer;
 
 /** 아이템 선택 상자: 아이콘 격자(8열) + 휠 스크롤 + id 검색. 고른 id 는 콜백으로 돌려준다. */
 final class ItemPickerOverlay {
-    static final int COLS = 8, CELL = 18, ROWS = 6;
+    static final int ICON_COLS = 8, ICON_CELL = 18, ICON_ROWS = 6, TEXT_ROW_H = 11, TEXT_ROWS = 12;
+
+    /** true 면 아이콘 격자 대신 글자 목록(이미지/영상 파일 고르기). */
+    private boolean textMode;
+    private int cols = ICON_COLS, cell = ICON_CELL, cellH = ICON_CELL, rows = ICON_ROWS;
 
     private boolean open;
     private Rect near;
@@ -24,7 +28,14 @@ final class ItemPickerOverlay {
 
     boolean isOpen() { return open; }
 
-    void open(Rect near, List<String> ids) {
+    void open(Rect near, List<String> ids) { open(near, ids, false); }
+
+    void open(Rect near, List<String> ids, boolean textMode) {
+        this.textMode = textMode;
+        cols = textMode ? 1 : ICON_COLS;
+        cell = textMode ? ICON_COLS * ICON_CELL : ICON_CELL;
+        cellH = textMode ? TEXT_ROW_H : ICON_CELL;
+        rows = textMode ? TEXT_ROWS : ICON_ROWS;
         this.open = true;
         this.near = near;
         this.ids = ids;
@@ -50,7 +61,7 @@ final class ItemPickerOverlay {
 
     /** 검색창 자리(글자 입력/IME 를 켤 때 알려 주는 위치). */
     Rect searchArea(int viewW, int toolbarH) {
-        int w = COLS * CELL + 10;
+        int w = cols * cell + 10;
         return new Rect(Math.max(2, (near == null ? viewW : near.x()) - w - 4), near == null ? toolbarH : near.y(), w, 11);
     }
 
@@ -67,38 +78,45 @@ final class ItemPickerOverlay {
         if (!open) return;
         regions.add(new Region(new Rect(0, 0, viewW, viewH), onClose));                       // 바깥을 누르면 닫는다
         List<String> items = filtered();
-        int w = COLS * CELL + 10, h = ROWS * CELL + 30;
+        int w = cols * cell + 10, h = rows * cellH + 30;
         int x = Math.max(2, Math.min((near == null ? viewW : near.x()) - w - 4, viewW - w - 2));
         int y = Math.max(toolbarH + 2, Math.min(near == null ? toolbarH : near.y(), viewH - h - 2));
         g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
         g.fillRect(x, y, w, h, 0xFF161820);
         regions.add(new Region(new Rect(x, y, w, h), null));
-        int totalRows = (items.size() + COLS - 1) / COLS;
-        scrollRow = Math.max(0, Math.min(scrollRow, Math.max(0, totalRows - ROWS)));
+        int totalRows = (items.size() + cols - 1) / cols;
+        scrollRow = Math.max(0, Math.min(scrollRow, Math.max(0, totalRows - rows)));
         String q = filter.toString();
         g.fillRect(x + 4, y + 4, w - 8, 11, C_FIELD);
         g.drawText(q.isEmpty() ? "검색... (글자를 입력)" : q + "_", x + 7, y + 6, q.isEmpty() ? C_DIM : C_TEXT, false);
         g.drawText(items.size() + "개", x + w - 6 - tm.width(items.size() + "개"), y + 6, C_DIM, false);
         int gx = x + 5, gy = y + 20;
         String hoverId = null;
-        g.pushClip(gx, gy, COLS * CELL, ROWS * CELL);
-        for (int r = 0; r < ROWS; r++) {
-            for (int c = 0; c < COLS; c++) {
-                int i = (scrollRow + r) * COLS + c;
+        g.pushClip(gx, gy, cols * cell, rows * cellH);
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                int i = (scrollRow + r) * cols + c;
                 if (i >= items.size()) break;
                 String id = items.get(i);
-                Rect cell = new Rect(gx + c * CELL, gy + r * CELL, CELL, CELL);
-                boolean hot = cell.contains(mouseX, mouseY);
-                if (hot) hoverId = id;
-                g.fillRect(cell.x() + 1, cell.y() + 1, CELL - 2, CELL - 2, hot ? 0xFF3A4A80 : id.equals(current) ? 0xFF2E5A3A : 0xFF222536);
-                g.drawItem(id, cell.x() + 1, cell.y() + 1, 1);
-                regions.add(new Region(cell, () -> pick.accept(id)));
+                Rect box = new Rect(gx + c * cell, gy + r * cellH, cell, cellH);
+                boolean hot = box.contains(mouseX, mouseY);
+                if (hot && !textMode) hoverId = id;
+                g.fillRect(box.x() + 1, box.y() + 1, cell - 2, cellH - 2, hot ? 0xFF3A4A80 : id.equals(current) ? 0xFF2E5A3A : 0xFF222536);
+                if (textMode) g.drawText(id, box.x() + 4, box.y() + 2, C_TEXT, false);
+                else g.drawItem(id, box.x() + 1, box.y() + 1, 1);
+                regions.add(new Region(box, () -> pick.accept(id)));
             }
         }
         g.popClip();
-        if (totalRows > ROWS) {                                                              // 스크롤 막대
-            int trackH = ROWS * CELL, thumbH = Math.max(8, trackH * ROWS / totalRows);
-            int thumbY = gy + (trackH - thumbH) * scrollRow / Math.max(1, totalRows - ROWS);
+        if (textMode && ids.isEmpty()) {                                                     // 파일이 하나도 없을 때 이유를 알려 준다
+            String[] hint = {"파일이 없어요.", "config/better-uiux/", "images 폴더에 png·gif·mp4", "파일을 넣어 주세요."};
+            for (int i = 0; i < hint.length; i++) g.drawText(hint[i], gx + 4, gy + 4 + i * (tm.lineHeight() + 2), C_DIM, false);
+        } else if (items.isEmpty()) {
+            g.drawText("검색 결과가 없어요.", gx + 4, gy + 4, C_DIM, false);
+        }
+        if (totalRows > rows) {                                                              // 스크롤 막대
+            int trackH = rows * cellH, thumbH = Math.max(8, trackH * rows / totalRows);
+            int thumbY = gy + (trackH - thumbH) * scrollRow / Math.max(1, totalRows - rows);
             g.fillRect(x + w - 4, gy, 2, trackH, 0x30FFFFFF);
             g.fillRect(x + w - 4, thumbY, 2, thumbH, 0xA0FFFFFF);
         }

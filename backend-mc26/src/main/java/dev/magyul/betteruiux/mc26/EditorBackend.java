@@ -23,6 +23,19 @@ import net.minecraft.client.Minecraft;
 final class EditorBackend {
     private EditorBackend() {}
 
+    /** 이미지/영상 파일 후보: config/better-uiux/images 안의 png/jpg/bmp/gif/mp4 를 "file:이름" 으로. */
+    private static java.util.List<String> imageFiles(Path userDir) {
+        Path dir = userDir.getParent().resolve("images");
+        if (!java.nio.file.Files.isDirectory(dir)) return java.util.List.of();
+        try (var s = java.nio.file.Files.list(dir)) {
+            return s.filter(java.nio.file.Files::isRegularFile).map(p -> p.getFileName().toString())
+                    .filter(n -> n.toLowerCase().matches(".*[.](png|jpe?g|bmp|gif|mp4|m4v|mov)"))
+                    .sorted().map(n -> "file:" + n).toList();
+        } catch (IOException e) {
+            return java.util.List.of();
+        }
+    }
+
     static EditorController create(String id, Path userDir, TextMetrics metrics, UiScreen screen, int width, int height)
             throws IOException, UiParseException {
         String text = UiSources.load(userDir, id).orElseThrow(() -> new NoSuchFileException(id + ".xml"));
@@ -71,6 +84,42 @@ final class EditorBackend {
 
             @Override public void requestExit() { screen.exitEditor(); }
 
+            /** 사용자 폴더의 .xml 화면들(지금 것 제외). */
+            @Override public java.util.List<String> screens() {
+                try (var s = java.nio.file.Files.list(userDir)) {
+                    return s.map(p -> p.getFileName().toString()).filter(n -> n.endsWith(".xml"))
+                            .map(n -> n.substring(0, n.length() - 4)).filter(n -> !n.equals(id) && UiSources.validId(n)).sorted().toList();
+                } catch (IOException e) {
+                    return java.util.List.of();
+                }
+            }
+
+            @Override public void switchTo(String other) { screen.switchEditor(other); }
+
+            @Override public String createScreen(int kind) throws IOException {
+                String body = kind == 1 ? """
+                        <screen use="blur,dim">
+                          <panel anchor="center" width="200" height="100" padding="8" background="#E0181A24">
+                            <column gap="6" width="fill" height="fill">
+                              <label text="제목" />
+                              <button text="닫기" onClick="close" />
+                            </column>
+                          </panel>
+                        </screen>
+                        """ : """
+                        <screen>
+                        </screen>
+                        """;
+                java.nio.file.Files.createDirectories(userDir);
+                for (int n = 1; n < 1000; n++) {
+                    String nid = "new_" + n;
+                    if (java.nio.file.Files.exists(userDir.resolve(nid + ".xml"))) continue;
+                    AtomicFiles.write(userDir.resolve(nid + ".xml"), body);
+                    return nid;
+                }
+                throw new IOException("new_1..new_999 가 모두 사용 중입니다");
+            }
+
             /** 채팅창과 같은 시스템 클립보드(Ctrl+C/X/V). */
             @Override public java.util.List<String> suggestions(String key) {
                 return switch (key) {
@@ -85,6 +134,7 @@ final class EditorBackend {
                         all.addAll(ScriptBridge.functionActions(text, userDir));   // script:함수 도 후보에 넣는다
                         yield all;
                     }
+                    case "src" -> imageFiles(userDir);
                     case "item" -> net.minecraft.core.registries.BuiltInRegistries.ITEM.keySet().stream()
                             .map(Object::toString).sorted().toList();
                     default -> java.util.List.of();
@@ -98,6 +148,34 @@ final class EditorBackend {
                     return java.nio.file.Files.exists(f) ? java.nio.file.Files.readString(f) : null;
                 } catch (IOException e) {
                     return null;
+                }
+            }
+
+            /** 저장 전 편집 내용은 config/better-uiux/autosave/<id>.xml 에 임시로 남긴다(저장하거나 정상 종료하면 지운다). */
+            private Path autosaveFile() { return userDir.getParent().resolve("autosave").resolve(id + ".xml"); }
+
+            @Override public void autosave(String text) {
+                try {
+                    AtomicFiles.write(autosaveFile(), text);
+                } catch (IOException ignored) {
+                    // 임시 저장은 실패해도 편집에는 영향이 없다
+                }
+            }
+
+            @Override public String readAutosave() {
+                try {
+                    Path f = autosaveFile();
+                    return java.nio.file.Files.exists(f) ? java.nio.file.Files.readString(f) : null;
+                } catch (IOException e) {
+                    return null;
+                }
+            }
+
+            @Override public void clearAutosave() {
+                try {
+                    java.nio.file.Files.deleteIfExists(autosaveFile());
+                } catch (IOException ignored) {
+                    // 남아 있어도 다음에 복구 여부를 한 번 더 물을 뿐이다
                 }
             }
 
