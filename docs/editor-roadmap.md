@@ -99,3 +99,11 @@ M3 에디터를 만들면서 쌓인 피드백과 코드 상태를 바탕으로, 
 
 M4 완료: HUD(`<hud>` + 읽기 전용 데이터 소스), 외부 이미지(png/jpg/bmp/gif), 영상(H.264 mp4, 소리 없음). Fabric/NeoForge 모두 확인.
 사용법은 [hud-and-images.md](hud-and-images.md). 다음: M4.5 서버 동기화 — 설계는 [server-sync-plan.md](server-sync-plan.md).
+
+## 10. 진행 상태 (M5 에디터 도구, `feat/m5-editor-tools2`)
+
+- **자동 저장/복구**: 저장하지 않은 편집은 5초마다 `config/better-uiux/autosave/<id>.xml` 에 임시로 남는다. 저장하거나 정상 종료하면 지우고, 게임이 비정상 종료된 뒤 에디터를 열면 "복구 / 버리기 / 나중에" 를 묻는다.
+- **File 메뉴**(툴바 첫 버튼): 다른 UI 열기, 새 UI 만들기(빈 화면/대화상자 → `new_N.xml`). 저장하지 않은 변경이 있으면 전환하지 않고 먼저 저장하라고 알린다.
+- **해상도 미리보기**(View 메뉴 → 크기): 창 크기와 상관없이 960x540(1080p·2x) … 320x180 으로 배치해 본다. 화면 경계와 크기 표시가 나오고 편집 중에도 유지된다(저장 파일에는 영향 없음).
+- **리소스 선택기**: image/video 의 `src` 칸 끝의 ▦ 를 누르면 `config/better-uiux/images/` 의 파일 목록(검색 가능)에서 고른다.
+- 남은 것: **스타일시트 편집**(적용된 규칙 표시/편집), `EditorController` 분리, 나머지 태그.
