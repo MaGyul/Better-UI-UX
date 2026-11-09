@@ -85,7 +85,7 @@ final class PropertyModel {
             rows.add(style(b, "width"));
             rows.add(style(b, "height"));
             rows.add(style(b, "margin"));
-            if (!EditorController.isFlow(b.parent)) {
+            if (!LayoutQueries.isFlow(b.parent)) {
                 rows.add(style(b, "anchor"));
                 rows.add(style(b, "x"));
                 rows.add(style(b, "y"));

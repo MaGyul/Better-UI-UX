@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.core.edit;
 
 import static dev.magyul.betteruiux.core.edit.EditorColors.*;
+import static dev.magyul.betteruiux.core.edit.LayoutQueries.*;
 import static dev.magyul.betteruiux.core.edit.PropertyModel.*;
 
 import dev.magyul.betteruiux.api.Cursor;
@@ -720,66 +721,11 @@ public final class EditorController {
 
     private LayoutBox selectedBox() { return selected < 0 ? null : boxByIndex(doc.layout(), selected); }
 
-    private static LayoutBox boxByIndex(LayoutBox b, int idx) {
-        if (b.node.sourceIndex() == idx) return b;
-        for (LayoutBox c : b.children) {
-            LayoutBox r = boxByIndex(c, idx);
-            if (r != null) return r;
-        }
-        return null;
-    }
-
     /** 문서 좌표 (x,y) 아래의 요소 중 원본 XML 에 실제로 있는 가장 깊은 것(확장으로 생긴 요소는 조상으로 올라간다). */
     private LayoutBox hitSource(int x, int y) {
         LayoutBox hit = doc.hitTest(x, y);
         while (hit != null && hit.node.sourceIndex() < 0) hit = hit.parent;
         return hit;
-    }
-
-    private static Rect rectOf(LayoutBox b) { return new Rect(b.x, b.y, b.w, b.h); }
-
-    /** 자식이 x/y 로 자유롭게 놓이지 않고 순서대로 배치되는 컨테이너(row/column/scroll/grid). */
-    static boolean isFlow(LayoutBox parent) {
-        return parent != null && (parent.tag().equals("row") || parent.tag().equals("column")
-                || parent.tag().equals("scroll") || parent.tag().equals("grid"));
-    }
-
-    private static boolean isScroll(LayoutBox b) { return b != null && b.tag().equals("scroll"); }
-
-    /** 내용보다 작게 줄일 수 없는 컨테이너(row/column/grid). scroll 은 너비만 제한하므로 {@link #isScroll} 로 따로 다룬다. */
-    private static boolean isSizedFlow(LayoutBox b) {
-        return b != null && (b.tag().equals("row") || b.tag().equals("column") || b.tag().equals("grid"));
-    }
-
-    private static Rect contentRect(LayoutBox parent) {
-        Insets pad = Insets.parse(parent.style.get("padding"), Insets.ZERO);
-        return new Rect(parent.x + pad.left(), parent.y + pad.top(),
-                Math.max(0, parent.w - pad.horizontal()), Math.max(0, parent.h - pad.vertical()));
-    }
-
-    /** 원본에 실제로 있는 자식들(템플릿 확장으로 생긴 요소는 그 자식들을 대신 펼쳐서 포함하지 않는다). */
-    private static List<LayoutBox> displayChildren(LayoutBox parent) {
-        List<LayoutBox> out = new ArrayList<>();
-        for (LayoutBox c : parent.children) {
-            if (c.node.sourceIndex() >= 0) {
-                if (c.visible() || c.inactive) out.add(c);
-            } else {
-                out.addAll(displayChildren(c));
-            }
-        }
-        return out;
-    }
-
-    /** 원본에 있는 가장 가까운 조상. */
-    private static LayoutBox displayParent(LayoutBox b) {
-        LayoutBox p = b.parent;
-        while (p != null && p.node.sourceIndex() < 0) p = p.parent;
-        return p;
-    }
-
-    private static boolean isInsideOrSelf(LayoutBox box, int movingIndex) {
-        for (LayoutBox b = box; b != null; b = b.parent) if (b.node.sourceIndex() == movingIndex) return true;
-        return false;
     }
 
     // ================= 팔레트 / 트리 / 휴지통 기하 (화면 좌표) =================
