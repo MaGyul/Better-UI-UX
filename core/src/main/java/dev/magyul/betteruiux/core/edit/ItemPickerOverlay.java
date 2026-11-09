@@ -108,6 +108,12 @@ final class ItemPickerOverlay {
             }
         }
         g.popClip();
+        if (textMode && ids.isEmpty()) {                                                     // 파일이 하나도 없을 때 이유를 알려 준다
+            String[] hint = {"파일이 없어요.", "config/better-uiux/", "images 폴더에 png·gif·mp4", "파일을 넣어 주세요."};
+            for (int i = 0; i < hint.length; i++) g.drawText(hint[i], gx + 4, gy + 4 + i * (tm.lineHeight() + 2), C_DIM, false);
+        } else if (items.isEmpty()) {
+            g.drawText("검색 결과가 없어요.", gx + 4, gy + 4, C_DIM, false);
+        }
         if (totalRows > rows) {                                                              // 스크롤 막대
             int trackH = rows * cellH, thumbH = Math.max(8, trackH * rows / totalRows);
             int thumbY = gy + (trackH - thumbH) * scrollRow / Math.max(1, totalRows - rows);

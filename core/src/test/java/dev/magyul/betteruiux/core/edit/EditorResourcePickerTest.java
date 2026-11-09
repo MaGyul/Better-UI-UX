@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 
 /** 이미지/영상 src 칸의 파일 선택 목록. */
 class EditorResourcePickerTest {
-    private static final class Host implements EditorHost {
+    private static class Host implements EditorHost {
         @Override public UiDocument load(String text) throws UiParseException { return UiDocument.parse(text, new FixedMetrics()); }
 
         @Override public void save(String text) throws IOException { }
@@ -58,6 +58,20 @@ class EditorResourcePickerTest {
         click(e, item.x() + 2, item.y() + 2);
         assertTrue(e.text().contains("src=\"file:clip.mp4\""), e.text());
         assertFalse(find(paint(e), "file:spin.gif") != null, "고르면 닫힌다");
+    }
+
+    @Test
+    void emptyListExplainsWhyAndWhereToPutFiles() throws Exception {
+        EditorController e = new EditorController(new Host() {
+            @Override public List<String> suggestions(String key) { return List.of(); }
+        }, new FixedMetrics(), "<screen><image id=\"m\" src=\"file:a.png\" width=\"20\" height=\"20\"/></screen>", 600, 300);
+        e.select(1);
+        paint(e);
+        DrawCommand.DrawText mark = find(paint(e), "▦");
+        click(e, mark.x() + 1, mark.y() + 1);
+        DrawList open = paint(e);
+        assertTrue(find(open, "파일이 없어요.") != null, "빈 목록 안내");
+        assertTrue(find(open, "config/better-uiux/") != null);
     }
 
     @Test
