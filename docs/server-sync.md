@@ -53,6 +53,8 @@ ServerSync.core().registerAction("shop:buy",
 
 ## 테스트
 
+- 자동 시험(사람 조작 없이): 서버를 띄운 뒤 클라이언트를 `JAVA_TOOL_OPTIONS=-Dbetteruiux.serverselftest=true` 로 실행하면, 접속→`/serverui open`→버튼 클릭→연타→닫기를 스스로 수행하고 `[selftest] PASS/FAIL` 을 로그에 남긴 뒤 종료한다(`ServerSelfTest`, 개발용).
+
 - 코어: `SyncProtocolTest`, `SyncIntegrationTest`(클라이언트↔서버를 실제 코덱으로 연결).
 - 실제: `./gradlew :fabric:runServer` 후 `:fabric:runClient --args="--username Dev --quickPlayMultiplayer localhost:25565"`,
   NeoForge는 `:neoforge:runServer`, `:neoforge:runClient -PquickPlay=localhost:25565`. 게임에서 `/serverui open Dev shop`

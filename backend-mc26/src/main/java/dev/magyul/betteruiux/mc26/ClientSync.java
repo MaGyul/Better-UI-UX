@@ -80,8 +80,11 @@ public final class ClientSync {
             }
         });
         core.connected();
+        if (ServerSelfTest.enabled()) ServerSelfTest.start();
         LOG.info("[better-uiux] 서버 동기화 인사를 보냈습니다");
     }
+
+    static Object stateValue(String key) { return latestState.get(key); }
 
     public static void onDisconnect() {
         core = null;
