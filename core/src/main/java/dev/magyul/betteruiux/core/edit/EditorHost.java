@@ -49,6 +49,12 @@ public interface EditorHost {
     /** 디스크에 있는 현재 파일 내용(없으면 null). 저장할 때 에디터 밖에서 바뀌었는지 확인하는 데 쓴다. */
     default String diskText() { return null; }
 
+    /** 서버로 발행할 수 있는 상태인가(서버에 모드가 있어 서버 기능이 켜져 있을 때). */
+    default boolean canPublish() { return false; }
+
+    /** 현재 문서(저장된 파일)를 서버로 발행한다. 권한은 서버가 확인하고 결과는 채팅 메시지로 알린다. */
+    default void publish() { }
+
     /** 에디터를 닫아 달라는 요청(툴바의 Exit 버튼, 아무것도 선택하지 않고 Esc). */
     default void requestExit() { }
 

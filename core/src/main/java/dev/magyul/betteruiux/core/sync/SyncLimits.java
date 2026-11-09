@@ -22,4 +22,8 @@ public final class SyncLimits {
     public static final int MAX_PARAMS = 32;
     public static final int MAX_ARGS = 16;
     public static final int MAX_NEED = MAX_FILES;
+
+    /** 발행(클라이언트→서버)은 UI 파일 위주라 작게 제한한다. 이미지/영상은 https 로. 매니페스트가 32KB 패킷 안에 들어가도록 파일 수도 제한. */
+    public static final int MAX_PUBLISH_FILES = 64;
+    public static final long MAX_PUBLISH_BYTES = 2L * 1024 * 1024;
 }

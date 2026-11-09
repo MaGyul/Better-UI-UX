@@ -44,6 +44,10 @@ final class EditorBackend {
 
             @Override public String title() { return id + ".xml"; }
 
+            @Override public boolean canPublish() { return ClientSync.active(); }
+
+            @Override public void publish() { ClientSync.publishUi(id); }
+
             /** 패널/툴바 접힘 상태는 config.toml 의 [editor] 에 저장해 다음에도 유지한다. */
             @Override public java.util.Map<String, String> loadPrefs() {
                 var cfg = dev.magyul.betteruiux.core.doc.UiConfig.load(userDir.getParent().resolve("config.toml"));

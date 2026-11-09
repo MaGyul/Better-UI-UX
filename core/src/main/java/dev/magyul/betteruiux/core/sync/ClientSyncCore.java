@@ -44,6 +44,9 @@ public final class ClientSyncCore {
         /** 서버 값이 바뀌었다(전체 현재 값). */
         void onState(Map<String, Object> values);
 
+        /** 발행 결과(stage 0 = 시작 승인/거부, 1 = 저장 완료/실패). */
+        default void onPublishResult(int stage, boolean ok, String message) {}
+
         /** 서버 기능이 꺼졌다(버전 불일치, 프로토콜 위반 등). */
         void onDisabled(String reason);
     }
@@ -56,6 +59,9 @@ public final class ClientSyncCore {
     private BundleManifest pendingManifest;
     private BundleAssembler assembler;
     private final Map<String, Object> state = new LinkedHashMap<>();
+    private boolean manifestSwitched;
+    private java.util.ArrayDeque<BundleChunk> publishQueue;
+    private boolean publishWaiting;
 
     public ClientSyncCore(ServerSyncCore.Outbox out, BundleCache cache, Listener listener) {
         this.out = out;
@@ -66,6 +72,41 @@ public final class ClientSyncCore {
     public boolean active() { return active && !disabled; }
 
     public Map<String, Object> state() { return Map.copyOf(state); }
+
+    /** 서버가 알린 정책(0 = server-first, 1 = local-first). 인사 전에는 1. */
+    public int policy() { return policy; }
+
+    /** 화면을 닫았음을 서버에 알린다. */
+    public void closedUi(String id) {
+        if (active() && UiIds.valid(id)) out.send(new SyncMessage.UiClosed(id));
+    }
+
+    /**
+     * 파일들을 서버에 발행한다(서버가 권한을 확인한다). 한 번에 하나만. 파일 수/크기 상한을 넘으면 예외.
+     * @return 시작했으면 true(결과는 {@link Listener#onPublishResult})
+     */
+    public boolean publish(Map<String, byte[]> files) throws SyncException {
+        if (!active()) return false;
+        if (publishWaiting || publishQueue != null) throw new SyncException("이미 발행 중입니다");
+        if (files.isEmpty() || files.size() > SyncLimits.MAX_PUBLISH_FILES) throw new SyncException("발행 파일 수가 올바르지 않습니다");
+        BundleManifest m = Bundle.manifestOf(files);
+        long total = 0;
+        for (var f : m.files()) total += f.size();
+        if (total > SyncLimits.MAX_PUBLISH_BYTES) throw new SyncException("발행 크기가 너무 큽니다(최대 " + SyncLimits.MAX_PUBLISH_BYTES / 1024 + "KB)");
+        java.util.ArrayDeque<BundleChunk> q = new java.util.ArrayDeque<>();
+        for (var f : m.files()) q.addAll(Bundle.chunks(f.path(), files.get(f.path())));
+        publishQueue = q;
+        publishWaiting = true;
+        out.send(new SyncMessage.PublishBegin(m));
+        return true;
+    }
+
+    /** 틱마다: 승인된 발행의 조각을 조금씩 보낸다(서버의 메시지 한도를 넘지 않도록). */
+    public void tick() {
+        if (publishWaiting || publishQueue == null || !active()) return;
+        for (int i = 0; i < 4 && !publishQueue.isEmpty(); i++) out.send(publishQueue.poll());
+        if (publishQueue.isEmpty()) publishQueue = null;
+    }
 
     /** 서버에 접속했을 때 부른다: 인사를 보낸다. */
     public void connected() { out.send(new ClientHello(SyncLimits.PROTOCOL, cache.bundleHash())); }
@@ -113,6 +154,16 @@ public final class ClientSyncCore {
                     state.putAll(s.values());
                     listener.onState(Map.copyOf(state));
                 }
+                case SyncMessage.PublishResult r -> {
+                    if (!active) throw new SyncException("인사 전의 발행 결과");
+                    if (r.stage() == 0) {
+                        publishWaiting = false;
+                        if (!r.ok()) publishQueue = null;
+                    } else {
+                        publishQueue = null;
+                    }
+                    listener.onPublishResult(r.stage(), r.ok(), r.message());
+                }
                 default -> throw new SyncException("서버가 보낼 수 없는 메시지: " + m.getClass().getSimpleName());
             }
         } catch (SyncException e) {
@@ -136,7 +187,9 @@ public final class ClientSyncCore {
         if (!active) throw new SyncException("인사 전의 번들 목록");
         Bundle.validate(b);                                                       // 경로/크기/중복/해시
         List<String> need = Bundle.missing(b, cache.fileHashes());
+        manifestSwitched = pendingManifest != null || assembler != null;      // 받는 중에 새 목록이 왔다: 이전 목록의 조각이 아직 도착할 수 있다
         pendingManifest = b;
+        assembler = null;
         if (need.isEmpty()) {
             cache.store(b, Map.of());
             pendingManifest = null;
@@ -149,8 +202,17 @@ public final class ClientSyncCore {
     }
 
     private void chunk(BundleChunk c) throws SyncException {
-        if (assembler == null || pendingManifest == null) throw new SyncException("요청하지 않은 번들 조각");
-        assembler.accept(c);
+        if (assembler == null || pendingManifest == null) {
+            if (manifestSwitched) return;                                     // 목록이 바뀌기 전의 조각: 조용히 버린다
+            throw new SyncException("요청하지 않은 번들 조각");
+        }
+        try {
+            assembler.accept(c);
+        } catch (SyncException e) {
+            if (manifestSwitched) return;
+            throw e;
+        }
+        manifestSwitched = false;
         if (!assembler.complete()) return;
         BundleManifest m = pendingManifest;
         Map<String, byte[]> files = assembler.files();

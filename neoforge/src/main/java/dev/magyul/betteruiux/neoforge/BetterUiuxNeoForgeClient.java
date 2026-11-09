@@ -49,6 +49,7 @@ public final class BetterUiuxNeoForgeClient {
                 UiOpener.autoOpenIfRequested(baseDir);
             }
         });
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> ClientSync.tick());
         NeoForge.EVENT_BUS.addListener((RegisterClientCommandsEvent e) ->
                 e.getDispatcher().register(Commands.literal("uiux")
                         .then(Commands.literal("open")
@@ -57,6 +58,9 @@ public final class BetterUiuxNeoForgeClient {
                                             UiApi.open(StringArgumentType.getString(ctx, "id"));
                                             return 1;
                                         })))
+                        .then(Commands.literal("publish")
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .executes(ctx -> ClientSync.publishUi(StringArgumentType.getString(ctx, "id")) ? 1 : 0)))
                         .then(Commands.literal("edit")
                                 .then(Commands.argument("id", StringArgumentType.word())
                                         .executes(ctx -> {

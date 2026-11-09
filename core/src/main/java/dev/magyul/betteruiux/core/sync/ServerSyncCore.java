@@ -52,11 +52,25 @@ public final class ServerSyncCore {
     private static final int CHUNKS_PER_TICK = 8;
 
     private volatile ServerBundle bundle = ServerBundle.EMPTY;
-    private final int policy;
+    private volatile int policy;
+    private volatile Publisher publisher;
     private final Map<String, ActionEntry> actions = new ConcurrentHashMap<>();
 
     /** @param policy 0 = server-first(서버 번들이 같은 id 의 로컬 파일을 덮음), 1 = local-first */
     public ServerSyncCore(int policy) { this.policy = policy; }
+
+    public void setPolicy(int policy) { this.policy = policy; }
+
+    /** 에디터 발행을 받는 쪽(서버 글루). 없으면 발행은 모두 거부된다. */
+    public interface Publisher {
+        /** 이 플레이어가 발행할 권한이 있는가(예: 권한 레벨 4). 호출 시점의 권한을 본다. */
+        boolean mayPublish(String playerId);
+
+        /** 검증과 조립이 끝난 파일을 저장하고 번들에 적용한다. 실패하면 {@link SyncException}. */
+        void publish(String playerId, Map<String, byte[]> files) throws SyncException;
+    }
+
+    public void setPublisher(Publisher p) { this.publisher = p; }
 
     /** 배포할 번들을 바꾼다. 검사(경로, 크기, 형식)에 걸리면 {@link SyncException}. */
     public void setBundle(Map<String, byte[]> files) throws SyncException {
@@ -86,6 +100,7 @@ public final class ServerSyncCore {
         private final Map<String, Object> state = new LinkedHashMap<>();
         private final Deque<BundleChunk> pending = new ArrayDeque<>();
         private BundleManifest sentManifest;
+        private BundleAssembler publishAssembler;
         private Set<String> allowedNeed = Set.of();
 
         private ServerSession(String playerId, Outbox out, LongSupplier nanos) {
@@ -126,6 +141,9 @@ public final class ServerSyncCore {
                 case ClientHello h -> hello(h);
                 case BundleNeed n -> need(n);
                 case Action a -> action(a);
+                case SyncMessage.UiClosed c -> openUis.remove(c.id());
+                case SyncMessage.PublishBegin p -> publishBegin(p.manifest());
+                case BundleChunk c -> publishChunk(c);
                 default -> violation("클라이언트가 보낼 수 없는 메시지: " + m.getClass().getSimpleName());
             }
         }
@@ -142,6 +160,66 @@ public final class ServerSyncCore {
                 out.send(b.manifest());
             }
             if (!state.isEmpty()) out.send(new StateSnapshot(new LinkedHashMap<>(state)));
+        }
+
+        /** 번들이 바뀌었다: 클라이언트가 가진 것과 비교하도록 새 매니페스트를 다시 보낸다. */
+        public void resync() {
+            if (!active()) return;
+            ServerBundle b = bundle;
+            pending.clear();
+            sentManifest = b.manifest();
+            allowedNeed = new HashSet<>();
+            for (var f : b.manifest().files()) allowedNeed.add(f.path());
+            out.send(b.manifest());
+        }
+
+        private void publishBegin(BundleManifest m) {
+            if (!active()) {
+                violation("활성화되지 않은 클라이언트의 발행");
+                return;
+            }
+            Publisher p = publisher;
+            publishAssembler = null;
+            if (p == null || !p.mayPublish(playerId)) {
+                violation("발행 권한이 없습니다");
+                out.send(new SyncMessage.PublishResult(0, false, "발행 권한이 없습니다"));
+                return;
+            }
+            try {
+                if (m.files().isEmpty() || m.files().size() > SyncLimits.MAX_PUBLISH_FILES) throw new SyncException("발행 파일 수가 올바르지 않습니다");
+                Bundle.validate(m);
+                long total = 0;
+                for (var f : m.files()) total += f.size();
+                if (total > SyncLimits.MAX_PUBLISH_BYTES) throw new SyncException("발행 크기가 너무 큽니다(최대 " + SyncLimits.MAX_PUBLISH_BYTES / 1024 + "KB)");
+                List<String> all = new java.util.ArrayList<>();
+                for (var f : m.files()) all.add(f.path());
+                publishAssembler = new BundleAssembler(m, all);
+                out.send(new SyncMessage.PublishResult(0, true, ""));
+            } catch (SyncException e) {
+                violation("발행 목록 오류: " + e.getMessage());
+                out.send(new SyncMessage.PublishResult(0, false, e.getMessage()));
+            }
+        }
+
+        private void publishChunk(BundleChunk c) {
+            if (publishAssembler == null) {
+                violation("요청하지 않은 발행 조각");
+                return;
+            }
+            Publisher p = publisher;
+            try {
+                publishAssembler.accept(c);
+                if (!publishAssembler.complete()) return;
+                Map<String, byte[]> files = publishAssembler.files();
+                publishAssembler = null;
+                if (p == null || !p.mayPublish(playerId)) throw new SyncException("발행 권한이 없습니다");   // 전송 중 권한이 바뀐 경우
+                p.publish(playerId, files);
+                out.send(new SyncMessage.PublishResult(1, true, files.size() + "개 파일을 발행했습니다"));
+            } catch (SyncException e) {
+                publishAssembler = null;
+                violation("발행 실패: " + e.getMessage());
+                out.send(new SyncMessage.PublishResult(1, false, e.getMessage()));
+            }
         }
 
         private void need(BundleNeed n) {

@@ -51,6 +51,8 @@ class SyncIntegrationTest {
         public void onCloseUi(String id) { closed.add(id); }
         public void onState(Map<String, Object> v) { state = v; }
         public void onDisabled(String r) { disabled++; disabledReason = r; }
+        final List<String> publishResults = new ArrayList<>();
+        public void onPublishResult(int stage, boolean ok, String message) { publishResults.add(stage + ":" + ok); }
     }
 
     /** 한 연결: 양쪽 메시지를 인코딩→디코딩해서 큐로 전달한다. */
@@ -92,6 +94,8 @@ class SyncIntegrationTest {
                     ss.tick();
                     continue;
                 }
+                client.tick();
+                if (!toServer.isEmpty()) continue;
                 return;
             }
             throw new AssertionError("pump 이 끝나지 않습니다");
@@ -316,5 +320,100 @@ class SyncIntegrationTest {
         assertEquals(1, got.size());
         assertNotNull(l.ss.openUis());
         assertNull(null);
+    }
+
+    /** 테스트용 발행 처리기: 권한 여부를 바꿀 수 있고, 받은 파일을 서버 번들에 합친다. */
+    static final class TestPublisher implements ServerSyncCore.Publisher {
+        boolean allowed = true;
+        final ServerSyncCore core;
+        final List<ServerSyncCore.ServerSession> sessions = new ArrayList<>();
+
+        TestPublisher(ServerSyncCore core) { this.core = core; }
+
+        public boolean mayPublish(String playerId) { return allowed; }
+
+        public void publish(String playerId, Map<String, byte[]> files) throws SyncException {
+            Map<String, byte[]> all = new LinkedHashMap<>();
+            core.bundle().files().forEach(all::put);
+            all.putAll(files);
+            core.setBundle(all);
+            for (var s : sessions) s.resync();
+        }
+    }
+
+    @Test
+    void clientClosingScreenStopsServerActions() throws Exception {
+        ServerSyncCore s = new ServerSyncCore(0);
+        List<Object> got = new ArrayList<>();
+        s.registerAction("ping", ActionSchema.none(), (p, a) -> got.add(1));
+        Link l = new Link(s);
+        l.client.connected();
+        l.pump();
+        l.ss.open("ui", Map.of());
+        l.pump();
+        l.client.sendAction("ui", "ping", Map.of());
+        l.pump();
+        assertEquals(1, got.size());
+        l.client.closedUi("ui");
+        l.pump();
+        assertFalse(l.ss.openUis().contains("ui"));
+        l.client.sendAction("ui", "ping", Map.of());
+        l.pump();
+        assertEquals(1, got.size());
+    }
+
+    @Test
+    void publishRequiresPermissionAndUpdatesBundleForEveryone() throws Exception {
+        ServerSyncCore s = new ServerSyncCore(0);
+        s.setBundle(files("a.xml", "<screen/>"));
+        TestPublisher pub = new TestPublisher(s);
+        s.setPublisher(pub);
+        Link editor = new Link(s), viewer = new Link(s);
+        pub.sessions.add(editor.ss);
+        pub.sessions.add(viewer.ss);
+        for (Link l : List.of(editor, viewer)) { l.client.connected(); l.pump(); }
+
+        // 권한 없음: 거부되고 아무것도 바뀌지 않는다
+        pub.allowed = false;
+        assertTrue(editor.client.publish(files("b.xml", "<screen id='b'/>")));
+        editor.pump();
+        assertEquals(List.of("0:false"), editor.rec.publishResults);
+        assertEquals(1, s.bundle().files().size());
+
+        // 권한 있음: 서버 번들에 합쳐지고, 접속 중인 다른 클라이언트도 새 파일을 받는다
+        pub.allowed = true;
+        editor.rec.publishResults.clear();
+        assertTrue(editor.client.publish(files("b.xml", "<screen id='b'/>", "style.uicss", ".x{}")));
+        editor.pump();
+        viewer.pump();
+        assertEquals(List.of("0:true", "1:true"), editor.rec.publishResults);
+        assertEquals(3, s.bundle().files().size());
+        assertTrue(viewer.cache.files.containsKey("b.xml"));
+        assertTrue(viewer.cache.files.containsKey("style.uicss"));
+        assertTrue(viewer.client.active());
+    }
+
+    @Test
+    void publishLimitsAndBadFilesAreRejected() throws Exception {
+        ServerSyncCore s = new ServerSyncCore(0);
+        TestPublisher pub = new TestPublisher(s);
+        s.setPublisher(pub);
+        Link l = new Link(s);
+        pub.sessions.add(l.ss);
+        l.client.connected();
+        l.pump();
+
+        // 클라이언트가 스스로 큰 발행을 거부한다
+        byte[] big = new byte[(int) SyncLimits.MAX_PUBLISH_BYTES + 1];
+        boolean threw = false;
+        try { l.client.publish(Map.of("big.png", big)); } catch (SyncException e) { threw = true; }
+        assertTrue(threw);
+
+        // 악의적인 클라이언트: 경로 탈출 / 조각을 보내지 않고 시작만 / 승인 없이 조각만
+        l.ss.onMessage(new SyncMessage.PublishBegin(new BundleManifest("00", List.of(new SyncMessage.FileEntry("../evil.xml", Bundle.sha256(new byte[0]), 0)))));
+        l.ss.onMessage(new SyncMessage.BundleChunk("a.xml", 0, 1, new byte[] {1}));
+        l.pump();
+        assertTrue(s.bundle().files().isEmpty());
+        assertTrue(l.rec.publishResults.contains("0:false"));
     }
 }

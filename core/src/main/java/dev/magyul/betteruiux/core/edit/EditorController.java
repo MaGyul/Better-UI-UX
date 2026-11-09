@@ -2379,7 +2379,7 @@ public final class EditorController {
     }
 
     private static final Map<String, String> TIPS = Map.ofEntries(
-            Map.entry("Save", "저장 (Ctrl+S)"), Map.entry("Undo", "실행 취소 (Ctrl+Z)"), Map.entry("Redo", "다시 실행 (Ctrl+Y)"),
+            Map.entry("Save", "저장 (Ctrl+S)"), Map.entry("Pub", "서버로 발행 (저장 후, 서버 권한 레벨 4 필요)"), Map.entry("Undo", "실행 취소 (Ctrl+Z)"), Map.entry("Redo", "다시 실행 (Ctrl+Y)"),
             Map.entry("Dup", "선택한 요소 복제 (Ctrl+D)"), Map.entry("Del", "선택한 요소 삭제 (Delete)"),
             Map.entry("Wrap", "선택을 컨테이너로 감싸기 / 풀기 (Ctrl+G)"), Map.entry("Align", "부모 안에서 정렬(기준점 지정)"),
             Map.entry("View", "XML 보기, 상태 미리보기, 도움말"), Map.entry("Grid", "8px 격자에 맞추기 켜고 끄기"),
@@ -2435,6 +2435,7 @@ public final class EditorController {
                     else if (item.contains("active")) previewState = 2;
                     else help.open = true;
                 }), C_BTN, 0),
+                new ToolItem("Pub", host.canPublish(), r -> { if (!session.isDirty() || save()) host.publish(); }, C_BTN, 4),
                 new ToolItem(panned ? "Fit!" : "Fit", panned, r -> resetView(), C_BTN_HOT, 0));
         int exitW = tm.width("Exit") + 8;
         int exitX = viewW - exitW - 2, limit = exitX - 2;

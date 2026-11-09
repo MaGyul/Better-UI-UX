@@ -43,4 +43,13 @@ public sealed interface SyncMessage {
 
     /** C2S: 버튼 동작. */
     record Action(String uiId, String actionId, Map<String, Object> args) implements SyncMessage {}
+
+    /** C2S: 클라이언트가 서버가 연 화면을 닫았다(서버는 그 화면의 동작을 더 받지 않는다). */
+    record UiClosed(String id) implements SyncMessage {}
+
+    /** C2S: 에디터에서 서버로 발행 시작. 파일 목록(최대 {@link SyncLimits#MAX_PUBLISH_FILES}개, 합계 {@link SyncLimits#MAX_PUBLISH_BYTES}). */
+    record PublishBegin(BundleManifest manifest) implements SyncMessage {}
+
+    /** S2C: 발행 진행 결과. {@code stage} 0 = 시작 승인/거부(승인이면 조각을 보낸다), 1 = 저장 완료/실패. */
+    record PublishResult(int stage, boolean ok, String message) implements SyncMessage {}
 }

@@ -139,6 +139,7 @@ public final class UiScreen extends Screen {
     @Override
     public void removed() {
         super.removed();
+        if (options.serverUi()) ClientSync.screenClosed(id);
         if (scriptHost != null) {
             scriptHost.close();
             scriptHost = null;
