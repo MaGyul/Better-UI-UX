@@ -2042,10 +2042,12 @@ public final class EditorController {
         }
         LayoutBox box = selectedBox();
         if (key == null || box == null) return;
-        if (key.startsWith(StyleText.KEY) || key.startsWith(StyleText.ADD_KEY)) {       // <style> 규칙의 선언 편집
+        if (key.startsWith(StyleText.KEY) || key.startsWith(StyleText.ADD_KEY) || key.startsWith(StyleText.NEW_KEY)) {       // <style> 규칙의 선언 편집
             try {
                 String next = StyleText.apply(session.source(), key, raw);
+                int before = session.source().all().size();
                 if (!applyEdit(src -> next)) setStatus("바뀐 것이 없어요", false);
+                else if (selected > 0 && session.source().all().size() > before) selected += session.source().all().size() - before;   // <style> 블록이 새로 생기면 뒤 요소 번호가 밀린다
             } catch (IllegalArgumentException e) {
                 setStatus(e.getMessage(), true);
             }

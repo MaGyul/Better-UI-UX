@@ -150,7 +150,6 @@ final class StyleText {
         List<Rule> rules = rules(src);
         List<PropRow> rows = new ArrayList<>();
         List<Integer> hits = matching(src, box);
-        if (hits.isEmpty()) return rows;
         rows.add(PropertyModel.header("스타일 규칙"));
         for (int n : hits) {
             Rule r = rules.get(n);
@@ -161,7 +160,48 @@ final class StyleText {
             }
             rows.add(new PropRow("+ 추가", ADD_KEY + n, "", true));
         }
+        rows.add(new PropRow("+ 새 규칙 " + selectorFor(box), NEW_KEY + selectorFor(box), "", true));   // 맞는 규칙이 없어도 첫 규칙을 만들 수 있다
         return rows;
+    }
+
+    static final String NEW_KEY = "css*:";
+
+    /** 새 규칙의 선택자: id 가 있으면 #id, 없으면 첫 class, 둘 다 없으면 태그 이름. */
+    static String selectorFor(LayoutBox box) {
+        String id = box.id();
+        if (id != null && !id.isBlank()) return "#" + id.trim();
+        String cls = box.node.attr("class");
+        if (cls != null && !cls.isBlank()) return "." + cls.trim().split("\\s+")[0];
+        return box.tag();
+    }
+
+    /** 새 규칙을 만든다: 기존 {@code <style>} 끝에 덧붙이고, 없으면 루트 요소 맨 앞에 {@code <style>} 블록을 만든다. */
+    static String addRule(XmlSource src, String selector, String declaration) {
+        String s = declaration == null ? "" : declaration.trim();
+        int c = s.indexOf(':');
+        if (c <= 0) c = s.indexOf(' ');
+        if (c <= 0) throw new IllegalArgumentException("속성: 값 형태로 입력하세요");
+        String prop = s.substring(0, c).trim(), value = s.substring(c + 1).trim();
+        if (!prop.matches("[A-Za-z-][A-Za-z0-9-]*") || value.isEmpty()) throw new IllegalArgumentException("속성: 값 형태로 입력하세요");
+        String t = src.text();
+        String rule = selector + " { " + prop + ": " + value + "; }";
+        for (XmlSource.Element el : src.all()) {
+            if (!el.tag.equals("style") || el.selfClosing() || el.endTagStart < 0) continue;
+            int at = el.endTagStart;
+            int cdata = t.lastIndexOf("]]>", at);
+            if (cdata >= el.startTagEnd) at = cdata;
+            int ls = at;
+            while (ls > el.startTagEnd && t.charAt(ls - 1) != '\n' && Character.isWhitespace(t.charAt(ls - 1))) ls--;   // 닫는 태그 앞 들여쓰기는 그대로 둔다
+            String indent = t.substring(ls, at);
+            if (ls > el.startTagEnd && t.charAt(ls - 1) == '\n') {
+                return t.substring(0, ls) + indent + "  " + rule + "\n" + t.substring(ls);
+            }
+            return t.substring(0, at) + " " + rule + " " + t.substring(at);
+        }
+        XmlSource.Element root = src.root();
+        if (root.selfClosing()) throw new IllegalArgumentException("루트 요소가 비어 있어 스타일을 넣을 수 없어요");
+        String block = "\n  <style>\n    " + rule + "\n  </style>";
+        return t.substring(0, root.startTagEnd) + block + t.substring(root.startTagEnd);
     }
 
     // ---- 고치기 ----
@@ -214,6 +254,10 @@ final class StyleText {
 
     /** 속성 패널 키({@code css:규칙:속성}, {@code css+:규칙})로 값을 반영한다. 잘못된 입력이면 IllegalArgumentException. */
     static String apply(XmlSource src, String key, String raw) {
+        if (key.startsWith(NEW_KEY)) {
+            if (raw == null || raw.isBlank()) return src.text();
+            return addRule(src, key.substring(NEW_KEY.length()), raw);
+        }
         if (key.startsWith(ADD_KEY)) {
             int n = Integer.parseInt(key.substring(ADD_KEY.length()));
             String s = raw == null ? "" : raw.trim();

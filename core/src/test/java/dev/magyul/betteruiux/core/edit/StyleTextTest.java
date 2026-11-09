@@ -80,6 +80,23 @@ class StyleTextTest {
     }
 
     @Test
+    void newRuleGoesIntoAnExistingStyleBlock() {
+        String out = StyleText.apply(src(XML), "css*:#z", "color: #FF0000");
+        assertEquals(4, StyleText.rules(src(out)).size());
+        assertEquals("#z", StyleText.rules(src(out)).get(3).selector());
+        assertTrue(out.contains("    #z { color: #FF0000; }\n  </style>"), out);
+        assertThrows(IllegalArgumentException.class, () -> StyleText.apply(src(XML), "css*:#z", "엉터리"));
+    }
+
+    @Test
+    void newRuleCreatesAStyleBlockWhenThereIsNone() {
+        String plain = "<screen><panel id=\"p\"/></screen>";
+        String out = StyleText.apply(src(plain), "css*:#p", "padding: 4");
+        assertEquals("<screen>\n  <style>\n    #p { padding: 4; }\n  </style><panel id=\"p\"/></screen>", out);
+        assertEquals(1, StyleText.rules(src(out)).size());
+    }
+
+    @Test
     void matchingRulesForAnElement() throws Exception {
         UiDocument d = UiDocument.parse(XML, new FixedMetrics());
         d.layout(400, 240);

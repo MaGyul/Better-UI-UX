@@ -79,6 +79,23 @@ class EditorStyleRulesTest {
     }
 
     @Test
+    void elementWithoutRulesStillOffersANewRule() throws Exception {
+        String plain = "<screen><panel id=\"a\" width=\"80\" height=\"40\"/></screen>";
+        EditorController e = new EditorController(new Host(), new FixedMetrics(), plain, W, H);
+        int idx = e.document().layout().children.stream().filter(b -> "a".equals(b.id())).findFirst().orElseThrow().node.sourceIndex();
+        e.select(idx);
+        paint(e);
+        assertTrue(find(paint(e), "- 스타일 규칙") != null, "규칙이 없어도 구역은 보인다");
+        DrawCommand.DrawText add = find(paint(e), "+ 새 규칙 #a");
+        assertTrue(add != null);
+        click(e, W - EditorController.RIGHT_W + 60 + 5, add.y() + 2);
+        for (char c : "padding: 6".toCharArray()) e.charTyped(c);
+        e.keyPressed(EditorKey.ENTER, false, false);
+        assertTrue(e.text().contains("#a { padding: 6; }"), e.text());
+        assertTrue(find(paint(e), "- #a") != null, "만든 규칙이 바로 목록에 나온다");
+    }
+
+    @Test
     void invalidAddShowsAnErrorAndChangesNothing() throws Exception {
         EditorController e = selected();
         DrawCommand.DrawText add = find(paint(e), "+ 추가");
