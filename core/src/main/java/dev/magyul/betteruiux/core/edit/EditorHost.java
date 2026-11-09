@@ -55,6 +55,15 @@ public interface EditorHost {
     /** 현재 문서(저장된 파일)를 서버로 발행한다. 권한은 서버가 확인하고 결과는 채팅 메시지로 알린다. */
     default void publish() { }
 
+    /** 저장하지 않은 편집 내용을 임시로 보관한다(게임이 죽어도 복구할 수 있게). 실제 파일은 건드리지 않는다. */
+    default void autosave(String text) { }
+
+    /** 이전 실행에서 남은 자동 저장본(없으면 null). */
+    default String readAutosave() { return null; }
+
+    /** 자동 저장본을 지운다(저장했거나 버렸을 때). */
+    default void clearAutosave() { }
+
     /** 에디터를 닫아 달라는 요청(툴바의 Exit 버튼, 아무것도 선택하지 않고 Esc). */
     default void requestExit() { }
 

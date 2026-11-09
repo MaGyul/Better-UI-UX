@@ -194,6 +194,54 @@ public final class EditorController {
         toolbarHidden = "true".equalsIgnoreCase(prefs.get("toolbarHidden"));
         lastPrefs = currentPrefs();
         diskBase = host.diskText();
+        String rec = host.readAutosave();
+        if (rec != null && !rec.equals(text)) {                      // 지난번에 저장하지 못하고 끝난 편집이 있다
+            recovery = rec;
+            dialogRecover = true;
+            exitDialog = true;
+        }
+    }
+
+    // ---- 자동 저장 / 복구 ----
+
+    private static final long AUTOSAVE_NANOS = 5_000_000_000L;
+    private String recovery;
+    private boolean dialogRecover;
+    private String autosavedText;
+    private long autosavedAt;
+
+    /** 저장하지 않은 편집이 있으면 몇 초마다 임시 파일에 남기고, 없으면 지운다. 복구 여부를 묻는 동안에는 덮어쓰지 않는다. */
+    private void autosaveTick() {
+        if (dialogRecover) return;
+        if (!session.isDirty()) {
+            if (autosavedText != null) {
+                host.clearAutosave();
+                autosavedText = null;
+            }
+            return;
+        }
+        long now = clock.getAsLong();
+        String t = session.text();
+        if (session.inTransient() || t.equals(autosavedText) || now - autosavedAt < AUTOSAVE_NANOS) return;
+        host.autosave(t);
+        autosavedText = t;
+        autosavedAt = now;
+    }
+
+    private void recoverNow() {
+        String r = recovery;
+        recovery = null;
+        dialogRecover = false;
+        exitDialog = false;
+        if (r != null && applyEdit(src -> r)) setStatus("자동 저장본을 복구했습니다 — 저장하면 적용됩니다", false);
+        else setStatus("복구할 변경이 없습니다", false);
+    }
+
+    private void discardRecovery() {
+        recovery = null;
+        dialogRecover = false;
+        exitDialog = false;
+        host.clearAutosave();
     }
 
     private java.util.Map<String, String> lastPrefs = java.util.Map.of();
@@ -386,6 +434,7 @@ public final class EditorController {
     /** 에디터를 닫는다. 저장하지 않은 변경이 있으면 먼저 물어본다. */
     public void requestExit() {
         if (!session.isDirty()) {
+            host.clearAutosave();
             host.requestExit();
             return;
         }
@@ -415,6 +464,10 @@ public final class EditorController {
         Rect full = new Rect(0, 0, viewW, viewH);
         g.fillRect(0, 0, viewW, viewH, 0xB0000000);
         regions.add(new Region(full, null));                  // 뒤의 모든 것을 막는다
+        if (dialogRecover) {
+            paintRecoverDialog(g);
+            return;
+        }
         String l1 = "저장하지 않은 변경이 있습니다.", l2 = "저장하고 닫을까요?";
         String b1 = "저장 후 닫기", b2 = "저장 안 함", b3 = "취소";
         int bw1 = tm.width(b1) + 8, bw2 = tm.width(b2) + 8, bw3 = tm.width(b3) + 8;
@@ -430,9 +483,32 @@ public final class EditorController {
         bx += button(g, bx, by, b1, true, this::saveAndExit, 0xFF2A6A3A);
         bx += button(g, bx, by, b2, true, () -> {
             exitDialog = false;
+            host.clearAutosave();
             host.requestExit();
         }, 0xFF7A2A2A);
         button(g, bx, by, b3, true, () -> exitDialog = false);
+    }
+
+    private void paintRecoverDialog(UiGfx g) {
+        String l1 = "저장하지 못하고 끝난 편집 내용이 남아 있습니다.", l2 = "복구할까요?";
+        String b1 = "복구", b2 = "버리기", b3 = "나중에";
+        int bw1 = tm.width(b1) + 8, bw2 = tm.width(b2) + 8, bw3 = tm.width(b3) + 8;
+        int w = Math.max(Math.max(tm.width(l1), tm.width(l2)) + 24, bw1 + bw2 + bw3 + 6 + 24);
+        int h = tm.lineHeight() * 2 + TOOLBAR_H + 26;
+        int x = (viewW - w) / 2, y = (viewH - h) / 2;
+        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
+        g.fillRect(x, y, w, h, 0xFF161820);
+        g.drawText(l1, x + (w - tm.width(l1)) / 2, y + 8, C_TEXT, false);
+        g.drawText(l2, x + (w - tm.width(l2)) / 2, y + 10 + tm.lineHeight(), C_DIM, false);
+        int by = y + h - TOOLBAR_H - 4;
+        int bx = x + (w - (bw1 + bw2 + bw3 + 6)) / 2;
+        bx += button(g, bx, by, b1, true, this::recoverNow, 0xFF2A6A3A);
+        bx += button(g, bx, by, b2, true, this::discardRecovery, 0xFF7A2A2A);
+        button(g, bx, by, b3, true, () -> {              // 자동 저장본은 그대로 두고 지금 파일로 계속한다(다음에 다시 묻지 않도록 이번엔 덮어쓰지 않음)
+            dialogRecover = false;
+            exitDialog = false;
+            recovery = null;
+        });
     }
 
     /**
@@ -1397,6 +1473,14 @@ public final class EditorController {
 
     public boolean keyPressed(EditorKey key, boolean ctrl, boolean shift) {
         if (exitDialog) {
+            if (dialogRecover) {
+                if (key == EditorKey.ESCAPE) {
+                    dialogRecover = false;
+                    exitDialog = false;
+                    recovery = null;
+                } else if (key == EditorKey.ENTER) recoverNow();
+                return true;
+            }
             if (key == EditorKey.ESCAPE) exitDialog = false;
             else if (key == EditorKey.ENTER) saveAndExit();
             return true;
@@ -1695,6 +1779,8 @@ public final class EditorController {
             diskBase = host.diskText();
             overwriteArmed = false;
             session.markSaved();
+            host.clearAutosave();
+            autosavedText = null;
             setStatus("저장됨: " + host.title(), false);
             return true;
         } catch (IOException e) {
@@ -2215,6 +2301,7 @@ public final class EditorController {
             mouseY = -9999;
         }
         persistPrefs();
+        autosaveTick();
         updateToolbarPeek();
         updateSidePeek();
         autoPan();

@@ -101,6 +101,34 @@ final class EditorBackend {
                 }
             }
 
+            /** 저장 전 편집 내용은 config/better-uiux/autosave/<id>.xml 에 임시로 남긴다(저장하거나 정상 종료하면 지운다). */
+            private Path autosaveFile() { return userDir.getParent().resolve("autosave").resolve(id + ".xml"); }
+
+            @Override public void autosave(String text) {
+                try {
+                    AtomicFiles.write(autosaveFile(), text);
+                } catch (IOException ignored) {
+                    // 임시 저장은 실패해도 편집에는 영향이 없다
+                }
+            }
+
+            @Override public String readAutosave() {
+                try {
+                    Path f = autosaveFile();
+                    return java.nio.file.Files.exists(f) ? java.nio.file.Files.readString(f) : null;
+                } catch (IOException e) {
+                    return null;
+                }
+            }
+
+            @Override public void clearAutosave() {
+                try {
+                    java.nio.file.Files.deleteIfExists(autosaveFile());
+                } catch (IOException ignored) {
+                    // 남아 있어도 다음에 복구 여부를 한 번 더 물을 뿐이다
+                }
+            }
+
             @Override public String clipboard() { return Minecraft.getInstance().keyboardHandler.getClipboard(); }
 
             @Override public void setClipboard(String text) { Minecraft.getInstance().keyboardHandler.setClipboard(text); }
