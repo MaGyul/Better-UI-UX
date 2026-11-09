@@ -140,7 +140,7 @@ public final class ServerSync {
         public void publish(String playerId, Map<String, byte[]> files) throws SyncException {
             Path base = baseDir;
             if (base == null) throw new SyncException("서버 UI 폴더를 알 수 없습니다");
-            Path dir = base.resolve("server-ui");
+            Path dir = base.toAbsolutePath().normalize().resolve("server-ui");   // 상대 경로면 startsWith 비교가 어긋나므로 절대 경로로
             Map<String, byte[]> all = new LinkedHashMap<>(CORE.bundle().files());
             try {
                 Files.createDirectories(dir);

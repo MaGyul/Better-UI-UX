@@ -92,6 +92,10 @@ public final class ClientSync {
 
     static Object stateValue(String key) { return latestState.get(key); }
 
+    static Path baseDir() { return baseDir; }
+
+    static Path cacheFiles() { return cacheFiles; }
+
     /** 클라이언트 틱마다(렌더 스레드): 발행 중인 조각을 조금씩 보낸다. */
     public static void tick() {
         ClientSyncCore c = core;
@@ -307,7 +311,7 @@ public final class ClientSync {
 
         public void store(BundleManifest manifest, Map<String, byte[]> newFiles) {
             try {
-                Path f = files();
+                Path f = files().toAbsolutePath().normalize();                  // 상대/비정규 경로여도 startsWith 비교가 맞도록
                 Files.createDirectories(f);
                 Set<String> keep = new HashSet<>();
                 for (var e : manifest.files()) keep.add(e.path());

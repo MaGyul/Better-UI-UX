@@ -38,6 +38,7 @@ public final class UiApi {
     public static void init(Path configBaseDir) {
         baseDir = configBaseDir;
         HudManager.init(configBaseDir);
+        RemoteAccess.init(configBaseDir);
         ExternalImages.init(configBaseDir);
         ExternalVideos.init(configBaseDir);
         BackendBuiltins.register();

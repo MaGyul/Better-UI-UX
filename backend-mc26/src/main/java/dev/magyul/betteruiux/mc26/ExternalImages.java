@@ -1,5 +1,6 @@
 package dev.magyul.betteruiux.mc26;
 
+import dev.magyul.betteruiux.core.net.RemoteUrl;
 import dev.magyul.betteruiux.core.render.ImageDecoder;
 import java.io.IOException;
 import java.io.InputStream;
@@ -72,19 +73,22 @@ final class ExternalImages {
 
     static void init(Path configBaseDir) { baseDir = configBaseDir; }
 
-    static boolean handles(String src) { return src != null && src.startsWith(PREFIX); }
+    static boolean handles(String src) { return src != null && (src.startsWith(PREFIX) || RemoteUrl.looksRemote(src)); }
+
+    /** 캐시/읽기에 쓰는 이름: file: 이면 접두사를 뗀 이름, https 이면 주소 전체(핀 포함). */
+    private static String nameOf(String src) { return RemoteUrl.looksRemote(src) ? src.trim() : src.substring(PREFIX.length()).trim(); }
 
     /** 이미지의 원래 크기 {w, h}. 아직 불러오는 중이거나 실패했으면 null({@code onReady} 는 준비되면 렌더 스레드에서 한 번 불린다). */
     static int[] size(String src, Runnable onReady) {
         if (!handles(src)) return null;
-        Entry e = entry(src.substring(PREFIX.length()).trim(), onReady);
+        Entry e = entry(nameOf(src), onReady);
         return e.state == State.READY ? new int[] {e.image.width(), e.image.height()} : null;
     }
 
     /** 지금 그릴 텍스처 id 와 이미지 크기. 준비되지 않았으면 null(그 자리는 비어 있다). */
     static Frame texture(String src) {
         if (!handles(src)) return null;
-        Entry e = entry(src.substring(PREFIX.length()).trim(), null);
+        Entry e = entry(nameOf(src), null);
         if (e.state != State.READY) return null;
         if (e.texture == null) {
             e.texture = new DynamicTexture(() -> "better_uiux:" + e.name, e.image.width(), e.image.height(), false);
@@ -210,6 +214,7 @@ final class ExternalImages {
     }
 
     private static byte[] readBytes(String name) throws IOException {
+        if (RemoteUrl.looksRemote(name)) return RemoteAccess.fetch(name, dev.magyul.betteruiux.core.net.RemoteMedia.Kind.IMAGE);
         if (!safe(name)) throw new IOException("허용되지 않는 이미지 이름");
         Path f = file(name);
         if (f != null && f.startsWith(baseDir.resolve("images").normalize()) && Files.isRegularFile(f)) {
