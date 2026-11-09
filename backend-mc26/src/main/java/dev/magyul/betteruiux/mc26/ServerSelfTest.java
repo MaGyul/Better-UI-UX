@@ -128,15 +128,20 @@ final class ServerSelfTest {
         Path cached = ClientSync.cacheFiles().resolve("shoptest.xml");
         Files.deleteIfExists(cached);
 
-        setCfg("server.publishers", "\"Other\"");                                   // Dev 는 목록에 없다 → 거부돼야 한다
-        main(() -> ClientSync.publishUi("shoptest"));
-        sleep(2000);
-        check("발행 권한 목록에 없으면 거부(서버 번들 그대로)", !Files.exists(cached));
-
-        setCfg("server.publishers", "\"dev\"");                                     // 이름은 대소문자 무시
+        // 권한 노드: 권한 제공자(개발용 파일, Fabric)가 거부하면 레벨 4 여도 거부, 허용하면 성공. 파일이 없으면 기본 권한 레벨(NeoForge 는 이 부분만 확인).
+        String pf = System.getProperty("betteruiux.perm.file");
+        Path permFile = pf == null ? null : Path.of(pf);
+        if (permFile != null) {
+            Files.writeString(permFile, "deny better_uiux:publish\n");
+            main(() -> ClientSync.publishUi("shoptest"));
+            sleep(2000);
+            check("권한 노드가 거부하면(레벨 4 여도) 발행 거부", !Files.exists(cached));
+            Files.writeString(permFile, "allow better_uiux:publish\n");
+        }
         main(() -> ClientSync.publishUi("shoptest"));
         boolean arrived = waitFor(() -> Files.exists(cached), 10_000);
-        check("레벨 4 + 목록에 있으면 발행 성공 → 서버 번들 갱신 → 캐시에 도착", arrived);
+        check(permFile != null ? "권한 노드가 허용하면 발행 성공 → 서버 번들 갱신 → 캐시에 도착" : "레벨 4 이면 발행 성공 → 서버 번들 갱신 → 캐시에 도착", arrived);
+        if (permFile != null) Files.deleteIfExists(permFile);                       // 이후는 기본 권한 레벨로 판단
 
         // 정책: 같은 id 의 로컬 파일이 있을 때(기본 local-first 라 로컬이 이긴다)
         Files.writeString(ui.resolve("shoptest.xml"), String.format(SHOPTEST, "LOCAL VERSION"));
@@ -144,7 +149,6 @@ final class ServerSelfTest {
         setCfg("server.allowOverride", "true");                                      // 서버(server-first 요청) + 내가 허락 → 서버 파일이 이긴다
         openAndExpectLabel(mc, "정책 server-first + allowOverride: 서버 파일이 이김", "SERVER VERSION");
         setCfg("server.allowOverride", "false");
-        setCfg("server.publishers", "\"\"");
         Files.deleteIfExists(ui.resolve("shoptest.xml"));
 
         // 권한 레벨: 관리자 권한을 잃으면(/deop) 발행은 거부된다. ops.json 은 끝에 원래대로 되돌린다(같은 개발용 실행 폴더).

@@ -1,6 +1,11 @@
 package dev.magyul.betteruiux.neoforge;
 
+import dev.magyul.betteruiux.mc26.Perms;
 import dev.magyul.betteruiux.mc26.ServerCommands;
+import net.neoforged.neoforge.server.permission.PermissionAPI;
+import net.neoforged.neoforge.server.permission.events.PermissionGatherEvent;
+import net.neoforged.neoforge.server.permission.nodes.PermissionNode;
+import net.neoforged.neoforge.server.permission.nodes.PermissionTypes;
 import dev.magyul.betteruiux.mc26.ServerSync;
 import dev.magyul.betteruiux.mc26.SyncPayload;
 import net.minecraft.server.level.ServerPlayer;
@@ -30,6 +35,13 @@ public final class BetterUiuxNeoForge {
                     (payload, ctx) -> ctx.enqueueWork(() -> ServerSync.onPayload((ServerPlayer) ctx.player(), payload)),
                     (payload, ctx) -> ctx.enqueueWork(() -> NeoClientHooks.onPayload(payload)));
         });
+        // 권한: NeoForge PermissionAPI 노드를 등록한다(권한 플러그인이 값을 주지 않으면 기본 권한 레벨).
+        java.util.Map<Perms.Node, PermissionNode<Boolean>> nodes = new java.util.EnumMap<>(Perms.Node.class);
+        for (Perms.Node n : Perms.Node.values()) {
+            nodes.put(n, new PermissionNode<>(n.id, PermissionTypes.BOOLEAN, (player, uuid, ctx) -> player != null && Perms.byLevel(player, n)));
+        }
+        NeoForge.EVENT_BUS.addListener((PermissionGatherEvent.Nodes e) -> e.addNodes(new java.util.ArrayList<PermissionNode<?>>(nodes.values())));
+        Perms.setChecker((player, node) -> PermissionAPI.getPermission(player, nodes.get(node)));
         ServerCommands.registerDemoActions();
         ServerSync.setSender((player, payload) -> {
             if (player.connection.hasChannel(SyncPayload.TYPE)) PacketDistributor.sendToPlayer(player, payload);

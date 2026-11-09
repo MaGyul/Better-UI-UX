@@ -119,21 +119,15 @@ public final class ServerSync {
     }
 
     /**
-     * 에디터 발행을 받는 쪽. 권한: 권한 레벨 4(소유자) **이고**, 설정 {@code [server] publishers = "이름,이름"} 이 비어 있지 않으면 그 목록에 있는 플레이어만.
+     * 에디터 발행을 받는 쪽. 권한: 노드 {@code better_uiux:publish}(권한 플러그인이 값을 주지 않으면 기본 권한 레벨 4).
      * 파일은 {@code server-ui/} 에 임시 파일을 거쳐 저장하고(경로는 번들 검사를 이미 통과한 것), 접속 중인 모든 클라이언트에 새 목록을 알린다.
      */
     private static final class Publisher implements ServerSyncCore.Publisher {
         @Override
         public boolean mayPublish(String playerId) {
-            ServerSyncCore.ServerSession s = sessionById(playerId);
-            ServerPlayer p = s == null ? null : PLAYERS.get(UUID.fromString(playerId));
-            if (p == null || !net.minecraft.commands.Commands.LEVEL_OWNERS.check(p.permissions())) return false;
-            Path base = baseDir;
-            if (base == null) return false;
-            String list = dev.magyul.betteruiux.core.doc.UiConfig.load(base.resolve("config.toml")).get("server.publishers");
-            if (list == null || list.isBlank()) return true;
-            for (String n : list.split(",")) if (n.trim().equalsIgnoreCase(p.getName().getString())) return true;
-            return false;
+            ServerPlayer p;
+            try { p = PLAYERS.get(UUID.fromString(playerId)); } catch (IllegalArgumentException e) { return false; }
+            return p != null && Perms.has(p, Perms.Node.PUBLISH);                  // 시작할 때와 저장할 때 둘 다 확인된다
         }
 
         @Override

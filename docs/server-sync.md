@@ -72,18 +72,29 @@ ServerSync.core().registerAction("shop:buy",
 - 서버는 `config.toml` 의 `[server] policy = "server-first"`(기본) 또는 `"local-first"` 로 자기 의도를 알린다.
 - 서버가 server-first 를 요청해도 클라이언트가 `[server] allowOverride = true` 로 허락해야만 서버 파일이 이긴다(서버가 로컬 설정을 마음대로 덮지 못하게).
 
+## 권한 노드
+
+| 노드 | 용도 | 기본 |
+|---|---|---|
+| `better_uiux:publish` | 에디터에서 서버로 발행 | 권한 레벨 4 |
+| `better_uiux:serverui` | `/serverui` 명령 | 권한 레벨 2 |
+
+- **Fabric**: Fabric API 의 permission-api-v1 을 쓴다(LuckPerms 같은 권한 플러그인이 이 API 를 제공한다). 별도 라이브러리는 필요 없다.
+- **NeoForge**: PermissionAPI 노드로 등록한다(권한 핸들러가 값을 주지 않으면 기본 레벨).
+- 노드 값이 없거나 확인 중 오류가 나면 기본 레벨로 판단하거나(값 없음) 거부한다(오류).
+- 콘솔/명령 블록은 노드가 없으므로 기본 레벨로 판단한다.
+
 ## 에디터에서 서버로 발행
 
 - 에디터 도구 모음의 **Pub** 버튼(저장 후 발행) 또는 클라이언트 명령 `/uiux publish <id>`. 서버에 모드가 있어 서버 기능이 켜져 있을 때만 쓸 수 있다.
 - 올라가는 파일: `ui/<id>.xml` 과 그 문서가 `<include src>` / `<link href>` 로 쓰는 로컬 파일(최대 64개, 합계 2MB). 이미지/영상은 올리지 않는다(https 주소 사용).
-- **권한**: 서버 권한 레벨 4(소유자). 추가로 서버 `config.toml` 의 `[server] publishers = "이름,이름"` 이 비어 있지 않으면 그 목록의 플레이어만(대소문자 무시). 권한은 시작할 때와 저장할 때 모두 서버가 확인하고, 거부는 위반으로 센다.
+- **권한**: 권한 노드 `better_uiux:publish`(기본 권한 레벨 4). 권한 플러그인(예: LuckPerms)이 있으면 그 노드로 개별 허용/거부할 수 있고, 값을 주지 않으면 기본 레벨로 판단한다. 시작할 때와 저장할 때 모두 서버가 확인하고, 거부는 위반으로 센다.
 - 서버는 파일 경로/해시/크기를 다시 검증하고 `server-ui/` 에 원자적으로 저장한 뒤 번들을 갱신해, 접속 중인 모든 클라이언트가 바뀐 파일만 새로 받는다. 서버 로그에 발행자와 파일 목록이 남는다.
 
 ## 알려진 한계
 
 - 에디터 발행은 파일 단위 추가/덮어쓰기만 한다(서버 파일 삭제는 직접).
 - 서버 번들 안의 이미지/영상 파일(png, mp4)은 아직 `file:` 로 쓸 수 없다(https 를 쓰세요).
-- 별도의 퍼미션 노드(권한 플러그인 연동)는 아직 없다. 지금은 권한 레벨 4 + `publishers` 목록.
 
 ## 테스트
 
@@ -92,4 +103,4 @@ ServerSync.core().registerAction("shop:buy",
 - 코어: `SyncProtocolTest`, `SyncIntegrationTest`(클라이언트↔서버를 실제 코덱으로 연결).
 - 실제: `./gradlew :fabric:runServer` 후 `:fabric:runClient --args="--username Dev --quickPlayMultiplayer localhost:25565"`,
   NeoForge는 `:neoforge:runServer`, `:neoforge:runClient -PquickPlay=localhost:25565`. 게임에서 `/serverui open Dev shop`
-  (개발용 서버는 `server.properties` 의 `online-mode=false`, `ops.json` 에 Dev 를 레벨 4 로 등록). 자동 시험은 닫힘 통지, 발행(권한 목록/레벨 4/deop), 정책(local-first/server-first), https 이미지(핀/핀 없음/내부 주소/설정 on·off)까지 확인한다(Fabric·NeoForge 모두 25/25).
+  (개발용 서버는 `server.properties` 의 `online-mode=false`, `ops.json` 에 Dev 를 레벨 4 로 등록). 자동 시험은 닫힘 통지, 발행(권한 노드 거부·허용[Fabric: `-Dbetteruiux.perm.file` 개발용 제공자]/레벨 4/deop), 정책(local-first/server-first), https 이미지(핀/핀 없음/내부 주소/설정 on·off)까지 확인한다(Fabric 25/25, NeoForge 24/24 — NeoForge 는 개발용 권한 제공자가 없어 노드 거부 항목만 빠진다).
