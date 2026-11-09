@@ -151,10 +151,7 @@ public final class EditorController {
     private List<Geometry.Guide> guides = List.of();
 
     private String editKey;
-    private final StringBuilder editBuffer = new StringBuilder();
-    private int editCursor;
-    /** 선택 범위의 반대쪽 끝(커서와 같으면 선택 없음). */
-    private int editAnchor;
+    private final FieldText fieldText = new FieldText();
     /** 칸 안에서 글자가 그려지기 시작하는 문자 번호와 x 위치(마우스로 커서를 찍을 때 쓴다). */
     private int editViewStart, editTextX;
     private boolean fieldDragging;
@@ -310,8 +307,8 @@ public final class EditorController {
     /** 편집 중인 칸의 글자 커서 화면 위치 {x, 칸 위쪽 y, 칸 높이}. 편집 중이 아니면 null. IME 조합창을 띄울 위치. */
     public int[] caretScreen() {
         if (editKey == null || editRect == null) return null;
-        int start = Math.min(editViewStart, editBuffer.length()), cur = Math.min(editCursor, editBuffer.length());
-        return new int[] {editTextX + tm.width(editBuffer.substring(Math.min(start, cur), cur)), editRect.y(), editRect.h()};
+        int start = Math.min(editViewStart, fieldText.buf.length()), cur = Math.min(fieldText.cursor, fieldText.buf.length());
+        return new int[] {editTextX + tm.width(fieldText.buf.substring(Math.min(start, cur), cur)), editRect.y(), editRect.h()};
     }
 
     public boolean isGridSnap() { return grid; }
@@ -1018,7 +1015,7 @@ public final class EditorController {
             return true;
         }
         if (fieldDragging) {
-            editCursor = indexAt(x);
+            fieldText.cursor = indexAt(x);
             return true;
         }
         if (marqPending) {
@@ -1497,7 +1494,7 @@ public final class EditorController {
             return true;
         }
         if (editKey == null || c < 32 || c == 127) return false;
-        insertText(String.valueOf(c));
+        fieldText.insertText(String.valueOf(c));
         if (COLOR_KEYS.contains(editKey)) previewField();
         return true;
     }
@@ -1636,7 +1633,7 @@ public final class EditorController {
      * Ctrl+A/C/X/V = 전체 선택/복사/잘라내기/붙여넣기.
      */
     private boolean editKeyPressed(EditorKey key, boolean ctrl, boolean shift) {
-        int len = editBuffer.length();
+        int len = fieldText.buf.length();
         switch (key) {
             case ENTER -> {
                 if (suggestIndex >= 0 && suggestIndex < suggestions.size()) acceptSuggestion(suggestions.get(suggestIndex));
@@ -1655,48 +1652,48 @@ public final class EditorController {
                 else if (NUMBERS.contains(editKey)) stepEditingNumber(-1, shift);
             }
             case BACKSPACE -> {
-                if (hasSelection()) deleteSelection();
-                else if (editCursor > 0) deleteRange(ctrl ? wordLeft(editCursor) : editCursor - 1, editCursor);
+                if (fieldText.hasSelection()) fieldText.deleteSelection();
+                else if (fieldText.cursor > 0) fieldText.deleteRange(ctrl ? fieldText.wordLeft(fieldText.cursor) : fieldText.cursor - 1, fieldText.cursor);
             }
             case DELETE -> {
-                if (hasSelection()) deleteSelection();
-                else if (editCursor < len) deleteRange(editCursor, ctrl ? wordRight(editCursor) : editCursor + 1);
+                if (fieldText.hasSelection()) fieldText.deleteSelection();
+                else if (fieldText.cursor < len) fieldText.deleteRange(fieldText.cursor, ctrl ? fieldText.wordRight(fieldText.cursor) : fieldText.cursor + 1);
             }
             case LEFT -> {
-                if (!shift && hasSelection() && !ctrl) editCursor = selectionStart();
-                else editCursor = Math.max(0, ctrl ? wordLeft(editCursor) : editCursor - 1);
-                if (!shift) editAnchor = editCursor;
+                if (!shift && fieldText.hasSelection() && !ctrl) fieldText.cursor = fieldText.selectionStart();
+                else fieldText.cursor = Math.max(0, ctrl ? fieldText.wordLeft(fieldText.cursor) : fieldText.cursor - 1);
+                if (!shift) fieldText.anchor = fieldText.cursor;
             }
             case RIGHT -> {
-                if (!shift && hasSelection() && !ctrl) editCursor = selectionEnd();
-                else editCursor = Math.min(len, ctrl ? wordRight(editCursor) : editCursor + 1);
-                if (!shift) editAnchor = editCursor;
+                if (!shift && fieldText.hasSelection() && !ctrl) fieldText.cursor = fieldText.selectionEnd();
+                else fieldText.cursor = Math.min(len, ctrl ? fieldText.wordRight(fieldText.cursor) : fieldText.cursor + 1);
+                if (!shift) fieldText.anchor = fieldText.cursor;
             }
             case HOME -> {
-                editCursor = 0;
-                if (!shift) editAnchor = editCursor;
+                fieldText.cursor = 0;
+                if (!shift) fieldText.anchor = fieldText.cursor;
             }
             case END -> {
-                editCursor = len;
-                if (!shift) editAnchor = editCursor;
+                fieldText.cursor = len;
+                if (!shift) fieldText.anchor = fieldText.cursor;
             }
             case A -> {
                 if (ctrl) {
-                    editAnchor = 0;
-                    editCursor = len;
+                    fieldText.anchor = 0;
+                    fieldText.cursor = len;
                 }
             }
             case C -> {
-                if (ctrl && hasSelection()) host.setClipboard(selectedText());
+                if (ctrl && fieldText.hasSelection()) host.setClipboard(fieldText.selectedText());
             }
             case X -> {
-                if (ctrl && hasSelection()) {
-                    host.setClipboard(selectedText());
-                    deleteSelection();
+                if (ctrl && fieldText.hasSelection()) {
+                    host.setClipboard(fieldText.selectedText());
+                    fieldText.deleteSelection();
                 }
             }
             case V -> {
-                if (ctrl) insertText(host.clipboard());
+                if (ctrl) fieldText.insertText(host.clipboard());
             }
             default -> { }
         }
@@ -1706,50 +1703,10 @@ public final class EditorController {
 
     // ---- 칸 안의 텍스트 선택/편집 도우미 ----
 
-    private boolean hasSelection() { return editAnchor != editCursor; }
-
-    private int selectionStart() { return Math.min(editAnchor, editCursor); }
-
-    private int selectionEnd() { return Math.max(editAnchor, editCursor); }
-
-    private String selectedText() { return editBuffer.substring(selectionStart(), selectionEnd()); }
-
-    private void deleteSelection() { deleteRange(selectionStart(), selectionEnd()); }
-
-    private void deleteRange(int from, int to) {
-        int a = Math.max(0, Math.min(from, to)), b = Math.min(editBuffer.length(), Math.max(from, to));
-        editBuffer.delete(a, b);
-        editCursor = editAnchor = a;
-    }
-
-    /** 선택 범위가 있으면 바꾸고, 없으면 커서 자리에 넣는다. 줄바꿈/제어 문자는 공백 하나로 바꾼다(한 줄 칸이므로). */
-    private void insertText(String s) {
-        String clean = s.replaceAll("[\\r\\n\\t]+", " ").replaceAll("\\p{Cntrl}", "");
-        if (clean.isEmpty()) return;
-        if (hasSelection()) deleteSelection();
-        editBuffer.insert(editCursor, clean);
-        editCursor += clean.length();
-        editAnchor = editCursor;
-    }
-
-    private int wordLeft(int pos) {
-        int i = Math.min(pos, editBuffer.length());
-        while (i > 0 && Character.isWhitespace(editBuffer.charAt(i - 1))) i--;
-        while (i > 0 && !Character.isWhitespace(editBuffer.charAt(i - 1))) i--;
-        return i;
-    }
-
-    private int wordRight(int pos) {
-        int n = editBuffer.length(), i = Math.max(0, pos);
-        while (i < n && !Character.isWhitespace(editBuffer.charAt(i))) i++;
-        while (i < n && Character.isWhitespace(editBuffer.charAt(i))) i++;
-        return i;
-    }
-
     /** 화면 x 좌표에 가장 가까운 글자 사이 위치(칸 안에서 현재 보이는 구간 기준). */
     private int indexAt(int x) {
         int rel = x - editTextX;
-        String s = editBuffer.toString();
+        String s = fieldText.buf.toString();
         int best = editViewStart, prev = 0;
         for (int i = editViewStart + 1; i <= s.length(); i++) {
             int w = tm.width(s.substring(editViewStart, i));
@@ -1768,14 +1725,10 @@ public final class EditorController {
         lastFieldClickNanos = now;
         lastFieldClickIndex = idx;
         if (doubleClick) {
-            int s = Math.min(idx, editBuffer.length()), e = s;
-            while (s > 0 && !Character.isWhitespace(editBuffer.charAt(s - 1))) s--;
-            while (e < editBuffer.length() && !Character.isWhitespace(editBuffer.charAt(e))) e++;
-            editAnchor = s;
-            editCursor = e;
+            fieldText.selectWordAt(idx);
             return;
         }
-        editAnchor = editCursor = idx;
+        fieldText.anchor = fieldText.cursor = idx;
         fieldDragging = true;
     }
 
@@ -1991,10 +1944,7 @@ public final class EditorController {
     private void startEdit(String key, String value, Rect fieldRect) {
         commitFieldQuietly();
         editKey = key;
-        editBuffer.setLength(0);
-        editBuffer.append(value);
-        editAnchor = 0;                         // 칸을 누르면 전체가 선택된다: 바로 입력하면 값이 바뀌고, 방향키/Home/End 로 이어 쓸 수 있다
-        editCursor = editBuffer.length();
+        fieldText.setAllSelected(value);              // 칸을 누르면 전체가 선택된다
         editRect = fieldRect;
         suggestIndex = -1;
         suggestQuery = null;
@@ -2028,7 +1978,7 @@ public final class EditorController {
 
     private void commitField() {
         String key = editKey;
-        String raw = editBuffer.toString().trim();
+        String raw = fieldText.buf.toString().trim();
         cancelField();
         if (key != null) applyValue(key, raw);
     }
@@ -2100,9 +2050,7 @@ public final class EditorController {
 
     /** 피커를 만졌을 때: 칸의 글자를 바꾸고 화면에 바로 미리 보여 준다(확정 전에는 되돌릴 수 있는 임시 편집). */
     private void setBufferFromPicker(String hex) {
-        editBuffer.setLength(0);
-        editBuffer.append(hex);
-        editCursor = editAnchor = editBuffer.length();
+        fieldText.setCaretAtEnd(hex);
         previewField();
     }
 
@@ -2111,7 +2059,7 @@ public final class EditorController {
     private void previewField() {
         LayoutBox box = selectedBox();
         if (box == null || editKey == null || !COLOR_KEYS.contains(editKey)) return;
-        String raw = editBuffer.toString().trim();
+        String raw = fieldText.buf.toString().trim();
         if (Colors.tryParse(raw) == null) return;
         if (!previewActive) {
             session.beginTransient();
@@ -2130,7 +2078,7 @@ public final class EditorController {
         if (editKey == null) return List.of();
         List<String> all = host.suggestions(editKey);
         if (all.isEmpty()) return List.of();
-        String q = editBuffer.toString().trim().toLowerCase();
+        String q = fieldText.buf.toString().trim().toLowerCase();
         List<String> out = new ArrayList<>();
         for (String c : all) {
             if (c.equalsIgnoreCase(q)) return List.of();     // 이미 완성된 값이면 목록을 닫는다
@@ -2142,21 +2090,19 @@ public final class EditorController {
 
     /** 숫자 칸을 편집하는 중 ↑/↓ 로 값을 올리고 내린다(Shift 면 8). */
     private void stepEditingNumber(int dir, boolean big) {
-        String key = editKey, cur = editBuffer.toString().trim();
+        String key = editKey, cur = fieldText.buf.toString().trim();
         cancelField();
         adjustNumber(key, cur, dir, big);
     }
 
     private void acceptSuggestion(String value) {
-        editBuffer.setLength(0);
-        editBuffer.append(value);
-        editCursor = editAnchor = editBuffer.length();
+        fieldText.setCaretAtEnd(value);
         suggestIndex = -1;
     }
 
     private void paintSuggestions(UiGfx g) {
         if (editKey == null || editRect == null || COLOR_KEYS.contains(editKey)) return;
-        String q = editBuffer.toString();
+        String q = fieldText.buf.toString();
         if (!q.equals(suggestQuery)) {                     // 글자가 바뀌면 선택을 처음(없음)으로
             suggestQuery = q;
             suggestIndex = -1;
@@ -2186,7 +2132,7 @@ public final class EditorController {
 
     private void paintPicker(UiGfx g) {
         if (!pickerActive() || editRect == null) return;
-        picker.syncFrom(editBuffer.toString().trim());
+        picker.syncFrom(fieldText.buf.toString().trim());
         picker.layout(editRect, viewW - RIGHT_W, RIGHT_W, TOOLBAR_H, viewH);
         popupRect = picker.area();
         picker.paint(g);
@@ -2241,7 +2187,7 @@ public final class EditorController {
 
     /** 지금 적용할 검색어(편집 중이면 입력 중인 글자로 바로 걸러진다). */
     private String activeFilter() {
-        return (FILTER_KEY.equals(editKey) ? editBuffer.toString() : treeFilter).trim().toLowerCase();
+        return (FILTER_KEY.equals(editKey) ? fieldText.buf.toString() : treeFilter).trim().toLowerCase();
     }
 
     private boolean subtreeMatches(LayoutBox b, String f) {
@@ -2883,7 +2829,7 @@ public final class EditorController {
         int reserve = 4;
         if (row.kind() == Kind.COLOR) {                            // 색 칸 오른쪽에 현재 색 견본
             reserve = 16;
-            Integer swatch = Colors.tryParse(editing ? editBuffer.toString().trim() : row.value());
+            Integer swatch = Colors.tryParse(editing ? fieldText.buf.toString().trim() : row.value());
             if (swatch != null) {
                 g.fillRect(field.right() - 11, field.y() + 2, 9, field.h() - 4, 0xFF2A2D3E);
                 g.fillRect(field.right() - 11, field.y() + 2, 9, field.h() - 4, swatch);
@@ -3227,24 +3173,24 @@ public final class EditorController {
     }
 
     private void paintEditText(UiGfx g, Rect field) {
-        String s = editBuffer.toString();
+        String s = fieldText.buf.toString();
         int maxW = field.w() - 6;
         int start = 0;
-        while (start < editCursor && tm.width(s.substring(start, editCursor)) > maxW) start++;
+        while (start < fieldText.cursor && tm.width(s.substring(start, fieldText.cursor)) > maxW) start++;
         int end = s.length();
-        while (end > editCursor && tm.width(s.substring(start, end)) > maxW) end--;
+        while (end > fieldText.cursor && tm.width(s.substring(start, end)) > maxW) end--;
         String shown = s.substring(start, end);
         editViewStart = start;                    // 마우스로 커서를 찍을 때 같은 기준을 쓴다
         editTextX = field.x() + 3;
-        if (hasSelection()) {                     // 선택 범위 배경
-            int a = Math.max(start, selectionStart()), b = Math.min(end, selectionEnd());
+        if (fieldText.hasSelection()) {                     // 선택 범위 배경
+            int a = Math.max(start, fieldText.selectionStart()), b = Math.min(end, fieldText.selectionEnd());
             if (b > a) {
                 int x1 = editTextX + tm.width(s.substring(start, a)), x2 = editTextX + tm.width(s.substring(start, b));
                 g.fillRect(x1, field.y() + 1, x2 - x1, field.h() - 2, C_SELECTION);
             }
         }
         g.drawText(shown, editTextX, field.y() + 2, C_TEXT, false);
-        int cx = editTextX + tm.width(s.substring(start, editCursor));
+        int cx = editTextX + tm.width(s.substring(start, fieldText.cursor));
         g.fillRect(cx, field.y() + 1, 1, field.h() - 2, C_SEL);
     }
 
