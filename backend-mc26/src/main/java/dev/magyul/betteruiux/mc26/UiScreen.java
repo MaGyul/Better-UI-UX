@@ -40,7 +40,11 @@ public final class UiScreen extends Screen {
     private static final boolean DEBUG = Boolean.getBoolean("betteruiux.debug");
 
     /** @param startInEditor 화면이 열리자마자 에디터를 켠다({@code /uiux edit}) */
-    public record Options(boolean hotReload, boolean editorEnabled, boolean startInEditor, boolean scripting, java.util.List<String> scriptCommands) {}
+    public record Options(boolean hotReload, boolean editorEnabled, boolean startInEditor, boolean scripting, java.util.List<String> scriptCommands, boolean serverUi) {
+        public Options(boolean hotReload, boolean editorEnabled, boolean startInEditor, boolean scripting, java.util.List<String> scriptCommands) {
+            this(hotReload, editorEnabled, startInEditor, scripting, scriptCommands, false);
+        }
+    }
 
     private final String id;
     private final Path userDir;
@@ -77,8 +81,14 @@ public final class UiScreen extends Screen {
 
     private ScriptBridge.Attached scriptHost;
 
+    /** 서버가 연 화면인가(번들 캐시에서 읽고, 서버 동작을 보낼 수 있고, 에디터/스크립트는 쓰지 않는다). */
+    public boolean isServerUi() { return options.serverUi(); }
+
+    public String uiId() { return id; }
+
     private void bind(UiDocument d) {
         d.setOnClose(this::onClose);
+        if (options.serverUi()) d.setServerDispatcher((el, action) -> ClientSync.sendUiAction(id, el, action));
         if (scriptHost != null) scriptHost.close();                       // 문서가 바뀌면(핫리로드 등) 스크립트도 새로 시작한다
         scriptHost = ScriptBridge.attach(d, userDir, options);
         // 글자 입력 칸(textfield): 채팅창과 같은 시스템 클립보드, SDL 글자 입력(IME 포함) 켜기/끄기
