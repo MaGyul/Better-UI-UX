@@ -187,7 +187,7 @@ public final class EditorController {
         this.viewH = viewH;
         this.doc = host.load(text);
         this.doc.setAnimationsEnabled(false);
-        this.doc.layout(viewW, viewH);
+        this.doc.layout(docW(), docH());
         java.util.Map<String, String> prefs = host.loadPrefs();
         leftCollapsed = "true".equalsIgnoreCase(prefs.get("leftCollapsed"));
         rightCollapsed = "true".equalsIgnoreCase(prefs.get("rightCollapsed"));
@@ -235,6 +235,37 @@ public final class EditorController {
         exitDialog = false;
         if (r != null && applyEdit(src -> r)) setStatus("자동 저장본을 복구했습니다 — 저장하면 적용됩니다", false);
         else setStatus("복구할 변경이 없습니다", false);
+    }
+
+    // ---- 해상도(GUI 크기) 미리보기 ----
+
+    /** 0 이면 창 크기 그대로, 아니면 이 크기(GUI 단위)로 화면을 배치해 본다. */
+    private int previewW, previewH;
+
+    private static final List<String> SIZE_ITEMS = List.of("크기: 창 그대로", "크기: 960x540 (1080p·2x)", "크기: 640x360 (1080p·3x)",
+            "크기: 480x270 (1080p·4x)", "크기: 427x240 (480p·2x)", "크기: 320x180");
+
+    int docW() { return previewW > 0 ? previewW : viewW; }
+
+    int docH() { return previewW > 0 ? previewH : viewH; }
+
+    /** "크기: 960x540 (…)" 형태의 항목을 적용한다(창 그대로는 해제). */
+    private void applySizeItem(String item) {
+        previewW = previewH = 0;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("([0-9]+)x([0-9]+)").matcher(item);
+        if (m.find()) {
+            previewW = Integer.parseInt(m.group(1));
+            previewH = Integer.parseInt(m.group(2));
+        }
+        reload();
+        setStatus(previewW > 0 ? "배치 크기: " + previewW + "x" + previewH : "배치 크기: 창 그대로", false);
+    }
+
+    /** 외부(테스트/백엔드)에서 미리보기 크기를 정한다. 0,0 이면 해제. */
+    public void setPreviewSize(int w, int h) {
+        previewW = Math.max(0, w);
+        previewH = previewW > 0 ? Math.max(1, h) : 0;
+        reload();
     }
 
     private void discardRecovery() {
@@ -288,7 +319,7 @@ public final class EditorController {
     public void setView(int w, int h) {
         this.viewW = w;
         this.viewH = h;
-        doc.layout(w, h);
+        doc.layout(docW(), docH());
     }
 
     /** 구조 트리 등에서 요소를 고른다. 요소가 가려져 있으면 가운데로 화면을 옮긴다. */
@@ -572,9 +603,9 @@ public final class EditorController {
         try {
             UiDocument d = host.load(session.text());
             d.setAnimationsEnabled(false);
-            d.layout(viewW, viewH);
-            if (applyTabs(d)) d.layout(viewW, viewH);
-            if (applyScrolls(d)) d.layout(viewW, viewH);
+            d.layout(docW(), docH());
+            if (applyTabs(d)) d.layout(docW(), docH());
+            if (applyScrolls(d)) d.layout(docW(), docH());
             doc = d;
             int count = XmlSource.parse(session.text()).all().size();
             if (selected >= count) selected = -1;
@@ -634,7 +665,7 @@ public final class EditorController {
                 changed = true;
             }
         }
-        if (changed) doc.layout(viewW, viewH);
+        if (changed) doc.layout(docW(), docH());
     }
 
     /** 마우스 아래의 스크롤 요소를 휠로 스크롤한다. 스크롤할 수 있는 요소가 없으면 false. */
@@ -643,7 +674,7 @@ public final class EditorController {
             if (b.widget instanceof BuiltinWidgets.Scroll sw && sw.canScroll()) {
                 if (sw.scrollBy(-(int) Math.signum(amount) * 12) || true) {
                     scrollPos.put(b.node.sourceIndex(), sw.scrollY());
-                    doc.layout(viewW, viewH);
+                    doc.layout(docW(), docH());
                 }
                 return true;
             }
@@ -668,7 +699,7 @@ public final class EditorController {
                 int i = tabIndex(x.parent, x);
                 tabActive.put(x.parent.node.sourceIndex(), i);
                 t.setActive(i);
-                doc.layout(viewW, viewH);
+                doc.layout(docW(), docH());
                 return;
             }
         }
@@ -969,7 +1000,7 @@ public final class EditorController {
         if (i < 0) return false;
         tabActive.put(hit.node.sourceIndex(), i);
         t.setActive(i);
-        doc.layout(viewW, viewH);
+        doc.layout(docW(), docH());
         selected = hit.node.sourceIndex();
         return true;
     }
@@ -1145,7 +1176,7 @@ public final class EditorController {
         d.parentIndex = parent == null ? 0 : parent.node.sourceIndex();
         d.anchor = b.style.get("anchor");
         d.margin = Insets.parse(b.style.get("margin"), Insets.ZERO);
-        d.parentContent = parent == null ? new Rect(0, 0, viewW, viewH) : contentRect(parent);
+        d.parentContent = parent == null ? new Rect(0, 0, docW(), docH()) : contentRect(parent);
         d.curX = b.style.integer("x", 0);
         d.curY = b.style.integer("y", 0);
         if (isSizedFlow(b) || isScroll(b)) {                // row/column/grid: 내용보다 작게 줄일 수 없다(scroll 은 너비만)
@@ -1409,7 +1440,7 @@ public final class EditorController {
     private String placeAt(String text, int index, int parentIndex, int x, int y) {
         try {
             UiDocument tmp = host.load(text);
-            tmp.layout(viewW, viewH);
+            tmp.layout(docW(), docH());
             LayoutBox box = boxByIndex(tmp.layout(), index), parent = boxByIndex(tmp.layout(), parentIndex);
             if (box == null || parent == null || isFlow(parent)) return text;
             Rect before = rectOf(box);
@@ -1438,7 +1469,7 @@ public final class EditorController {
     private String keepRect(String text, int index, int parentIndex, Rect desired) {
         try {
             UiDocument tmp = host.load(text);
-            tmp.layout(viewW, viewH);
+            tmp.layout(docW(), docH());
             LayoutBox box = boxByIndex(tmp.layout(), index), parent = boxByIndex(tmp.layout(), parentIndex);
             if (box == null || parent == null || isFlow(parent)) return text;
             Map<String, String> props = Geometry.propsForRect(false, box.style.get("anchor"),
@@ -1810,7 +1841,7 @@ public final class EditorController {
             UiDocument tmp;
             try {
                 tmp = host.load(t);
-                tmp.layout(viewW, viewH);
+                tmp.layout(docW(), docH());
             } catch (UiParseException e) {
                 return t;
             }
@@ -2425,13 +2456,14 @@ public final class EditorController {
      * (옮기지 않았을 때는 경계가 창 가장자리와 같으므로 아무것도 그리지 않는다.)
      */
     private void paintScreenFrame(UiGfx g) {
-        if (panX == 0 && panY == 0) return;
-        int far = 4000;
-        g.fillRect(-far, -far, 2 * far + viewW, far, SCREEN_OUTSIDE);                    // 위
-        g.fillRect(-far, viewH, 2 * far + viewW, far, SCREEN_OUTSIDE);                   // 아래
-        g.fillRect(-far, 0, far, viewH, SCREEN_OUTSIDE);                                 // 왼쪽
-        g.fillRect(viewW, 0, far, viewH, SCREEN_OUTSIDE);                                // 오른쪽
-        outline(g, new Rect(0, 0, viewW, viewH), SCREEN_FRAME);
+        if (panX == 0 && panY == 0 && previewW == 0) return;
+        int far = 4000, dw = docW(), dh = docH();
+        g.fillRect(-far, -far, 2 * far + dw, far, SCREEN_OUTSIDE);                       // 위
+        g.fillRect(-far, dh, 2 * far + dw, far, SCREEN_OUTSIDE);                         // 아래
+        g.fillRect(-far, 0, far, dh, SCREEN_OUTSIDE);                                    // 왼쪽
+        g.fillRect(dw, 0, far, dh, SCREEN_OUTSIDE);                                      // 오른쪽
+        outline(g, new Rect(0, 0, dw, dh), SCREEN_FRAME);
+        if (previewW > 0) g.drawText(dw + "x" + dh, 3, dh - tm.lineHeight() - 2, C_DIM, false);   // 미리보기 크기 표시
     }
 
     /** 색의 밝기를 delta 만큼 올리거나 내린다(알파 유지). */
@@ -2516,8 +2548,9 @@ public final class EditorController {
                 new ToolItem("Align", selected > 0, r -> openMenu(r, ALIGN_ITEMS, this::alignSelected), C_BTN, 0),
                 new ToolItem(grid ? "Grid:8" : "Grid:off", true, r -> grid = !grid, C_BTN, 4),
                 new ToolItem(autoAnchor ? "Anchor:auto" : "Anchor:keep", true, r -> autoAnchor = !autoAnchor, C_BTN, 0),
-                new ToolItem("View", true, r -> openMenu(r, List.of("XML 보기", "상태 미리보기: 없음", "상태 미리보기: hover", "상태 미리보기: active", "도움말"), item -> {
-                    if (item.startsWith("XML")) xmlView.open = true;
+                new ToolItem("View", true, r -> openMenu(r, viewItems(), item -> {
+                    if (item.startsWith("크기:")) applySizeItem(item);
+                    else if (item.startsWith("XML")) xmlView.open = true;
                     else if (item.contains("없음")) previewState = 0;
                     else if (item.contains("hover")) previewState = 1;
                     else if (item.contains("active")) previewState = 2;
@@ -2930,6 +2963,12 @@ public final class EditorController {
     private Rect menuNear;
     private List<String> menuItems = List.of();
     private java.util.function.Consumer<String> menuPick;
+
+    private static List<String> viewItems() {
+        List<String> l = new ArrayList<>(List.of("XML 보기", "상태 미리보기: 없음", "상태 미리보기: hover", "상태 미리보기: active", "도움말"));
+        l.addAll(SIZE_ITEMS);
+        return l;
+    }
 
     private static final String OPEN_PREFIX = "열기: ", NEW_PREFIX = "새 화면: ";
     private static final List<String> NEW_KINDS = List.of("빈 화면", "대화상자");
