@@ -160,7 +160,7 @@ final class StyleText {
             }
             rows.add(new PropRow("+ 추가", ADD_KEY + n, "", true));
         }
-        rows.add(new PropRow("+ 새 규칙 " + selectorFor(box), NEW_KEY + selectorFor(box), "", true));   // 맞는 규칙이 없어도 첫 규칙을 만들 수 있다
+        rows.add(new PropRow("+ 새 규칙",NEW_KEY + selectorFor(box), "", true));   // 맞는 규칙이 없어도 첫 규칙을 만들 수 있다
         return rows;
     }
 

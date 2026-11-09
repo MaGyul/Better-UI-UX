@@ -86,7 +86,7 @@ class EditorStyleRulesTest {
         e.select(idx);
         paint(e);
         assertTrue(find(paint(e), "- 스타일 규칙") != null, "규칙이 없어도 구역은 보인다");
-        DrawCommand.DrawText add = find(paint(e), "+ 새 규칙 #a");
+        DrawCommand.DrawText add = find(paint(e), "+ 새 규칙");
         assertTrue(add != null);
         click(e, W - EditorController.RIGHT_W + 60 + 5, add.y() + 2);
         for (char c : "padding: 6".toCharArray()) e.charTyped(c);
