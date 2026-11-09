@@ -78,7 +78,7 @@ final class PropertyModel {
         rows.add(attr(b, "class"));
         if (tag.equals("label") || tag.equals("button")) rows.add(new PropRow(label("text"), "text", LayoutEngine.rawText(b), true));
         if (tag.equals("button")) rows.add(attr(b, "onClick"));
-        if (tag.equals("image")) rows.add(attr(b, "src"));
+        if (tag.equals("image") || tag.equals("video")) rows.add(attr(b, "src"));
         widgetRows(b, tag, rows);
         rows.add(header("레이아웃"));
         if (!root) {

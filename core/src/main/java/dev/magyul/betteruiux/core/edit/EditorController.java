@@ -2907,9 +2907,9 @@ public final class EditorController {
             }
             default -> {
                 g.drawText(fit(row.value(), fieldW - reserve), fieldX + 2, y + 1, row.editable() ? C_TEXT : C_DIM, false);
-                if (key.equals("item")) {                              // 아이템 칸: 아이콘 목록에서 고르기
+                if (key.equals("item") || (key.equals("src") && isMediaTag())) {   // 아이템/이미지·영상 칸: 목록에서 고르기
                     g.drawText("▦", field.right() - 9, y + 1, C_DIM, false);
-                    if (sees(panel, field)) regions.add(new Region(field, () -> openItemPicker(field)));
+                    if (sees(panel, field)) regions.add(new Region(field, () -> openItemPicker(field, key)));
                 } else if (row.editable() && sees(panel, field)) {
                     regions.add(new Region(field, () -> startEdit(key, value, field)));
                 }
@@ -3040,9 +3040,18 @@ public final class EditorController {
 
     private final ItemPickerOverlay itemPicker = new ItemPickerOverlay();
 
-    private void openItemPicker(Rect near) {
+    /** 지금 열린 선택 상자가 채우는 속성("item" 또는 "src"). */
+    private String pickerKey = "item";
+
+    private boolean isMediaTag() {
+        LayoutBox b = selectedBox();
+        return b != null && (b.tag().equals("image") || b.tag().equals("video"));
+    }
+
+    private void openItemPicker(Rect near, String key) {
         commitFieldQuietly();
-        itemPicker.open(near, host.suggestions("item"));
+        pickerKey = key;
+        itemPicker.open(near, host.suggestions(key), key.equals("src"));
         Rect search = itemPicker.searchArea(viewW, TOOLBAR_H);                  // 게임(SDL)은 글자 입력을 켜 줘야 검색어가 들어온다
         host.textInput(true, search.x(), search.y(), search.w(), search.h());
     }
@@ -3056,10 +3065,10 @@ public final class EditorController {
     private void paintItemPicker(UiGfx g) {
         if (!itemPicker.isOpen()) return;
         LayoutBox sel = selectedBox();
-        itemPicker.paint(g, tm, viewW, viewH, TOOLBAR_H, mouseX, mouseY, regions, sel == null ? null : sel.node.attr("item"),
+        itemPicker.paint(g, tm, viewW, viewH, TOOLBAR_H, mouseX, mouseY, regions, sel == null ? null : sel.node.attr(pickerKey),
                 id -> {
                     closeItemPicker();
-                    applyValue("item", id);
+                    applyValue(pickerKey, id);
                 }, this::closeItemPicker);
     }
 

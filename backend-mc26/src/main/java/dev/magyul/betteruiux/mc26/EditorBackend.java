@@ -23,6 +23,19 @@ import net.minecraft.client.Minecraft;
 final class EditorBackend {
     private EditorBackend() {}
 
+    /** 이미지/영상 파일 후보: config/better-uiux/images 안의 png/jpg/bmp/gif/mp4 를 "file:이름" 으로. */
+    private static java.util.List<String> imageFiles(Path userDir) {
+        Path dir = userDir.getParent().resolve("images");
+        if (!java.nio.file.Files.isDirectory(dir)) return java.util.List.of();
+        try (var s = java.nio.file.Files.list(dir)) {
+            return s.filter(java.nio.file.Files::isRegularFile).map(p -> p.getFileName().toString())
+                    .filter(n -> n.toLowerCase().matches(".*[.](png|jpe?g|bmp|gif|mp4|m4v|mov)"))
+                    .sorted().map(n -> "file:" + n).toList();
+        } catch (IOException e) {
+            return java.util.List.of();
+        }
+    }
+
     static EditorController create(String id, Path userDir, TextMetrics metrics, UiScreen screen, int width, int height)
             throws IOException, UiParseException {
         String text = UiSources.load(userDir, id).orElseThrow(() -> new NoSuchFileException(id + ".xml"));
@@ -121,6 +134,7 @@ final class EditorBackend {
                         all.addAll(ScriptBridge.functionActions(text, userDir));   // script:함수 도 후보에 넣는다
                         yield all;
                     }
+                    case "src" -> imageFiles(userDir);
                     case "item" -> net.minecraft.core.registries.BuiltInRegistries.ITEM.keySet().stream()
                             .map(Object::toString).sorted().toList();
                     default -> java.util.List.of();
