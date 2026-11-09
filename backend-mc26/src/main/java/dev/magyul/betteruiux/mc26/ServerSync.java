@@ -26,6 +26,10 @@ public final class ServerSync {
     private static final ServerSyncCore CORE = new ServerSyncCore(0);
     private static final Map<UUID, ServerSyncCore.ServerSession> SESSIONS = new ConcurrentHashMap<>();
     private static volatile BiConsumer<ServerPlayer, SyncPayload> sender = (p, m) -> {};
+    private static final Map<UUID, ServerPlayer> PLAYERS = new ConcurrentHashMap<>();
+    private static volatile Path baseDir;
+
+    static { CORE.setPublisher(new Publisher()); }
 
     private ServerSync() {}
 
@@ -35,8 +39,11 @@ public final class ServerSync {
     public static void setSender(BiConsumer<ServerPlayer, SyncPayload> s) { sender = s; }
 
     /** 서버가 배포할 번들을 {@code <baseDir>/server-ui/} 에서 읽는다(없으면 비어 있음). */
-    public static void loadBundle(Path baseDir) {
-        Path dir = baseDir.resolve("server-ui");
+    public static void loadBundle(Path base) {
+        baseDir = base;
+        dev.magyul.betteruiux.core.doc.UiConfig cfg = dev.magyul.betteruiux.core.doc.UiConfig.load(base.resolve("config.toml"));
+        CORE.setPolicy("local-first".equals(cfg.get("server.policy")) ? 1 : 0);                 // 서버가 클라이언트에 요청하는 정책(기본 server-first)
+        Path dir = base.resolve("server-ui");
         Map<String, byte[]> files = new LinkedHashMap<>();
         if (Files.isDirectory(dir)) {
             try (var s = Files.walk(dir)) {
@@ -63,10 +70,14 @@ public final class ServerSync {
     }
 
     public static void onJoin(ServerPlayer p) {
+        PLAYERS.put(p.getUUID(), p);
         SESSIONS.put(p.getUUID(), CORE.connect(p.getUUID().toString(), m -> send(p, m), System::nanoTime));
     }
 
-    public static void onDisconnect(ServerPlayer p) { SESSIONS.remove(p.getUUID()); }
+    public static void onDisconnect(ServerPlayer p) {
+        SESSIONS.remove(p.getUUID());
+        PLAYERS.remove(p.getUUID());
+    }
 
     public static ServerSyncCore.ServerSession session(ServerPlayer p) { return SESSIONS.get(p.getUUID()); }
 
@@ -104,6 +115,45 @@ public final class ServerSync {
         } catch (SyncException e) {
             s.protocolViolation(e.getMessage());
             LOG.debug("[better-uiux] {} 의 잘못된 동기화 패킷: {}", p.getName().getString(), e.getMessage());
+        }
+    }
+
+    /**
+     * 에디터 발행을 받는 쪽. 권한: 노드 {@code better_uiux:publish}(권한 플러그인이 값을 주지 않으면 기본 권한 레벨 4).
+     * 파일은 {@code server-ui/} 에 임시 파일을 거쳐 저장하고(경로는 번들 검사를 이미 통과한 것), 접속 중인 모든 클라이언트에 새 목록을 알린다.
+     */
+    private static final class Publisher implements ServerSyncCore.Publisher {
+        @Override
+        public boolean mayPublish(String playerId) {
+            ServerPlayer p;
+            try { p = PLAYERS.get(UUID.fromString(playerId)); } catch (IllegalArgumentException e) { return false; }
+            return p != null && Perms.has(p, Perms.Node.PUBLISH);                  // 시작할 때와 저장할 때 둘 다 확인된다
+        }
+
+        @Override
+        public void publish(String playerId, Map<String, byte[]> files) throws SyncException {
+            Path base = baseDir;
+            if (base == null) throw new SyncException("서버 UI 폴더를 알 수 없습니다");
+            Path dir = base.toAbsolutePath().normalize().resolve("server-ui");   // 상대 경로면 startsWith 비교가 어긋나므로 절대 경로로
+            Map<String, byte[]> all = new LinkedHashMap<>(CORE.bundle().files());
+            try {
+                Files.createDirectories(dir);
+                for (var e : files.entrySet()) {
+                    Path target = dir.resolve(e.getKey()).normalize();
+                    if (!target.startsWith(dir)) throw new SyncException("경로가 올바르지 않습니다: " + e.getKey());
+                    Files.createDirectories(target.getParent());
+                    Path tmp = Files.createTempFile(target.getParent(), ".pub", ".tmp");
+                    Files.write(tmp, e.getValue());
+                    Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    all.put(e.getKey(), e.getValue());
+                }
+            } catch (IOException e) {
+                throw new SyncException("저장하지 못했습니다: " + e.getMessage());
+            }
+            CORE.setBundle(all);
+            ServerPlayer p = PLAYERS.get(UUID.fromString(playerId));
+            LOG.info("[better-uiux] {} 이(가) 서버 UI 를 발행했습니다: {}", p == null ? playerId : p.getName().getString(), files.keySet());
+            for (var s : SESSIONS.values()) s.resync();
         }
     }
 

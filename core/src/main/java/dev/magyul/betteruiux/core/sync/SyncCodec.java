@@ -8,6 +8,9 @@ import dev.magyul.betteruiux.core.sync.SyncMessage.ClientHello;
 import dev.magyul.betteruiux.core.sync.SyncMessage.CloseUi;
 import dev.magyul.betteruiux.core.sync.SyncMessage.FileEntry;
 import dev.magyul.betteruiux.core.sync.SyncMessage.OpenUi;
+import dev.magyul.betteruiux.core.sync.SyncMessage.PublishBegin;
+import dev.magyul.betteruiux.core.sync.SyncMessage.PublishResult;
+import dev.magyul.betteruiux.core.sync.SyncMessage.UiClosed;
 import dev.magyul.betteruiux.core.sync.SyncMessage.ServerHello;
 import dev.magyul.betteruiux.core.sync.SyncMessage.StateClear;
 import dev.magyul.betteruiux.core.sync.SyncMessage.StateSet;
@@ -31,7 +34,7 @@ public final class SyncCodec {
     private SyncCodec() {}
 
     private static final int CLIENT_HELLO = 1, SERVER_HELLO = 2, MANIFEST = 3, NEED = 4, CHUNK = 5, OPEN = 6, CLOSE = 7,
-            STATE_SET = 8, STATE_CLEAR = 9, SNAPSHOT = 10, ACTION = 11;
+            STATE_SET = 8, STATE_CLEAR = 9, SNAPSHOT = 10, ACTION = 11, UI_CLOSED = 12, PUBLISH_BEGIN = 13, PUBLISH_RESULT = 14;
     private static final int T_STRING = 0, T_LONG = 1, T_DOUBLE = 2, T_BOOL = 3;
 
     // ---- 인코딩 ----
@@ -54,15 +57,7 @@ public final class SyncCodec {
                 }
                 case BundleManifest b -> {
                     out.writeByte(MANIFEST);
-                    str(out, b.hash(), 128);
-                    if (b.files().size() > SyncLimits.MAX_FILES) throw new SyncException("파일이 너무 많습니다");
-                    out.writeShort(b.files().size());
-                    for (FileEntry f : b.files()) {
-                        str(out, f.path(), SyncLimits.MAX_PATH);
-                        if (f.sha256().length != 32) throw new SyncException("해시 길이가 올바르지 않습니다");
-                        out.write(f.sha256());
-                        out.writeLong(f.size());
-                    }
+                    writeManifest(out, b);
                 }
                 case BundleNeed n -> {
                     out.writeByte(NEED);
@@ -101,6 +96,21 @@ public final class SyncCodec {
                     out.writeByte(SNAPSHOT);
                     map(out, s.values(), SyncLimits.MAX_STATE_KEYS);
                 }
+                case UiClosed c -> {
+                    out.writeByte(UI_CLOSED);
+                    str(out, c.id(), SyncLimits.MAX_ID);
+                }
+                case PublishBegin p -> {
+                    out.writeByte(PUBLISH_BEGIN);
+                    if (p.manifest().files().size() > SyncLimits.MAX_PUBLISH_FILES) throw new SyncException("발행 파일이 너무 많습니다");
+                    writeManifest(out, p.manifest());
+                }
+                case PublishResult r -> {
+                    out.writeByte(PUBLISH_RESULT);
+                    out.writeByte(r.stage());
+                    out.writeBoolean(r.ok());
+                    str(out, r.message(), 512);
+                }
                 case Action a -> {
                     out.writeByte(ACTION);
                     str(out, a.uiId(), SyncLimits.MAX_ID);
@@ -114,6 +124,32 @@ public final class SyncCodec {
         } catch (IOException e) {
             throw new SyncException("인코딩 실패: " + e.getMessage());
         }
+    }
+
+    private static void writeManifest(DataOutputStream out, BundleManifest b) throws IOException, SyncException {
+        str(out, b.hash(), 128);
+        if (b.files().size() > SyncLimits.MAX_FILES) throw new SyncException("파일이 너무 많습니다");
+        out.writeShort(b.files().size());
+        for (FileEntry f : b.files()) {
+            str(out, f.path(), SyncLimits.MAX_PATH);
+            if (f.sha256().length != 32) throw new SyncException("해시 길이가 올바르지 않습니다");
+            out.write(f.sha256());
+            out.writeLong(f.size());
+        }
+    }
+
+    private static BundleManifest readManifest(DataInputStream in, int maxFiles) throws IOException, SyncException {
+        String hash = str(in, 128);
+        int n = in.readUnsignedShort();
+        if (n > maxFiles) throw new SyncException("파일이 너무 많습니다(" + n + ")");
+        List<FileEntry> files = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            String path = str(in, SyncLimits.MAX_PATH);
+            byte[] sha = new byte[32];
+            in.readFully(sha);
+            files.add(new FileEntry(path, sha, in.readLong()));
+        }
+        return new BundleManifest(hash, files);
     }
 
     private static void str(DataOutputStream out, String s, int max) throws IOException, SyncException {
@@ -164,19 +200,7 @@ public final class SyncCodec {
             SyncMessage m = switch (type) {
                 case CLIENT_HELLO -> new ClientHello(in.readInt(), str(in, 128));
                 case SERVER_HELLO -> new ServerHello(in.readInt(), str(in, 128), in.readUnsignedByte());
-                case MANIFEST -> {
-                    String hash = str(in, 128);
-                    int n = in.readUnsignedShort();
-                    if (n > SyncLimits.MAX_FILES) throw new SyncException("파일이 너무 많습니다(" + n + ")");
-                    List<FileEntry> files = new ArrayList<>();
-                    for (int i = 0; i < n; i++) {
-                        String path = str(in, SyncLimits.MAX_PATH);
-                        byte[] sha = new byte[32];
-                        in.readFully(sha);
-                        files.add(new FileEntry(path, sha, in.readLong()));
-                    }
-                    yield new BundleManifest(hash, files);
-                }
+                case MANIFEST -> readManifest(in, SyncLimits.MAX_FILES);
                 case NEED -> {
                     int n = in.readUnsignedShort();
                     if (n > SyncLimits.MAX_NEED) throw new SyncException("요청이 너무 많습니다(" + n + ")");
@@ -198,6 +222,9 @@ public final class SyncCodec {
                 case STATE_CLEAR -> new StateClear(str(in, SyncLimits.MAX_ID));
                 case SNAPSHOT -> new StateSnapshot(map(in, SyncLimits.MAX_STATE_KEYS));
                 case ACTION -> new Action(str(in, SyncLimits.MAX_ID), str(in, SyncLimits.MAX_ID), map(in, SyncLimits.MAX_ARGS));
+                case UI_CLOSED -> new UiClosed(str(in, SyncLimits.MAX_ID));
+                case PUBLISH_BEGIN -> new PublishBegin(readManifest(in, SyncLimits.MAX_PUBLISH_FILES));
+                case PUBLISH_RESULT -> new PublishResult(in.readUnsignedByte(), in.readBoolean(), str(in, 512));
                 default -> throw new SyncException("알 수 없는 메시지 종류: " + type);
             };
             if (in.available() > 0) throw new SyncException("메시지 끝에 남는 바이트가 있습니다");

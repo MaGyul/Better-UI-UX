@@ -44,6 +44,7 @@ public final class BetterUiuxFabricClient implements ClientModInitializer {
                 UiOpener.autoOpenIfRequested(baseDir);
             }
         });
+        ClientTickEvents.END_CLIENT_TICK.register(client -> ClientSync.tick());
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 dispatcher.register(ClientCommands.literal("uiux")
                         .then(ClientCommands.literal("open")
@@ -52,6 +53,9 @@ public final class BetterUiuxFabricClient implements ClientModInitializer {
                                             UiApi.open(StringArgumentType.getString(ctx, "id"));
                                             return 1;
                                         })))
+                        .then(ClientCommands.literal("publish")
+                                .then(ClientCommands.argument("id", StringArgumentType.word())
+                                        .executes(ctx -> ClientSync.publishUi(StringArgumentType.getString(ctx, "id")) ? 1 : 0)))
                         .then(ClientCommands.literal("edit")
                                 .then(ClientCommands.argument("id", StringArgumentType.word())
                                         .executes(ctx -> {

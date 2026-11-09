@@ -1,5 +1,6 @@
 package dev.magyul.betteruiux.mc26;
 
+import dev.magyul.betteruiux.core.net.RemoteUrl;
 import dev.magyul.betteruiux.core.render.VideoSource;
 import java.io.IOException;
 import java.io.InputStream;
@@ -44,9 +45,15 @@ final class ExternalVideos {
 
     static void init(Path configBaseDir) { baseDir = configBaseDir; }
 
+    private static String nameOf(String src) { return RemoteUrl.looksRemote(src) ? src.trim() : src.substring(PREFIX.length()).trim(); }
+
     static boolean handles(String src) {
-        if (src == null || !src.startsWith(PREFIX)) return false;
+        if (src == null || !(src.startsWith(PREFIX) || RemoteUrl.looksRemote(src))) return false;
         String s = src.toLowerCase(Locale.ROOT);
+        int cut = s.indexOf('#');                                    // https 주소의 #sha256=... 핀과 ?쿼리는 확장자 판단에서 뗀다
+        if (cut >= 0) s = s.substring(0, cut);
+        cut = s.indexOf('?');
+        if (cut >= 0) s = s.substring(0, cut);
         return s.endsWith(".mp4") || s.endsWith(".m4v") || s.endsWith(".mov");
     }
 
@@ -76,14 +83,14 @@ final class ExternalVideos {
 
     /** 영상의 (줄인) 크기 {w, h}. 아직 여는 중이거나 실패하면 null — 준비되면 {@code onReady} 가 렌더 스레드에서 한 번 불린다. */
     static int[] size(String src, Runnable onReady) {
-        Entry e = entry(src.substring(PREFIX.length()).trim());
+        Entry e = entry(nameOf(src));
         if (e.state == State.OPENING && onReady != null) e.onReady.add(onReady);
         return e.state == State.READY ? new int[] {e.info.width(), e.info.height()} : null;
     }
 
     /** 지금 보여 줄 프레임이 올라간 텍스처. 첫 프레임이 아직 없으면 null. */
     static ExternalImages.Frame texture(String src) {
-        Entry e = entry(src.substring(PREFIX.length()).trim());
+        Entry e = entry(nameOf(src));
         e.lastUse = System.currentTimeMillis();
         if (e.state != State.READY) return null;
         if (!e.running) start(e);                                    // 한동안 안 그려 멈췄다면 처음부터 다시
@@ -215,6 +222,7 @@ final class ExternalVideos {
     }
 
     private static byte[] readBytes(String name) throws IOException {
+        if (RemoteUrl.looksRemote(name)) return RemoteAccess.fetch(name, dev.magyul.betteruiux.core.net.RemoteMedia.Kind.VIDEO);
         if (!safe(name)) throw new IOException("허용되지 않는 영상 이름");
         Path images = baseDir == null ? null : baseDir.resolve("images").normalize();
         Path f = images == null ? null : images.resolve(name).normalize();

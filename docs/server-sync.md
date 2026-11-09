@@ -44,12 +44,57 @@ ServerSync.core().registerAction("shop:buy",
 - 서버 화면은 인게임 에디터로 열 수 없다.
 - 클라이언트→서버 패킷은 32KB 이하(로더/바닐라 한도)여서 번들 요청은 나눠 보낸다.
 
+## 이미지와 영상: https 로 받기
+
+번들(패킷)에 큰 파일을 싣지 않고, 서버/문서가 https 주소를 쓴다. 번들에는 xml/uicss 같은 작은 파일만 둔다.
+
+```xml
+<image src="https://cdn.example.com/banner.png#sha256=5776cd87...(64자리)" />
+<video src="https://cdn.example.com/intro.mp4#sha256=..." />
+```
+
+- **핀(`#sha256=`)**: 받은 파일이 정확히 그 해시여야 한다(다르면 버린다). 기본 설정에서는 **핀이 있는 주소만** 받는다 — 서버가 내 IP 로 임의 사이트를 찌르거나 내용을 바꿔치기하지 못하게.
+- 설정 `[media] remote = "pinned"`(기본) | `"on"`(핀 없는 주소도 허용, 24시간 캐시) | `"off"`(끄기).
+- 안전 규칙: https 와 443 포트만, 도메인 이름만(IP 직접 입력/localhost/.local 금지), 이름이 풀린 주소가 하나라도 사설·루프백·링크로컬이면 거부,
+  리다이렉트는 직접 따라가며 매번 같은 검사(최대 3회), 응답 형식(이미지는 `image/*`, 영상은 `video/*`)과 크기 상한(이미지 8MB, 영상 64MB), 시간 제한 15초.
+- 백그라운드 스레드에서 받아 `config/better-uiux/remote-cache/` 에 둔다(전체 256MB 넘으면 오래된 것부터 삭제). 핀이 있는 캐시는 읽을 때마다 해시를 다시 확인한다.
+- 알려진 한계: DNS 가 검사와 접속 사이에 다른 주소로 바뀌는 경우(재바인딩)까지는 막지 못한다(포트가 443 으로 고정되고 유효한 TLS 인증서가 필요해 영향은 제한적).
+
+## 화면 닫힘 통지
+
+서버가 연 화면을 클라이언트가 닫으면(버튼, Esc, 접속 종료 등) 서버에 알려, 서버는 그 화면의 동작을 더 받지 않는다.
+
+## server-first / local-first 정책
+
+서버 화면의 id 와 같은 로컬 파일(`config/better-uiux/ui/<id>.xml`)이 있을 때 어느 쪽을 열지 정한다.
+
+- **기본: local-first** — 내 파일이 이긴다. 플레이어가 서버 화면을 자기 취향대로 꾸밀 수 있다(서버 값과 서버 동작은 그대로 동작).
+- 서버는 `config.toml` 의 `[server] policy = "server-first"`(기본) 또는 `"local-first"` 로 자기 의도를 알린다.
+- 서버가 server-first 를 요청해도 클라이언트가 `[server] allowOverride = true` 로 허락해야만 서버 파일이 이긴다(서버가 로컬 설정을 마음대로 덮지 못하게).
+
+## 권한 노드
+
+| 노드 | 용도 | 기본 |
+|---|---|---|
+| `better_uiux:publish` | 에디터에서 서버로 발행 | 권한 레벨 4 |
+| `better_uiux:serverui` | `/serverui` 명령 | 권한 레벨 2 |
+
+- **Fabric**: Fabric API 의 permission-api-v1 을 쓴다(LuckPerms 같은 권한 플러그인이 이 API 를 제공한다). 별도 라이브러리는 필요 없다.
+- **NeoForge**: PermissionAPI 노드로 등록한다(권한 핸들러가 값을 주지 않으면 기본 레벨).
+- 노드 값이 없거나 확인 중 오류가 나면 기본 레벨로 판단하거나(값 없음) 거부한다(오류).
+- 콘솔/명령 블록은 노드가 없으므로 기본 레벨로 판단한다.
+
+## 에디터에서 서버로 발행
+
+- 에디터 도구 모음의 **Pub** 버튼(저장 후 발행) 또는 클라이언트 명령 `/uiux publish <id>`. 서버에 모드가 있어 서버 기능이 켜져 있을 때만 쓸 수 있다.
+- 올라가는 파일: `ui/<id>.xml` 과 그 문서가 `<include src>` / `<link href>` 로 쓰는 로컬 파일(최대 64개, 합계 2MB). 이미지/영상은 올리지 않는다(https 주소 사용).
+- **권한**: 권한 노드 `better_uiux:publish`(기본 권한 레벨 4). 권한 플러그인(예: LuckPerms)이 있으면 그 노드로 개별 허용/거부할 수 있고, 값을 주지 않으면 기본 레벨로 판단한다. 시작할 때와 저장할 때 모두 서버가 확인하고, 거부는 위반으로 센다.
+- 서버는 파일 경로/해시/크기를 다시 검증하고 `server-ui/` 에 원자적으로 저장한 뒤 번들을 갱신해, 접속 중인 모든 클라이언트가 바뀐 파일만 새로 받는다. 서버 로그에 발행자와 파일 목록이 남는다.
+
 ## 알려진 한계
 
-- 서버 번들 안의 이미지/영상은 아직 `file:` 로 쓸 수 없다(클라이언트 `images/` 폴더만 읽는다).
-- 클라이언트가 화면을 직접 닫아도 서버는 열린 것으로 기억한다(서버 동작은 계속 허용된다).
-- 정책(server-first/local-first)은 프로토콜에 있으나, 서버 화면은 항상 서버 캐시에서 열리므로 아직 구분이 없다.
-- 에디터에서 서버로 발행하는 기능은 아직 없다.
+- 에디터 발행은 파일 단위 추가/덮어쓰기만 한다(서버 파일 삭제는 직접).
+- 서버 번들 안의 이미지/영상 파일(png, mp4)은 아직 `file:` 로 쓸 수 없다(https 를 쓰세요).
 
 ## 테스트
 
@@ -58,4 +103,4 @@ ServerSync.core().registerAction("shop:buy",
 - 코어: `SyncProtocolTest`, `SyncIntegrationTest`(클라이언트↔서버를 실제 코덱으로 연결).
 - 실제: `./gradlew :fabric:runServer` 후 `:fabric:runClient --args="--username Dev --quickPlayMultiplayer localhost:25565"`,
   NeoForge는 `:neoforge:runServer`, `:neoforge:runClient -PquickPlay=localhost:25565`. 게임에서 `/serverui open Dev shop`
-  (개발용 서버는 `server.properties` 의 `online-mode=false`, `ops.json` 에 Dev 등록).
+  (개발용 서버는 `server.properties` 의 `online-mode=false`, `ops.json` 에 Dev 를 레벨 4 로 등록). 자동 시험은 닫힘 통지, 발행(권한 노드 거부·허용[Fabric: `-Dbetteruiux.perm.file` 개발용 제공자]/레벨 4/deop), 정책(local-first/server-first), https 이미지(핀/핀 없음/내부 주소/설정 on·off)까지 확인한다(Fabric 25/25, NeoForge 24/24 — NeoForge 는 개발용 권한 제공자가 없어 노드 거부 항목만 빠진다).

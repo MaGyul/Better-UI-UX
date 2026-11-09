@@ -69,6 +69,12 @@ public final class ClientSync {
             public void onCloseUi(String id) {
                 if (Minecraft.getInstance().gui.screen() instanceof UiScreen s && s.isServerUi() && s.uiId().equals(id)) Minecraft.getInstance().gui.setScreen(null);
             }
+            public void onPublishResult(int stage, boolean ok, String message) {
+                if (stage == 0 && ok) return;                                                  // 승인: 조치 없음(조각을 보내는 중)
+                Minecraft mc = Minecraft.getInstance();
+                UiOpener.say(mc, ok ? "서버 발행 완료: " + message : "서버 발행 실패: " + message);
+                LOG.info("[better-uiux] publish stage={} ok={} {}", stage, ok, message);
+            }
             public void onState(Map<String, Object> values) {
                 latestState = values;
                 UiDocument cur = UiApi.current();
@@ -85,6 +91,71 @@ public final class ClientSync {
     }
 
     static Object stateValue(String key) { return latestState.get(key); }
+
+    static Path baseDir() { return baseDir; }
+
+    static Path cacheFiles() { return cacheFiles; }
+
+    /** 클라이언트 틱마다(렌더 스레드): 발행 중인 조각을 조금씩 보낸다. */
+    public static void tick() {
+        ClientSyncCore c = core;
+        if (c != null) c.tick();
+    }
+
+    /** 서버가 연 화면이 닫혔다(어떤 이유로든): 서버에 알려 그 화면의 동작을 더 받지 않게 한다. */
+    static void screenClosed(String id) {
+        ClientSyncCore c = core;
+        if (c != null) c.closedUi(id);
+    }
+
+    private static final java.util.regex.Pattern REF = java.util.regex.Pattern.compile(
+            "<(?:include)\\b[^>]*?\\bsrc\\s*=\\s*\"([^\"]+)\"|<link\\b[^>]*?\\bhref\\s*=\\s*\"([^\"]+)\"");
+
+    /**
+     * {@code ui/<id>.xml} 과 그 문서가 쓰는 스타일시트/include 파일을 서버로 발행한다(권한은 서버가 확인한다).
+     * @return 시작했으면 true
+     */
+    public static boolean publishUi(String id) {
+        Minecraft mc = Minecraft.getInstance();
+        ClientSyncCore c = core;
+        if (c == null || !c.active()) {
+            UiOpener.say(mc, "서버 기능이 켜져 있지 않아 발행할 수 없습니다(서버에도 이 모드가 필요합니다)");
+            return false;
+        }
+        if (!UiSources.validId(id)) {
+            UiOpener.say(mc, "잘못된 UI id: " + id);
+            return false;
+        }
+        Path ui = baseDir.resolve("ui");
+        Map<String, byte[]> files = new java.util.LinkedHashMap<>();
+        try {
+            collect(ui, id + ".xml", files, 0);
+            if (c.publish(files)) UiOpener.say(mc, "서버로 발행하는 중: " + String.join(", ", files.keySet()));
+            return true;
+        } catch (dev.magyul.betteruiux.core.sync.SyncException | java.io.IOException e) {
+            UiOpener.say(mc, "발행할 수 없습니다: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static void collect(Path ui, String file, Map<String, byte[]> out, int depth)
+            throws java.io.IOException, dev.magyul.betteruiux.core.sync.SyncException {
+        if (out.containsKey(file) || depth > 5) return;
+        if (!UiSources.validName(file)) throw new dev.magyul.betteruiux.core.sync.SyncException("파일 이름이 올바르지 않습니다: " + file);
+        Path p = ui.resolve(file);
+        if (!Files.isRegularFile(p)) {
+            if (depth == 0) throw new java.io.FileNotFoundException(file + " (config/better-uiux/ui/)");
+            return;                                                                    // 기본 제공 파일(include/스타일)은 서버에도 있다고 보고 건너뛴다
+        }
+        byte[] data = Files.readAllBytes(p);
+        out.put(file, data);
+        if (!file.endsWith(".xml")) return;
+        var m = REF.matcher(new String(data, StandardCharsets.UTF_8));
+        while (m.find()) {
+            String ref = m.group(1) != null ? m.group(1) + (m.group(1).endsWith(".xml") ? "" : ".xml") : m.group(2);
+            collect(ui, ref, out, depth + 1);
+        }
+    }
 
     public static void onDisconnect() {
         core = null;
@@ -134,6 +205,17 @@ public final class ClientSync {
             if (PENDING_OPENS.size() < 8 && !PENDING_OPENS.contains(id)) PENDING_OPENS.add(id);
             LOG.info("[better-uiux] '{}' 은(는) 번들을 받는 중이라 잠시 뒤에 엽니다", id);
             return;
+        }
+        // 정책: 같은 id 의 로컬 파일(config/better-uiux/ui/<id>.xml)이 있을 때 어느 쪽을 열까.
+        //  - 기본(local-first): 내 파일이 이긴다 — 플레이어가 서버 화면을 자기 취향대로 꾸밀 수 있다(서버 동작/값은 그대로 동작).
+        //  - 서버가 server-first 를 요청해도, 내가 설정 server.allowOverride=true 로 허락한 경우에만 서버 파일이 이긴다.
+        UiConfig cfg0 = UiConfig.load(baseDir.resolve("config.toml"));
+        ClientSyncCore c0 = core;
+        boolean serverWins = c0 != null && c0.policy() == 0 && cfg0.bool("server.allowOverride", false);
+        Path localUi = baseDir.resolve("ui");
+        if (!serverWins && Files.isRegularFile(localUi.resolve(id + ".xml"))) {
+            dir = localUi;
+            LOG.info("[better-uiux] 서버 화면 '{}': 로컬 파일을 우선 사용합니다(local-first)", id);
         }
         // 스크립트는 기본적으로 꺼 둔다: 서버가 보낸 화면이 클라이언트에서 코드를 돌리게 하지 않는다(명령은 어떤 경우에도 못 쓴다).
         boolean allowScripts = UiConfig.load(baseDir.resolve("config.toml")).bool("server.allowScripts", false);
@@ -229,7 +311,7 @@ public final class ClientSync {
 
         public void store(BundleManifest manifest, Map<String, byte[]> newFiles) {
             try {
-                Path f = files();
+                Path f = files().toAbsolutePath().normalize();                  // 상대/비정규 경로여도 startsWith 비교가 맞도록
                 Files.createDirectories(f);
                 Set<String> keep = new HashSet<>();
                 for (var e : manifest.files()) keep.add(e.path());

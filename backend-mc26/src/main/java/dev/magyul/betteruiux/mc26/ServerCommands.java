@@ -16,7 +16,7 @@ public final class ServerCommands {
     private ServerCommands() {}
 
     public static void register(CommandDispatcher<CommandSourceStack> d) {
-        d.register(Commands.literal("serverui").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+        d.register(Commands.literal("serverui").requires(Perms.requires(Perms.Node.SERVERUI))
                 .then(Commands.literal("open").then(Commands.argument("player", EntityArgument.player())
                         .then(Commands.argument("id", StringArgumentType.word()).executes(c -> {
                             ServerPlayer p = EntityArgument.getPlayer(c, "player");
