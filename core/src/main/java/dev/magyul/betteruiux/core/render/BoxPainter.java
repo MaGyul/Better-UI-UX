@@ -82,6 +82,8 @@ final class BoxPainter {
             g.fillRect(x, y, w, h, argb);
             return;
         }
+        Radii f = r.fit(w, h);
+        if (f.tl() == f.tr() && f.tl() == f.br() && f.tl() == f.bl() && f.tl() > 0 && g.fillRoundRect(x, y, w, h, f.tl(), argb)) return;   // 지원하면 부드러운 가장자리로 한 번에
         int[][] sp = spans(w, h, r);
         int start = 0;
         for (int i = 1; i <= h; i++) {
@@ -112,6 +114,8 @@ final class BoxPainter {
         int color = colors[0];
         if ((color >>> 24) == 0) return;
         Radii outer = r.fit(w, h);
+        if (t == rt && t == b && t == l && "solid".equals(style) && outer.tl() > 0 && outer.tl() == outer.tr() && outer.tl() == outer.br()
+                && outer.tl() == outer.bl() && g.strokeRoundRect(x, y, w, h, outer.tl(), t, color)) return;       // 지원하면 부드러운 고리 한 번에
         int iw = w - l - rt, ih = h - t - b;
         int[][] os = spans(w, h, outer);
         int[][] is = iw > 0 && ih > 0 ? spans(iw, ih, outer.shrink(t, rt, b, l).fit(iw, ih)) : null;
@@ -520,6 +524,8 @@ final class BoxPainter {
                 fillShape(g, sx, sy, sw, sh, base, color);
                 continue;
             }
+            Radii sr = base.fit(sw, sh);
+            if (sr.tl() == sr.tr() && sr.tl() == sr.br() && sr.tl() == sr.bl() && g.shadowRoundRect(sx, sy, sw, sh, sr.tl(), s.blur(), color)) continue;   // 지원하면 부드러운 그림자 한 번에
             int n = Math.max(1, Math.min((s.blur() + 1) / 2, 6));      // 층 수: 번짐 2px 당 한 층(최대 6) — 명령 수를 줄이려고 번짐 1px 당 한 층이던 것을 줄였다
             double prev = 0;
             for (int layer = 1; layer <= n + 1; layer++) {

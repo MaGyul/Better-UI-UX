@@ -66,6 +66,13 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
         int[] rc = px(img, sx, rad.x + rad.w / 2, rad.y + rad.h / 2, s), rk = px(img, sx, rad.x + 1, rad.y + 1, s);
         check(rc[0] > rc[2] + 60, "방사형 그라디언트 가운데는 빨강 쪽이어야 한다: " + hex(rc));
         check(rk[2] > rk[0] + 60, "방사형 그라디언트 모서리는 파랑 쪽이어야 한다: " + hex(rk));
+        LayoutBox fx = box(ctx, "fx");
+        int[] ring = px(img, sx, fx.x + 1, fx.y + fx.h / 2, s), inner = px(img, sx, fx.x + fx.w / 2, fx.y + fx.h / 2, s);
+        int[] nearShadow = px(img, sx, fx.x - 3, fx.y + fx.h / 2, s), farBg = px(img, sx, fx.x - 15, fx.y + fx.h / 2, s);
+        check(ring[0] > 200 && ring[1] > 200 && ring[2] > 200, "둥근 테두리 고리(흰색)가 가장자리에 보여야 한다: " + hex(ring));
+        check(isNear(inner, 0x00, 0xDD, 0x00, 40), "테두리 안쪽은 배경(초록)이어야 한다: " + hex(inner));
+        int lumNear = nearShadow[0] + nearShadow[1] + nearShadow[2], lumFar = farBg[0] + farBg[1] + farBg[2];
+        check(lumNear < lumFar - 40, "그림자가 상자 바깥을 어둡게 해야 한다: " + hex(nearShadow) + " vs " + hex(farBg));
         LayoutBox clip = box(ctx, "clipbox");
         int[] cc = px(img, sx, clip.x + clip.w / 2, clip.y + clip.h / 2, s), ck = px(img, sx, clip.x, clip.y, s);
         check(cc[0] > cc[1] + 100, "클립 상자 가운데는 자식(빨강)이 보여야 한다: " + hex(cc));
@@ -188,6 +195,7 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
                         <row gap="4"><panel id="w1" class="wrap"><panel class="flag"/></panel><panel id="w2" class="wrap"><label text="x"/></panel></row>
                         <row id="rv"><panel id="ra"/><panel id="rb"/></row>
                         <panel id="rad" width="60" height="60" style="background: radial-gradient(#FF0000, #0000FF)"/>
+                        <panel id="fx" width="60" height="30" style="background: #00DD00; border-radius: 10; border: 3 solid #FFFFFF; box-shadow: 0 0 8 #000000FF"/>
                         <panel id="clipbox" width="40" height="40" style="border-radius: 10; overflow: hidden; background: #202020"><panel width="40" height="40" style="background: #FF0000"/></panel>
                       </column>
                     </screen>

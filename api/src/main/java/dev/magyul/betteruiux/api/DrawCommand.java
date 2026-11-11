@@ -6,6 +6,12 @@ public sealed interface DrawCommand {
 
     record DrawStyledText(String text, int x, int y, int argb, boolean shadow, boolean italic, String font) implements DrawCommand {}
 
+    record FillRoundRect(int x, int y, int w, int h, int radius, int argb) implements DrawCommand {}
+
+    record StrokeRoundRect(int x, int y, int w, int h, int radius, int thickness, int argb) implements DrawCommand {}
+
+    record ShadowRoundRect(int x, int y, int w, int h, int radius, int blur, int argb) implements DrawCommand {}
+
     record FillGradient(int x, int y, int w, int h, int topArgb, int bottomArgb) implements DrawCommand {}
 
     record DrawTexture(String texture, int x, int y, int w, int h,

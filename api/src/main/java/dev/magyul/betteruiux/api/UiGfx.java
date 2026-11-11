@@ -25,6 +25,21 @@ public interface UiGfx {
         drawText(text, x, y, argb, shadow);
     }
 
+    /**
+     * 네 모서리 반지름이 같은 둥근 사각형을 (가장자리가 부드럽게) 한 번에 그린다. 지원하지 않으면(또는 지금 못 그리면) 아무것도 그리지 않고
+     * false 를 돌려주며, 호출자는 사각형 여러 개로 근사해서 그린다.
+     */
+    default boolean fillRoundRect(int x, int y, int w, int h, int radius, int argb) { return false; }
+
+    /** 둥근 사각형의 테두리 고리(안쪽으로 {@code thickness} 두께, 부드러운 가장자리). 지원하지 않으면 false. */
+    default boolean strokeRoundRect(int x, int y, int w, int h, int radius, int thickness, int argb) { return false; }
+
+    /**
+     * 둥근 사각형(x,y,w,h)의 바깥 그림자: 가장자리에서 {@code blur} 만큼 부드럽게 퍼진다(그림자는 사각형 밖으로 blur 만큼 더 그려진다).
+     * 지원하지 않으면 false.
+     */
+    default boolean shadowRoundRect(int x, int y, int w, int h, int radius, int blur, int argb) { return false; }
+
     /** 이후 그리기를 사각형 안으로 제한한다. 중첩 가능, {@link #popClip()} 으로 복원. */
     void pushClip(int x, int y, int w, int h);
 

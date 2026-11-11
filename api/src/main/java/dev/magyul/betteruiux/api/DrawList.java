@@ -21,6 +21,11 @@ public final class DrawList implements UiGfx {
                 case DrawCommand.DrawTexture t -> target.drawTexture(t.texture(), t.x(), t.y(), t.w(), t.h(),
                         t.u(), t.v(), t.regionW(), t.regionH(), t.texW(), t.texH(), t.argb());
                 case DrawCommand.DrawText t -> target.drawText(t.text(), t.x(), t.y(), t.argb(), t.shadow());
+                case DrawCommand.FillRoundRect f -> {
+                    if (!target.fillRoundRect(f.x(), f.y(), f.w(), f.h(), f.radius(), f.argb())) target.fillRect(f.x(), f.y(), f.w(), f.h(), f.argb());
+                }
+                case DrawCommand.StrokeRoundRect f -> target.strokeRoundRect(f.x(), f.y(), f.w(), f.h(), f.radius(), f.thickness(), f.argb());
+                case DrawCommand.ShadowRoundRect f -> target.shadowRoundRect(f.x(), f.y(), f.w(), f.h(), f.radius(), f.blur(), f.argb());
                 case DrawCommand.DrawStyledText t -> target.drawStyledText(t.text(), t.x(), t.y(), t.argb(), t.shadow(), t.italic(), t.font());
                 case DrawCommand.PushClip p -> target.pushClip(p.x(), p.y(), p.w(), p.h());
                 case DrawCommand.PopClip p -> target.popClip();
@@ -32,6 +37,32 @@ public final class DrawList implements UiGfx {
                 case DrawCommand.DrawItem di -> target.drawItem(di.itemId(), di.x(), di.y(), di.count());
             }
         }
+    }
+
+    private boolean roundRects;
+
+    /** true 면 {@link #fillRoundRect} 를 지원하는 척 기록한다(테스트용). 기본은 false: 호출자가 사각형 여러 개로 그린다. */
+    public DrawList supportRoundRects(boolean on) {
+        this.roundRects = on;
+        return this;
+    }
+
+    @Override public boolean strokeRoundRect(int x, int y, int w, int h, int radius, int thickness, int argb) {
+        if (!roundRects) return false;
+        commands.add(new DrawCommand.StrokeRoundRect(x, y, w, h, radius, thickness, argb));
+        return true;
+    }
+
+    @Override public boolean shadowRoundRect(int x, int y, int w, int h, int radius, int blur, int argb) {
+        if (!roundRects) return false;
+        commands.add(new DrawCommand.ShadowRoundRect(x, y, w, h, radius, blur, argb));
+        return true;
+    }
+
+    @Override public boolean fillRoundRect(int x, int y, int w, int h, int radius, int argb) {
+        if (!roundRects) return false;
+        commands.add(new DrawCommand.FillRoundRect(x, y, w, h, radius, argb));
+        return true;
     }
 
     @Override public void drawStyledText(String text, int x, int y, int argb, boolean shadow, boolean italic, String font) {
