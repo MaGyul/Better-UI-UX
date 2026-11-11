@@ -204,7 +204,7 @@ class UiAnimationIntegrationTest {
     void animateValidatesProperties() throws Exception {
         UiDocument d = doc("<screen><label id='l' text='x'/></screen>");
         var l = d.query("#l");
-        assertThrows(IllegalArgumentException.class, () -> l.animate().to("width", 10));
+        assertThrows(IllegalArgumentException.class, () -> l.animate().to("display", 10));
         assertThrows(IllegalStateException.class, () -> l.animate().play());
     }
 }

@@ -16,11 +16,16 @@ public record Keyframes(String name, List<Stop> stops) {
 
     /** 키프레임 이름이 가리키는 속성들의 진행도 p(0..1) 시점의 값. 구간마다 {@code easing} 을 적용한다. */
     public Map<String, String> evaluate(StyleMap base, double p, Easing easing) {
+        return evaluate(base, p, easing, Interpolator.ANIMATABLE);
+    }
+
+    /** @param allowed 이 호출에서 계산할 속성들(그리기 속성 / 레이아웃 속성을 나누어 처리하려고) */
+    public Map<String, String> evaluate(StyleMap base, double p, Easing easing, Set<String> allowed) {
         Set<String> props = new LinkedHashSet<>();
         for (Stop s : stops) props.addAll(s.props().keySet());
         Map<String, String> out = new LinkedHashMap<>();
         for (String prop : props) {
-            if (!Interpolator.ANIMATABLE.contains(prop)) continue;
+            if (!allowed.contains(prop)) continue;
             List<double[]> offsets = new ArrayList<>();
             List<String> values = new ArrayList<>();
             for (Stop s : stops) {

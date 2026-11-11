@@ -8,6 +8,7 @@ import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -103,18 +104,35 @@ public final class AnimationEngine {
         return a;
     }
 
-    /** @return 애니메이션이 덧입혀지지 않았으면 {@code target} 그대로, 아니면 복사본. */
+    private boolean layoutAnimating;
+
+    /** 레이아웃 패스를 시작한다(움직이는 레이아웃 속성이 있는지 다시 모은다). */
+    public void beginLayoutPass() { layoutAnimating = false; }
+
+    /** 마지막 레이아웃 패스에서 레이아웃 속성이 아직 움직이는 중이었는지 → 다음 프레임에도 다시 배치해야 한다. */
+    public boolean layoutActive() { return layoutAnimating; }
+
+    /** 그리기 속성({@link Interpolator#ANIMATABLE})에 전환·애니메이션을 덧입힌다. @return 덧입혀지지 않았으면 {@code target} 그대로, 아니면 복사본. */
     public StyleMap apply(UiNode node, StyleMap target, long now) {
+        return run(node, target, now, Interpolator.ANIMATABLE, false);
+    }
+
+    /** 레이아웃 속성({@link Interpolator#LAYOUT})에 전환·애니메이션을 덧입힌다(레이아웃 패스에서 호출). */
+    public StyleMap applyLayout(UiNode node, StyleMap target, long now) {
+        return run(node, target, now, Interpolator.LAYOUT, true);
+    }
+
+    private StyleMap run(UiNode node, StyleMap target, long now, Set<String> props, boolean layoutPass) {
         StyleMap out = target;
-        out = applyTransitions(node, target, out, now);
-        out = applyKeyframes(node, target, out, now);
-        out = applyImperatives(node, out, now);
+        out = applyTransitions(node, target, out, now, props, layoutPass);
+        out = applyKeyframes(node, target, out, now, props, layoutPass);
+        out = applyImperatives(node, out, now, props, layoutPass);
         return out;
     }
 
     // ---- ① 전환 ----
 
-    private StyleMap applyTransitions(UiNode node, StyleMap target, StyleMap out, long now) {
+    private StyleMap applyTransitions(UiNode node, StyleMap target, StyleMap out, long now, Set<String> props, boolean layoutPass) {
         String spec = target.get("transition");
         if (spec == null) {
             transitions.remove(node);
@@ -123,7 +141,7 @@ public final class AnimationEngine {
         List<TransitionSpec> specs = transitionCache.computeIfAbsent(spec, TransitionSpec::parse);
         if (specs.isEmpty()) return out;
         Map<String, Transition> states = transitions.computeIfAbsent(node, n -> new HashMap<>());
-        for (String prop : Interpolator.ANIMATABLE) {
+        for (String prop : props) {
             TransitionSpec ts = null;
             for (TransitionSpec s : specs) if (s.covers(prop)) ts = s;   // 뒤에 오는 항목이 우선
             if (ts == null) continue;
@@ -148,6 +166,7 @@ public final class AnimationEngine {
             if (!shown.equals(tv)) {
                 if (out == target) out = target.copy();
                 out.put(prop, shown);
+                if (layoutPass) layoutAnimating = true;
             }
         }
         return out;
@@ -155,7 +174,7 @@ public final class AnimationEngine {
 
     // ---- ② @keyframes ----
 
-    private StyleMap applyKeyframes(UiNode node, StyleMap target, StyleMap out, long now) {
+    private StyleMap applyKeyframes(UiNode node, StyleMap target, StyleMap out, long now, Set<String> props, boolean layoutPass) {
         String value = target.get("animation");
         AnimationSpec spec = value == null ? null : animationCache.computeIfAbsent(value, v -> {
             AnimationSpec s = AnimationSpec.parse(v);
@@ -176,8 +195,11 @@ public final class AnimationEngine {
         }
         double p = spec.progressAt(now - run.start);
         if (p < 0) return out;
+        Map<String, String> values = kf.evaluate(target, p, spec.easing(), props);
+        if (values.isEmpty()) return out;
         if (out == target) out = target.copy();
-        out.entries().putAll(kf.evaluate(target, p, spec.easing()));
+        out.entries().putAll(values);
+        if (layoutPass) layoutAnimating = true;
         return out;
     }
 
@@ -186,7 +208,7 @@ public final class AnimationEngine {
 
     // ---- ③ 명령형 ----
 
-    private StyleMap applyImperatives(UiNode node, StyleMap out, long now) {
+    private StyleMap applyImperatives(UiNode node, StyleMap out, long now, Set<String> props, boolean layoutPass) {
         if (imperatives.isEmpty()) return out;
         StyleMap result = out;
         List<Imperative> done = null;
@@ -199,10 +221,13 @@ public final class AnimationEngine {
             if (a.node != node) continue;
             double elapsed = now - a.start - a.delayMs;
             double p = elapsed <= 0 ? 0 : a.durationMs <= 0 ? 1 : Math.min(1, elapsed / a.durationMs);
-            if (result == out) result = out.copy();
             for (Map.Entry<String, String> e : a.to.entrySet()) {
+                if (!props.contains(e.getKey())) continue;
+                if (result == out) result = out.copy();
                 result.put(e.getKey(), Interpolator.lerp(a.from.get(e.getKey()), e.getValue(), a.easing.apply(p)));
+                if (layoutPass && p < 1) layoutAnimating = true;
             }
+            if (layoutPass) continue;                        // 끝내기(확정·콜백)는 매 프레임 도는 그리기 패스에서만
             if (p >= 1) {
                 a.finished = true;
                 if (done == null) done = new ArrayList<>();

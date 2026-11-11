@@ -187,7 +187,11 @@ public final class UiDocument {
         this.anim = new AnimationEngine(name -> resolver.keyframes(name));
         this.layoutEngine = new LayoutEngine(textMetrics, resolver, this::interpolate, this::widgetFor);
         this.layoutEngine.setImageSizer(imageSizer);
+        this.layoutEngine.setStyleAnimator((box, s) -> animationsEnabled ? anim.applyLayout(box.node, s, clock.nowMillis()) : s);
     }
+
+    /** 레이아웃 속성(width, margin …)이 아직 움직이는 중이면 매 프레임 다시 배치한다. */
+    private boolean layoutAnimating;
 
     private java.util.function.Function<String, int[]> imageSizer = src -> null;
 
@@ -367,7 +371,9 @@ public final class UiDocument {
 
     private void relayout() {
         refreshBindings();
+        anim.beginLayoutPass();
         this.layout = layoutEngine.layout(root, viewW, viewH);
+        layoutAnimating = animationsEnabled && anim.layoutActive();
         boxes.clear();
         index(layout);
         this.background = ScreenBackground.parse(layout.style.get("use"));
@@ -404,6 +410,7 @@ public final class UiDocument {
         this.mouseY = mouseY;
         this.frameNow = clock.nowMillis();   // 한 프레임 안에서는 같은 시각을 쓴다
         refreshBindings();   // 값이 바뀌었으면 dirty 가 켜져 아래에서 다시 레이아웃된다
+        if (layoutAnimating) dirty = true;
         applyDirty();
         updateHover();
         applyDirty();
@@ -476,6 +483,7 @@ public final class UiDocument {
                                               Easing easing, Runnable onFinish) {
         long now = clock.nowMillis();
         frameNow = Math.max(frameNow, now);
+        dirty = true;                                  // 레이아웃 속성이 들어 있을 수 있으니 다음 프레임에 레이아웃 패스가 보게 한다
         return anim.start(el.node(), from, to, duration, delay, easing, now,
                 el::style, onFinish, (prop, value) -> el.setStyle(prop, value));
     }

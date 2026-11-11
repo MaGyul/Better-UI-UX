@@ -66,8 +66,10 @@ public final class UiAnimation {
 
     private static String check(String prop) {
         String p = prop.toLowerCase();
-        if (!Interpolator.ANIMATABLE.contains(p)) {
-            throw new IllegalArgumentException("애니메이션할 수 없는 속성: " + prop + " (가능: " + Interpolator.ANIMATABLE + ")");
+        if (!Interpolator.ANIMATABLE.contains(p) && !Interpolator.LAYOUT.contains(p)) {
+            java.util.TreeSet<String> all = new java.util.TreeSet<>(Interpolator.ANIMATABLE);
+            all.addAll(Interpolator.LAYOUT);
+            throw new IllegalArgumentException("애니메이션할 수 없는 속성: " + prop + " (가능: " + all + ")");
         }
         return p;
     }

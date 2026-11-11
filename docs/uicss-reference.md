@@ -58,8 +58,13 @@ CSS3 의 게임 UI 에 의미 있는 부분집합. 구현 계획과 진행 상�
 
 ## 애니메이션
 
-`transition`, `animation` + `@keyframes`. 보간 가능: `opacity translate-x translate-y scale rotate background color border-color tint border`.
-레이아웃 속성(`width` 등)은 아직 애니메이션되지 않는다.
+`transition`, `animation` + `@keyframes`, Java API(`element.animate().to(...)`).
+
+- **그리기 속성**(레이아웃 불변): `opacity translate-x translate-y scale rotate background color border-color tint border border-radius box-shadow outline-color outline-width outline-offset`
+- **레이아웃 속성**: `width height min/max-width/height margin padding gap row-gap column-gap x y font-size letter-spacing line-height`.
+  움직이는 동안 매 프레임 다시 배치하므로 옆 요소도 함께 밀린다(움직임이 끝나면 멈춘다). `margin: 4 8` 같은 여러 값과 `%`, 색이 섞인 `box-shadow` 도 항목별로 보간한다.
+  `auto`/`fill` ↔ 숫자처럼 보간할 수 없는 쌍은 중간에서 값이 바뀐다.
+- 전환은 "처음 본 스타일"에서는 시작하지 않는다 → `transition` 선언은 기본 규칙(`button { transition: ... }`)에 둔다.
 
 ## 아직 없는 것
 

@@ -115,8 +115,14 @@ public final class LayoutEngine {
         return b;
     }
 
+    private java.util.function.BiFunction<LayoutBox, StyleMap, StyleMap> styleAnimator;
+
+    /** 스타일 해석 직후 레이아웃 속성에 전환·애니메이션을 덧입히는 훅(문서가 건다). null 이면 없음. */
+    public void setStyleAnimator(java.util.function.BiFunction<LayoutBox, StyleMap, StyleMap> animator) { this.styleAnimator = animator; }
+
     private void resolveStyles(LayoutBox b) {
         resolver.resolve(b);
+        if (styleAnimator != null) b.style = styleAnimator.apply(b, b.style);
         if (!b.synthetic) addPseudoBoxes(b);
         for (LayoutBox c : b.children) resolveStyles(c);
         if (b.tag().equals("tabs") && b.widget instanceof BuiltinWidgets.Tabs tabs) {   // 선택된 탭만 보인다
