@@ -38,6 +38,8 @@ public record AnimationSpec(String name, double durationMs, double delayMs, Easi
                 dir = Direction.ALTERNATE;
             } else if (t.equals("alternate-reverse")) {
                 dir = Direction.ALTERNATE_REVERSE;
+            } else if (t.equals("running") || t.equals("paused")) {
+                // animation-play-state 는 AnimationEngine 이 읽는다
             } else if (t.equals("forwards")) {
                 fill = Fill.FORWARDS;
             } else if (t.equals("backwards")) {

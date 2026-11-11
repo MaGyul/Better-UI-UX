@@ -47,7 +47,7 @@ public final class Stylesheet {
             "border-radius", "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius",
             "border-bottom-left-radius", "box-shadow", "outline", "outline-width", "outline-color", "outline-style",
             "outline-offset", "opacity", "cursor", "backdrop", "tint", "src", "uv", "tex", "item", "count", "size",
-            "translate-x", "translate-y", "scale", "rotate", "transition", "animation",
+            "translate-x", "translate-y", "scale", "rotate", "transition", "animation", "animation-play-state",
             // 글자
             "color", "shadow", "text-shadow", "text-align", "font-size", "font-weight", "line-height", "letter-spacing",
             "vertical-align", "white-space", "text-transform", "text-overflow", "text-decoration", "text-decoration-line",

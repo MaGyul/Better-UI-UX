@@ -210,7 +210,29 @@ public final class UiPainter {
             tw = tex[0];
             th = tex[1];
         }
-        g.drawTexture(src, b.x, b.y, b.w, b.h, u, v, rw, rh, tw, th, withOpacity(s.color("tint", 0xFFFFFFFF), opacity));
+        int tint = withOpacity(s.color("tint", 0xFFFFFFFF), opacity);
+        Insets bw = s.borderInsets(0);                                      // 테두리 안쪽에만 그린다
+        int ix = b.x + bw.left(), iy = b.y + bw.top(), iw = b.w - bw.horizontal(), ih = b.h - bw.vertical();
+        if (iw <= 0 || ih <= 0) return;
+        BoxPainter.Radii r = BoxPainter.radii(s, b.w, b.h).shrink(bw.top(), bw.right(), bw.bottom(), bw.left()).fit(iw, ih);
+        if (r.none()) {
+            g.drawTexture(src, ix, iy, iw, ih, u, v, rw, rh, tw, th, tint);
+            return;
+        }
+        // 둥근 모서리: 이미지를 같은 모양의 행 묶음으로 잘라 그린다(모서리 행만 따로, 가운데는 한 번). 원본 영역도 같은 비율로 자른다.
+        int[][] sp = BoxPainter.spans(iw, ih, r);
+        float sx = rw / (float) iw, sy = rh / (float) ih;
+        int start = 0;
+        for (int i = 1; i <= ih; i++) {
+            if (i == ih || sp[0][i] != sp[0][start] || sp[1][i] != sp[1][start]) {
+                int l = sp[0][start], rr = sp[1][start], w = iw - l - rr, h = i - start;
+                if (w > 0 && h > 0) {
+                    g.drawTexture(src, ix + l, iy + start, w, h, u + l * sx, v + start * sy,
+                            Math.max(1, Math.round(w * sx)), Math.max(1, Math.round(h * sy)), tw, th, tint);
+                }
+                start = i;
+            }
+        }
     }
 
     private static float number(StyleMap s, String key, float def) {

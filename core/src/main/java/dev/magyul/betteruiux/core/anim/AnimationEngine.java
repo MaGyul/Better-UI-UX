@@ -37,6 +37,7 @@ public final class AnimationEngine {
     private static final class KeyframeRun {
         String signature;       // animation 속성 값이 바뀌면 처음부터 다시 시작
         long start;
+        long pausedAt = -1;     // animation-play-state: paused 가 시작된 시각(아니면 -1)
     }
 
     /** Java API 로 시작한 애니메이션. */
@@ -72,7 +73,7 @@ public final class AnimationEngine {
     private final Map<UiNode, KeyframeRun> runs = new IdentityHashMap<>();
     private final List<Imperative> imperatives = new ArrayList<>();
     private final Map<String, List<TransitionSpec>> transitionCache = new HashMap<>();
-    private final Map<String, AnimationSpec> animationCache = new HashMap<>();
+    private final Map<String, List<AnimationSpec>> animationCache = new HashMap<>();
 
     public AnimationEngine(Function<String, Keyframes> keyframeLookup) { this.keyframeLookup = keyframeLookup; }
 
@@ -176,16 +177,18 @@ public final class AnimationEngine {
 
     private StyleMap applyKeyframes(UiNode node, StyleMap target, StyleMap out, long now, Set<String> props, boolean layoutPass) {
         String value = target.get("animation");
-        AnimationSpec spec = value == null ? null : animationCache.computeIfAbsent(value, v -> {
-            AnimationSpec s = AnimationSpec.parse(v);
-            return s == null ? NONE : s;
+        List<AnimationSpec> specs = value == null ? List.of() : animationCache.computeIfAbsent(value, v -> {   // 쉼표로 여러 개: animation: a 1s, b 2s
+            List<AnimationSpec> list = new ArrayList<>();
+            for (String part : dev.magyul.betteruiux.core.style.Selector.splitList(v)) {
+                AnimationSpec s = AnimationSpec.parse(part);
+                if (s != null) list.add(s);
+            }
+            return list;
         });
-        if (spec == null || spec == NONE) {
+        if (specs.isEmpty()) {
             runs.remove(node);
             return out;
         }
-        Keyframes kf = keyframeLookup.apply(spec.name());
-        if (kf == null) return out;
         KeyframeRun run = runs.get(node);
         if (run == null || !value.equals(run.signature)) {
             run = new KeyframeRun();
@@ -193,18 +196,28 @@ public final class AnimationEngine {
             run.start = now;
             runs.put(node, run);
         }
-        double p = spec.progressAt(now - run.start);
-        if (p < 0) return out;
-        Map<String, String> values = kf.evaluate(target, p, spec.easing(), props);
-        if (values.isEmpty()) return out;
-        if (out == target) out = target.copy();
-        out.entries().putAll(values);
-        if (layoutPass) layoutAnimating = true;
+        // animation-play-state: paused 인 동안은 시간이 흐르지 않은 것처럼 멈춘다(풀면 멈춘 자리에서 이어서).
+        boolean paused = target.get("animation-play-state", "running").toLowerCase().contains("paused") || value.toLowerCase().contains("paused");
+        if (paused) {
+            if (run.pausedAt < 0) run.pausedAt = now;
+        } else if (run.pausedAt >= 0) {
+            run.start += now - run.pausedAt;
+            run.pausedAt = -1;
+        }
+        long at = paused ? run.pausedAt : now;
+        for (AnimationSpec spec : specs) {                                   // 뒤의 애니메이션이 같은 속성을 덮어쓴다
+            Keyframes kf = keyframeLookup.apply(spec.name());
+            if (kf == null) continue;
+            double p = spec.progressAt(at - run.start);
+            if (p < 0) continue;
+            Map<String, String> values = kf.evaluate(target, p, spec.easing(), props);
+            if (values.isEmpty()) continue;
+            if (out == target) out = target.copy();
+            out.entries().putAll(values);
+            if (layoutPass && !paused) layoutAnimating = true;
+        }
         return out;
     }
-
-    private static final AnimationSpec NONE =
-            new AnimationSpec("", 1, 0, Easing.LINEAR, 1, AnimationSpec.Direction.NORMAL, AnimationSpec.Fill.NONE);
 
     // ---- ③ 명령형 ----
 

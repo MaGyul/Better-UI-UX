@@ -2203,8 +2203,10 @@ public final class EditorController {
                 if (css != null) sheets.add(new StyleText.Sheet(href, css));
             }
             extra.addAll(StyleText.externalRows(b, sheets));
-            var spec = dev.magyul.betteruiux.core.anim.AnimationSpec.parse(b.style.get("animation"));   // 이 요소가 쓰는 @keyframes
-            if (spec != null) {
+            String animation = b.style.get("animation");                       // 이 요소가 쓰는 @keyframes (쉼표로 여러 개 가능)
+            for (String part : animation == null ? List.<String>of() : dev.magyul.betteruiux.core.style.Selector.splitList(animation)) {
+                var spec = dev.magyul.betteruiux.core.anim.AnimationSpec.parse(part);
+                if (spec == null) continue;
                 extra.addAll(StyleText.keyframeRows(spec.name(), StyleText.INLINE_SHEET, srcSource.text(), StyleText.keyframes(srcSource)));
                 for (StyleText.Sheet sh : sheets) extra.addAll(StyleText.keyframeRows(spec.name(), sh.href(), sh.text(), StyleText.cssKeyframes(sh.text())));
             }
