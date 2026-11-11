@@ -213,6 +213,18 @@ public final class McvWorld {
         log(new Change.EntityField(id, name, value));
     }
 
+    /**
+     * 엔티티의 NBT 에 {@code snbt}(예: {@code {Invisible:1b,CustomName:"Hi"}})를 <b>병합</b>해 달라고 요청한다(/data merge 와 같다).
+     * 실제 적용은 렌더 스레드가 진짜 엔티티에 한다(월드에 접속하지 않았다면 적용되지 않는다). 위치/회전은 setPosition/setRotation 이 매 프레임 이긴다.
+     */
+    public void mergeEntityNbt(int id, String snbt) {
+        if (snbt == null) throw new IllegalArgumentException("NBT 글자가 필요합니다");
+        String t = snbt.trim();
+        if (t.length() > McvEntity.MAX_NBT) throw new IllegalArgumentException("NBT 가 너무 깁니다(" + McvEntity.MAX_NBT + "자)");
+        if (!t.startsWith("{") || !t.endsWith("}")) throw new IllegalArgumentException("NBT 는 {...} 형식이어야 합니다");
+        entity(id).queueNbt(t);
+    }
+
     public Object getEntityField(int id, String name) {
         return entity(id).getField(name);
     }

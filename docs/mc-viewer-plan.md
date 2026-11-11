@@ -126,9 +126,15 @@ world.setTickRate(~);
 - `McViewerBlockEntities`: `EntityBlock.newBlockEntity` 로 만들어 두고(블록 상태+NBT 가 바뀌면 재생성, 지워진 블록은 정리) `BlockEntityRenderDispatcher.tryExtractRenderState`/`submit` 으로 그린다. 거리 컬링은 `prepare(블록 중심)` 으로 무력화. 블록 NBT(SNBT)는 `loadWithComponents` 로 불러 준다.
 - 월드 접속 필요(엔티티와 같은 제약). 게임 테스트: 상자/엔더상자/셜커/침대/표지판 장면이 바닥만 있는 장면과 확연히 달라짐을 확인, 스크린샷 육안 확인
 
+## 후속 완료: 엔티티 맞히기 + 엔티티 NBT
+- 맞히기: `McvEntity.setBounds` 를 백엔드가 진짜 엔티티 크기로 채우면(= 실제로 그려진 엔티티) core `McvView.raycast` 가 충돌 상자(슬랩 교차)로 맞히고 블록과 거리(`t`)를 비교해 가까운 쪽을 고른다. `Hit` 에 `entity`·`t` 추가, 결과에 `kind`(block/entity). 위젯은 `onEntityHover/onEntityClick` 을 보낸다.
+- NBT: `entity.mergeNbt(snbt)`(검증 후 큐, 최대 16개) → 렌더 스레드 `McViewerEntities.applyNbt` 가 현재 NBT 저장 → 병합 → `load` → 다시 저장해 스냅샷, `entity.getNbt()` 가 스냅샷을 읽는다. 매 프레임 동기화는 스크립트가 값을 준 필드(customName/invisible 등)만 적용해 NBT 로 바꾼 값을 덮어쓰지 않는다.
+- 테스트: `McvViewTest`(엔티티 크기를 알기 전엔 안 맞음, 가까운 쪽 선택, 보기 영역), `McvHostTest`(NBT 검증/한도), 게임 테스트(소 호버·클릭 이벤트, 병합한 NBT 가 `getNbt` 에 보이고 새끼 소로 화면이 바뀜 — 스크린샷 확인)
+- 알려진 제약: `Invisible` 은 이 버전에서 공통 NBT 키가 아니다(종류별 키만 유효), 이름표는 뷰어에서 안정적으로 안 보인다
+
 ## 완료 후 남은 과제 (후속, 우선순위 순)
 - 블록 엔티티 **동작**(상자 뚜껑 열림 등; 렌더 자체는 완료)
-- **엔티티 맞히기**(raycast), 엔티티 조명이 어두운 문제(PiP는 렌더당 라이팅 하나)
+- 엔티티 조명이 어두운 문제(PiP는 렌더당 라이팅 하나), 엔티티 이름표 표시(바닐라가 실제 카메라와의 거리로 결정)
 - **원근 투영**(별도 렌더 타깃 경로 필요), **타이틀 화면에서 엔티티**(가상 Level 필요)
 - 바이옴별 틴트, 반투명 블록 정렬, 면 단위 컬링(큰 월드 성능), 월드 스냅샷을 프레임마다 복사하는 비용 줄이기
 - NeoForge 실행 확인(컴파일만 확인됨)

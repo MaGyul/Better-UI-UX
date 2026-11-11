@@ -19,7 +19,9 @@ import java.util.Objects;
  * <ul>
  *   <li>{@code onTick(tick, world)} — 월드 틱마다</li>
  *   <li>{@code onBlockHover(e)} — 마우스 아래의 블록이 바뀔 때. 블록이 없으면 {@code e.block == null}</li>
- *   <li>{@code onBlockClick(e)} — 드래그 없이 눌렀다 뗐을 때. {@code e = {world, x, y, z, face, block, id, button}}</li>
+ *   <li>{@code onBlockClick(e)} — 드래그 없이 눌렀다 뗐을 때. {@code e = {world, kind, x, y, z, face, block, id, button}}</li>
+ *   <li>{@code onEntityHover(e)}, {@code onEntityClick(e)} — 엔티티 위에서. {@code e = {world, kind, entity, type, x, y, z, face, button}}, 없으면 {@code e.entity == null}.
+ *       엔티티가 블록보다 가까우면 엔티티 이벤트가 오고 블록 이벤트는 "블록 없음"이다.</li>
  * </ul>
  */
 final class McViewerWidget implements UiWidget {
@@ -27,7 +29,7 @@ final class McViewerWidget implements UiWidget {
     private final UiElement el;
     private int lastX, lastY, pressX, pressY, pressButton;
     private boolean dragging, moved;
-    private String hoverKey = "";                    // 직전에 알려 준 마우스 아래 블록(같으면 다시 알리지 않는다)
+    private String hoverKey = "", hoverEntityKey = "";   // 직전에 알려 준 마우스 아래 블록/엔티티(같으면 다시 알리지 않는다)
 
     McViewerWidget(UiElement el) { this.el = el; }
 
@@ -87,25 +89,37 @@ final class McViewerWidget implements UiWidget {
 
     // ---- 블록 호버/클릭 ----
 
-    private Map<String, Object> event(McvWorld world, McvView.Hit hit, int button) {
+    /** 스크립트에 줄 이벤트. 블록 이벤트에서 엔티티를 맞힌 경우는 "블록 없음", 엔티티 이벤트에서 블록을 맞힌 경우는 "엔티티 없음"이다. */
+    private Map<String, Object> event(McvWorld world, McvView.Hit hit, int button, boolean entityEvent) {
         McvHost host = McViewerRegistry.get(el.document());
         Map<String, Object> e = new LinkedHashMap<>();
         e.put("world", host == null ? -1 : host.handleOf(world));
-        Map<String, Object> m = McvHost.hitToMap(hit);
+        boolean match = hit != null && hit.isEntity() == entityEvent;
+        Map<String, Object> m = match ? McvHost.hitToMap(hit) : null;
         if (m != null) e.putAll(m);
-        else e.put("block", null);
+        else e.put(entityEvent ? "entity" : "block", null);
         e.put("button", button);
         return e;
+    }
+
+    private static String key(McvView.Hit hit, boolean entityEvent) {
+        if (hit == null || hit.isEntity() != entityEvent) return "";
+        return entityEvent ? "e" + hit.entity().id() : hit.x() + "," + hit.y() + "," + hit.z() + "," + hit.face();
     }
 
     private void updateHover(McvWorld world, Frame frame) {
         McViewerRegistry.ScriptEvents events = McViewerRegistry.events(el.document());
         if (events == null) return;
         McvView.Hit hit = frame.hovered() && !dragging ? McvView.raycast(world, frame.mouseX(), frame.mouseY()) : null;
-        String key = hit == null ? "" : hit.x() + "," + hit.y() + "," + hit.z() + "," + hit.face();
-        if (Objects.equals(key, hoverKey)) return;
-        hoverKey = key;
-        events.call("onBlockHover", event(world, hit, -1));
+        String blockKey = key(hit, false), entityKey = key(hit, true);
+        if (!Objects.equals(blockKey, hoverKey)) {
+            hoverKey = blockKey;
+            events.call("onBlockHover", event(world, hit, -1, false));
+        }
+        if (!Objects.equals(entityKey, hoverEntityKey)) {
+            hoverEntityKey = entityKey;
+            events.call("onEntityHover", event(world, hit, -1, true));
+        }
     }
 
     // ---- 입력: 드래그로 돌리고 휠로 확대, 제자리에서 뗴면 클릭 ----
@@ -141,7 +155,8 @@ final class McViewerWidget implements UiWidget {
         McViewerRegistry.ScriptEvents events = McViewerRegistry.events(el.document());
         if (w == null || events == null || moved || button != pressButton) return;
         McvView.Hit hit = McvView.raycast(w, x, y);
-        events.call("onBlockClick", event(w, hit, button));
+        if (hit != null && hit.isEntity()) events.call("onEntityClick", event(w, hit, button, true));
+        else events.call("onBlockClick", event(w, hit, button, false));
     }
 
     @Override

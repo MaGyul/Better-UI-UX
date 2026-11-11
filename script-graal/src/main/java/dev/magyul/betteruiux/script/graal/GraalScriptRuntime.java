@@ -79,7 +79,11 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                     return function () { return H({cmd: 'entityCall', world: w, entity: id, method: n, args: Array.prototype.slice.call(arguments)}); };
                   }
                 });
-                return Object.freeze({id: id, fields: fields, methods: methods});
+                return Object.freeze({
+                  id: id, fields: fields, methods: methods,
+                  mergeNbt: function (snbt) { H({cmd: 'entityCall', world: w, entity: id, method: 'mergeNbt', args: [String(snbt)]}); },
+                  getNbt: function () { return H({cmd: 'entityCall', world: w, entity: id, method: 'getNbt', args: []}); }
+                });
               }
               function world(w) {
                 var cam = camera(w);

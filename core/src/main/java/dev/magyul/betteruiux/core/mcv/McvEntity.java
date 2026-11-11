@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 
 /** 가상 월드에 소환된 엔티티의 데이터 모델(렌더 스레드의 실제 엔티티 객체와는 저널로 동기화된다). */
 public final class McvEntity {
-    public static final int MAX_FIELDS = 32, MAX_STRING = 256;
+    public static final int MAX_FIELDS = 32, MAX_STRING = 256, MAX_NBT = 4096, MAX_PENDING_NBT = 16;
     private static final Pattern TYPE = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
     private static final Pattern FIELD = Pattern.compile("[A-Za-z][A-Za-z0-9_]{0,31}");
 
@@ -15,6 +15,9 @@ public final class McvEntity {
     private volatile double x, y, z;
     private volatile float yaw, pitch;
     private final Map<String, Object> fields = new ConcurrentHashMap<>();
+    private volatile double bbWidth, bbHeight;                       // 0 = 아직 렌더러가 크기를 알려 주지 않았다(맞힐 수 없다)
+    private final java.util.concurrent.ConcurrentLinkedQueue<String> pendingNbt = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private volatile String nbtSnapshot;
 
     McvEntity(int id, String type, double x, double y, double z) {
         this.id = id;
@@ -47,6 +50,29 @@ public final class McvEntity {
     public float pitch() { return pitch; }
 
     public Map<String, Object> fields() { return Map.copyOf(fields); }
+
+    /** 충돌 상자 크기(가로=세로 폭, 높이). 백엔드가 진짜 엔티티를 만든 뒤 알려 준다. 알려지기 전에는 {@link McvView#raycast} 가 맞히지 않는다. */
+    public void setBounds(double width, double height) {
+        this.bbWidth = width;
+        this.bbHeight = height;
+    }
+
+    public double bbWidth() { return bbWidth; }
+
+    public double bbHeight() { return bbHeight; }
+
+    /** 스크립트가 요청한 NBT 병합(SNBT 글자)을 하나 꺼낸다(백엔드가 렌더 스레드에서 적용). 없으면 null. */
+    public String pollPendingNbt() { return pendingNbt.poll(); }
+
+    void queueNbt(String snbt) {
+        if (pendingNbt.size() >= MAX_PENDING_NBT) throw new IllegalArgumentException("NBT 요청이 너무 많이 밀렸습니다(" + MAX_PENDING_NBT + ")");
+        pendingNbt.add(snbt);
+    }
+
+    /** 백엔드가 마지막으로 본 진짜 엔티티의 NBT(SNBT). 만들어지기 전에는 null. */
+    public String nbtSnapshot() { return nbtSnapshot; }
+
+    public void setNbtSnapshot(String snbt) { this.nbtSnapshot = snbt; }
 
     void setPosition(double x, double y, double z) {
         this.x = x;

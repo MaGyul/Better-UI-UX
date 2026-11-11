@@ -196,6 +196,17 @@ public final class McvHost {
     public static Map<String, Object> hitToMap(McvView.Hit h) {
         if (h == null) return null;
         Map<String, Object> m = new LinkedHashMap<>();
+        if (h.isEntity()) {
+            m.put("kind", "entity");
+            m.put("entity", h.entity().id());
+            m.put("type", h.entity().type());
+            m.put("x", h.x());
+            m.put("y", h.y());
+            m.put("z", h.z());
+            m.put("face", h.face());
+            return m;
+        }
+        m.put("kind", "block");
         m.put("x", h.x());
         m.put("y", h.y());
         m.put("z", h.z());
@@ -218,6 +229,14 @@ public final class McvHost {
                 w.rotateEntity(id, (float) toDouble(a.get(0)), (float) toDouble(a.get(1)));
             }
             case "remove" -> w.removeEntity(id);
+            case "mergeNbt" -> {
+                need(a, 1);
+                if (!(a.get(0) instanceof String snbt)) throw new IllegalArgumentException("mergeNbt 는 SNBT 글자를 받습니다");
+                w.mergeEntityNbt(id, snbt);
+            }
+            case "getNbt" -> {
+                return w.entity(id).nbtSnapshot();
+            }
             default -> throw new IllegalArgumentException("허용되지 않은 엔티티 메서드: " + method);
         }
         return null;

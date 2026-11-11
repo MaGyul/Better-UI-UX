@@ -93,4 +93,23 @@ class McvHostTest {
         assertFalse(h.world(w).inView(4.5, 0, 0));
         assertEquals(List.of(0, 0, 0), List.of(0, 0, 0));
     }
+
+    @Test
+    void entityNbtMergeRequestsAreValidatedQueuedAndBounded() {
+        McvHost h = new McvHost();
+        int w = world(h, 4, 4, 4);
+        int e = ((Double) call(h, "{\"cmd\":\"spawnEntity\",\"world\":" + w + ",\"x\":1,\"y\":1,\"z\":1,\"type\":\"cow\"}").get("value")).intValue();
+        String base = "{\"cmd\":\"entityCall\",\"world\":" + w + ",\"entity\":" + e + ",\"method\":";
+        assertTrue((Boolean) call(h, base + "\"mergeNbt\",\"args\":[\"{Invisible:1b}\"]}").get("ok"));
+        assertEquals("{Invisible:1b}", h.world(w).entity(e).pollPendingNbt());
+        assertEquals(null, h.world(w).entity(e).pollPendingNbt());
+        assertFalse((Boolean) call(h, base + "\"mergeNbt\",\"args\":[\"not nbt\"]}").get("ok"), "{...} 가 아니면 거부");
+        assertFalse((Boolean) call(h, base + "\"mergeNbt\",\"args\":[5]}").get("ok"), "글자가 아니면 거부");
+        assertFalse((Boolean) call(h, base + "\"mergeNbt\",\"args\":[\"{a:\\\"" + "x".repeat(5000) + "\\\"}\"]}").get("ok"), "너무 길면 거부");
+        for (int i = 0; i < McvEntity.MAX_PENDING_NBT; i++) assertTrue((Boolean) call(h, base + "\"mergeNbt\",\"args\":[\"{}\"]}").get("ok"));
+        assertFalse((Boolean) call(h, base + "\"mergeNbt\",\"args\":[\"{}\"]}").get("ok"), "밀린 요청이 너무 많으면 거부");
+        assertEquals(null, call(h, base + "\"getNbt\"}").get("value"), "스냅샷은 백엔드가 채우기 전엔 null");
+        h.world(w).entity(e).setNbtSnapshot("{Age:0}");
+        assertEquals("{Age:0}", call(h, base + "\"getNbt\"}").get("value"));
+    }
 }

@@ -122,6 +122,34 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                       w.fill(0, 0, 0, 5, 0, 5, 'white_concrete');
                     }
                     """);
+            Files.writeString(base.resolve("ui/gt_mcv7.uiml"), """
+                    <screen>
+                      <script src="gt_mcv7.uijs"/>
+                      <column anchor="top-left" x="4" y="4" gap="2">
+                        <label id="p" text="p"/>
+                        <label id="h" text="h"/>
+                        <label id="c" text="c"/>
+                        <label id="n" text="n"/>
+                      </column>
+                      <mc-viewer id="view" anchor="center" width="240" height="180"/>
+                    </screen>
+                    """);
+            Files.writeString(base.resolve("ui/gt_mcv7.uijs"), """
+                    var w, cow;
+                    function onInit() {
+                      w = mcv.createWorld(5, 3, 5);
+                      w.fill(0, 0, 0, 4, 0, 4, 'white_concrete');
+                      cow = w.spawnEntity(2.5, 1, 2.5, 'cow');
+                    }
+                    function onTick() {
+                      var p = w.project(2.5, 1.5, 2.5);
+                      if (p) ui.setText('#p', Math.round(p.x) + ',' + Math.round(p.y));
+                      var n = cow.getNbt();
+                      if (n) ui.setText('#n', n.indexOf('Age:-1') >= 0 && n.indexOf('Moo') >= 0 ? 'merged' : 'plain');
+                    }
+                    function onEntityHover(e) { ui.setText('#h', e.entity ? 'hover ' + e.type : 'hover none'); }
+                    function onEntityClick(e) { ui.setText('#c', 'click ' + e.entity + ' ' + e.type); cow.mergeNbt('{Age:-24000,CustomName:\"Moo\",CustomNameVisible:1b}'); }
+                    """);
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -203,6 +231,40 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             }
             System.out.println("[mc-viewer test] blockEntity diff=" + beDiff);
             check(beDiff > 1500, "블록 엔티티(상자·침대·표지판)가 그려져야 한다(달라진 픽셀 " + beDiff + ")");
+
+            // 엔티티 맞히기 + NBT 수정: 소를 호버/클릭하면 이벤트가 오고, 클릭 때 병합한 NBT 가 진짜 엔티티에 적용되어 getNbt 에 보인다.
+            ctx.runOnClient(mc -> UiOpener.open("gt_mcv7", base, false));
+            ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv7"));
+            ctx.waitTicks(40);
+            String[] cxy = text(ctx, "#p").split(",");
+            double gs = ctx.computeOnClient(mc -> (double) mc.getWindow().getGuiScale());
+            var inp = ctx.getInput();
+            inp.setCursorPos(Integer.parseInt(cxy[0].trim()) * gs, Integer.parseInt(cxy[1].trim()) * gs);
+            ctx.waitTicks(5);
+            System.out.println("[mc-viewer test] " + text(ctx, "#h") + " / nbt " + text(ctx, "#n"));
+            check(text(ctx, "#h").equals("hover minecraft:cow"), "소 위에서 호버가 와야 한다: " + text(ctx, "#h"));
+            check(text(ctx, "#n").equals("plain"), "처음엔 어른 소다: " + text(ctx, "#n"));
+            BufferedImage cowBefore = read(ctx.takeScreenshot("mc-viewer-cow-adult"));
+            inp.pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
+            ctx.waitTicks(20);
+            System.out.println("[mc-viewer test] " + text(ctx, "#c") + " / nbt " + text(ctx, "#n"));
+            check(text(ctx, "#c").startsWith("click ") && text(ctx, "#c").endsWith(" minecraft:cow"), "소 클릭 이벤트: " + text(ctx, "#c"));
+            check(text(ctx, "#n").equals("merged"), "병합한 NBT(Age, CustomName)가 엔티티에 적용되어 getNbt 에 보여야 한다: " + text(ctx, "#n"));
+            inp.setCursorPos(2, 2);
+            ctx.waitTicks(5);
+            BufferedImage cowAfter = read(ctx.takeScreenshot("mc-viewer-cow-baby"));
+            LayoutBox cv = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            int cowDiff = 0;
+            for (int gy = cv.y; gy < cv.y + cv.h; gy++) {
+                for (int gx = cv.x; gx < cv.x + cv.w; gx++) {
+                    int x = (int) Math.min(cowBefore.getWidth() - 1, Math.round(gx * s * sx)), y = (int) Math.min(cowBefore.getHeight() - 1, Math.round(gy * s * sx));
+                    int a = cowBefore.getRGB(x, y), b = cowAfter.getRGB(x, y);
+                    int d = Math.abs((a >> 16 & 0xFF) - (b >> 16 & 0xFF)) + Math.abs((a >> 8 & 0xFF) - (b >> 8 & 0xFF)) + Math.abs((a & 0xFF) - (b & 0xFF));
+                    if (d > 60) cowDiff++;
+                }
+            }
+            System.out.println("[mc-viewer test] cow nbt diff=" + cowDiff);
+            check(cowDiff > 300, "NBT 로 새끼 소로 바꾸면 화면이 달라져야 한다(달라진 픽셀 " + cowDiff + ")");
 
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));

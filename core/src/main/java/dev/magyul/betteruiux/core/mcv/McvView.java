@@ -58,15 +58,68 @@ public final class McvView {
     }
 
     /** 광선이 처음 맞힌 블록. {@code face} 는 광선이 들어온 면(up/down/north/south/east/west, 마인크래프트 방향). */
-    public record Hit(int x, int y, int z, String face, McvBlock block) { }
+    public record Hit(int x, int y, int z, String face, McvBlock block, McvEntity entity, double t) {
+        /** 블록을 맞혔다. */
+        public boolean isBlock() { return block != null; }
+
+        /** 엔티티를 맞혔다({@code x,y,z} 는 맞은 지점이 있는 칸). */
+        public boolean isEntity() { return entity != null; }
+    }
+
+    /**
+     * 화면의 (sx, sy)에 보이는 것(블록 또는 엔티티) 중 가장 가까운 것을 찾는다. 엔티티는 충돌 상자로 맞힌다
+     * (백엔드가 크기를 알려 준, 곧 실제로 그려진 엔티티만).
+     */
+    public static Hit raycast(McvWorld w, double sx, double sy) {
+        double[] r = ray(w, sx, sy);
+        if (r == null) return null;
+        Hit block = raycastBlock(w, r);
+        Hit entity = raycastEntity(w, r);
+        if (entity != null && (block == null || entity.t() < block.t())) return entity;
+        return block;
+    }
+
+    private static Hit raycastEntity(McvWorld w, double[] r) {
+        Hit best = null;
+        for (McvEntity e : w.entities()) {
+            double bw = e.bbWidth(), bh = e.bbHeight();
+            if (bw <= 0 || bh <= 0 || !w.inView(e.x(), e.y(), e.z())) continue;
+            double[] min = {e.x() - bw / 2, e.y(), e.z() - bw / 2}, max = {e.x() + bw / 2, e.y() + bh, e.z() + bw / 2};
+            double tmin = 0, tmax = Double.POSITIVE_INFINITY;
+            int axis = -1;
+            boolean miss = false;
+            for (int a = 0; a < 3 && !miss; a++) {
+                double o = r[a], d = r[3 + a];
+                if (Math.abs(d) < 1e-12) {
+                    if (o < min[a] || o > max[a]) miss = true;
+                    continue;
+                }
+                double t1 = (min[a] - o) / d, t2 = (max[a] - o) / d;
+                if (t1 > t2) {
+                    double t = t1;
+                    t1 = t2;
+                    t2 = t;
+                }
+                if (t1 > tmin) {
+                    tmin = t1;
+                    axis = a;
+                }
+                if (t2 < tmax) tmax = t2;
+                if (tmin > tmax) miss = true;
+            }
+            if (miss || (best != null && tmin >= best.t())) continue;
+            int dir = axis < 0 ? 0 : r[3 + axis] > 0 ? 1 : -1;
+            best = new Hit((int) Math.floor(r[0] + r[3] * tmin), (int) Math.floor(r[1] + r[4] * tmin), (int) Math.floor(r[2] + r[5] * tmin),
+                    face(axis, dir), null, e, tmin);
+        }
+        return best;
+    }
 
     /**
      * 화면의 (sx, sy)에 보이는 블록을 찾는다. 보기 영역 밖 블록은 그려지지 않으므로 건너뛴다.
      * 모양과 상관없이 블록 칸 전체를 맞는 것으로 본다(계단·판자도 한 칸). 아무것도 없으면 null.
      */
-    public static Hit raycast(McvWorld w, double sx, double sy) {
-        double[] r = ray(w, sx, sy);
-        if (r == null) return null;
+    private static Hit raycastBlock(McvWorld w, double[] r) {
         double[] o = {r[0], r[1], r[2]}, d = {r[3], r[4], r[5]};
         double[] size = {w.sizeX(), w.sizeY(), w.sizeZ()};
         double tmin = 0, tmax = Double.POSITIVE_INFINITY;
@@ -105,14 +158,16 @@ public final class McvView {
             }
         }
         int lastAxis = enterAxis, lastDir = enterAxis < 0 ? 0 : step[enterAxis];
+        double tEnter = tmin;
         int limit = (int) (size[0] + size[1] + size[2]) + 3;
         for (int i = 0; i < limit; i++) {
             McvBlock b = w.getBlock(cell[0], cell[1], cell[2]);
             if (!b.isAir() && w.inView(cell[0] + 0.5, cell[1] + 0.5, cell[2] + 0.5)) {
-                return new Hit(cell[0], cell[1], cell[2], face(lastAxis, lastDir), b);
+                return new Hit(cell[0], cell[1], cell[2], face(lastAxis, lastDir), b, null, tEnter);
             }
             int a = tNext[0] <= tNext[1] && tNext[0] <= tNext[2] ? 0 : tNext[1] <= tNext[2] ? 1 : 2;
             if (tNext[a] > tmax || step[a] == 0) return null;
+            tEnter = tNext[a];
             cell[a] += step[a];
             if (cell[a] < 0 || cell[a] >= size[a]) return null;
             tNext[a] += tDelta[a];

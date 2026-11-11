@@ -89,4 +89,51 @@ class McvViewTest {
         assertNull(McvView.project(bare, 1, 1, 1));
         assertNull(McvView.raycast(bare, 10, 10));
     }
+
+    // ---- 엔티티 맞히기 ----
+
+    @Test
+    void entitiesAreOnlyPickedOnceTheirBoundsAreKnown() {
+        McvWorld w = world();
+        McvEntity cow = w.spawnEntity(3, 1, 3, "cow");
+        double[] s = McvView.project(w, 3, 1.5, 3);
+        assertNull(McvView.raycast(w, s[0], s[1]), "크기를 모르는(그려지지 않은) 엔티티는 맞지 않는다");
+        cow.setBounds(0.9, 1.4);
+        McvView.Hit hit = McvView.raycast(w, s[0], s[1]);
+        assertNotNull(hit);
+        assertTrue(hit.isEntity());
+        assertEquals(cow.id(), hit.entity().id());
+        assertNull(hit.block());
+    }
+
+    @Test
+    void theNearerOfEntityAndBlockWins() {
+        McvWorld w = world();
+        w.camera().setYaw(0);
+        w.camera().setPitch(0);                                        // 수평으로 본다: 깊이는 z 방향
+        w.setBlock(3, 1, 1, stone());
+        McvEntity cow = w.spawnEntity(3.5, 1, 4.5, "cow");
+        cow.setBounds(0.9, 1.4);
+        double[] s = McvView.project(w, 3.5, 1.5, 3);
+        McvView.Hit hit = McvView.raycast(w, s[0], s[1]);
+        assertNotNull(hit);
+        double[] blockDepth = McvView.project(w, 3.5, 1.5, 1.5), cowDepth = McvView.project(w, 3.5, 1.5, 4.5);
+        boolean blockNearer = blockDepth[2] < cowDepth[2];
+        assertEquals(blockNearer, hit.isBlock(), "더 가까운 쪽이 맞아야 한다");
+        cow.setBounds(0.9, 1.4);
+        w.setBlock(3, 1, 1, McvBlock.AIR);
+        assertTrue(McvView.raycast(w, s[0], s[1]).isEntity(), "블록을 치우면 엔티티가 맞는다");
+    }
+
+    @Test
+    void entityPickingRespectsTheViewArea() {
+        McvWorld w = world();
+        McvEntity cow = w.spawnEntity(1, 1, 1, "cow");
+        cow.setBounds(0.9, 1.4);
+        double[] s = McvView.project(w, 1, 1.5, 1);
+        assertNotNull(McvView.raycast(w, s[0], s[1]));
+        w.setViewArea(3, 0, 3, 5, 3, 5);
+        double[] s2 = McvView.project(w, 1, 1.5, 1);
+        assertNull(McvView.raycast(w, s2[0], s2[1]), "보기 영역 밖 엔티티는 그려지지 않으니 맞지도 않는다");
+    }
 }

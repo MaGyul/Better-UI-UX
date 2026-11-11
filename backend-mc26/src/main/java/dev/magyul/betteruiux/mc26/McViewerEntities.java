@@ -16,6 +16,11 @@ import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.TagParser;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
@@ -64,6 +69,8 @@ final class McViewerEntities {
             if (slot.isEmpty()) continue;
             Entity e = slot.get();
             sync(e, me, w);
+            applyNbt(e, me, level);
+            me.setBounds(e.getBbWidth(), e.getBbHeight());               // 이제 화면의 엔티티를 맞힐 수 있다(core 의 raycast 가 이 크기를 쓴다)
             EntityRenderState state = dispatcher.extractEntity(e, w.partialTick());   // 틱 사이를 보간해 부드럽게(ageInTicks = tickCount + partial)
             state.lightCoords = LightCoordsUtil.FULL_BRIGHT;
             pose.pushPose();
@@ -116,11 +123,49 @@ final class McViewerEntities {
             le.yHeadRotO = me.yaw();
         }
         e.tickCount = (int) w.tickCount();
+        // 필드는 스크립트가 값을 준 것만 적용한다(안 준 것은 NBT 병합 등으로 바뀐 값을 그대로 둔다).
         Map<String, Object> f = me.fields();
-        Object name = f.get("customName");
-        e.setCustomName(name instanceof String s && !s.isEmpty() ? Component.literal(s) : null);
-        e.setCustomNameVisible(Boolean.TRUE.equals(f.get("customNameVisible")) || name instanceof String s2 && !s2.isEmpty() && f.get("customNameVisible") == null);
-        e.setInvisible(Boolean.TRUE.equals(f.get("invisible")));
+        if (f.containsKey("customName")) {
+            Object name = f.get("customName");
+            boolean has = name instanceof String s && !s.isEmpty();
+            e.setCustomName(has ? Component.literal((String) name) : null);
+            if (!f.containsKey("customNameVisible")) e.setCustomNameVisible(has);
+        }
+        if (f.containsKey("customNameVisible")) e.setCustomNameVisible(Boolean.TRUE.equals(f.get("customNameVisible")));
+        if (f.containsKey("invisible")) e.setInvisible(Boolean.TRUE.equals(f.get("invisible")));
+    }
+
+    /**
+     * 스크립트가 요청한 NBT 병합을 진짜 엔티티에 적용한다(/data merge 처럼: 현재 NBT 를 저장해 요청 값을 덮어씌우고 다시 불러온다).
+     * 처음 한 번과 병합할 때마다 지금 NBT 를 스냅샷으로 남겨 스크립트의 getNbt() 가 읽는다. 위치/회전은 매 프레임 데이터 모델이 다시 이긴다.
+     */
+    private void applyNbt(Entity e, McvEntity me, ClientLevel level) {
+        String pending = me.pollPendingNbt();
+        if (pending == null && me.nbtSnapshot() != null) return;
+        try {
+            CompoundTag current = save(e, level);
+            while (pending != null) {
+                try {
+                    current.merge(TagParser.parseCompoundFully(pending));
+                    e.load(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), current));
+                    current = save(e, level);                              // 불러온 뒤의 실제 값(검증/보정된 것)
+                } catch (Exception ex) {
+                    warnOnce("엔티티 NBT 를 적용하지 못했습니다(" + me.type() + "): " + ex.getMessage());
+                }
+                pending = me.pollPendingNbt();
+            }
+            String snbt = current.toString();
+            me.setNbtSnapshot(snbt.length() <= 65536 ? snbt : "{}");
+        } catch (RuntimeException ex) {
+            warnOnce("엔티티 NBT 를 읽지 못했습니다(" + me.type() + "): " + ex);
+            me.setNbtSnapshot("{}");                                        // 다시 시도하지 않는다
+        }
+    }
+
+    private static CompoundTag save(Entity e, ClientLevel level) {
+        TagValueOutput out = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
+        e.saveWithoutId(out);
+        return out.buildResult();
     }
 
     private void warnOnce(String msg) {
