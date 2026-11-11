@@ -17,7 +17,7 @@ public final class UiConfig {
             # Better UI/UX 설정
 
             [hotReload]
-            # UI 파일(xml/uicss) 변경을 감시해 열려 있는 화면에 즉시 반영한다. 모드팩 배포 시 false 권장.
+            # UI 파일(uiml/uicss/uijs) 변경을 감시해 열려 있는 화면에 즉시 반영한다. 모드팩 배포 시 false 권장.
             enabled = true
 
             [editor]

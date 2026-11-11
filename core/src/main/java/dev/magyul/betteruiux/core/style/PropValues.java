@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.core.style;
 
 import dev.magyul.betteruiux.core.layout.Colors;
+import dev.magyul.betteruiux.core.layout.TextStyle;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -14,13 +15,14 @@ import java.util.regex.Pattern;
 final class PropValues {
     private PropValues() {}
 
-    private enum Type { LENGTH, NUMBER, COLOR, ENUM, BOX, RADIUS, BORDER, SHADOW, BACKGROUND, WEIGHT, FLEX, TRACKS, TRANSITION, ANIMATION }
+    private enum Type { LENGTH, NUMBER, COLOR, ENUM, BOX, RADIUS, BORDER, SHADOW, BACKGROUND, WEIGHT, FLEX, TRACKS, TRANSITION, ANIMATION, FAMILY, CONTENT, DECORATION }
 
     private static final Pattern LENGTH = Pattern.compile("-?([0-9]+[.]?[0-9]*|[.][0-9]+)(px|%|em|rem|vw|vh|vmin|vmax|pt|deg|s|ms)?");
     /** 단독 min()/max() 함수(minmax() 는 제외). */
     private static final Pattern MINMAX_FN = Pattern.compile("(^|[^a-z-])(min|max)[(]");
     private static final Set<String> GLOBAL = Set.of("inherit", "initial", "unset", "revert");
     private static final Set<String> LENGTH_WORDS = Set.of("auto", "fill", "none", "normal", "min-content", "max-content", "thin", "medium", "thick");
+    private static final Set<String> GENERIC_FAMILIES = Set.of("serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui", "ui-monospace");
     private static final Set<String> BORDER_STYLES = Set.of("solid", "dashed", "dotted", "double", "hidden", "groove", "ridge", "inset", "outset");
     private static final Set<String> COLOR_WORDS = Set.of("none", "transparent", "currentcolor");
 
@@ -53,6 +55,12 @@ final class PropValues {
         TYPES.put("text-shadow", Type.SHADOW);
         TYPES.put("background", Type.BACKGROUND);
         TYPES.put("font-weight", Type.WEIGHT);
+        TYPES.put("font-family", Type.FAMILY);
+        TYPES.put("content", Type.CONTENT);
+        TYPES.put("text-decoration", Type.DECORATION);
+        TYPES.put("text-decoration-line", Type.DECORATION);
+        enumOf("cursor", "default", "auto", "pointer", "text", "crosshair", "ew-resize", "col-resize", "ns-resize", "row-resize", "move", "grab",
+                "grabbing", "all-scroll", "not-allowed", "no-drop");
         TYPES.put("flex", Type.FLEX);
         TYPES.put("grid-template-columns", Type.TRACKS);
         TYPES.put("grid-template-rows", Type.TRACKS);
@@ -125,6 +133,9 @@ final class PropValues {
             case TRACKS -> out.addAll(java.util.List.of("1fr 1fr", "repeat(3, 1fr)", "100px 1fr", "auto 1fr", "minmax(50px, 1fr) 2fr"));
             case TRANSITION -> out.addAll(java.util.List.of("all 0.2s", "opacity 0.3s ease", "background 0.15s linear", "width 0.2s ease-out", "none"));
             case ANIMATION -> out.addAll(java.util.List.of("name 1s", "name 1s infinite", "name 0.5s ease-in-out alternate infinite", "none"));
+            case FAMILY -> out.addAll(java.util.List.of("default", "uniform", "alt", "illageralt", "serif", "sans-serif", "monospace"));
+            case CONTENT -> out.addAll(java.util.List.of("\"\"", "\"> \"", "attr(title)", "none"));
+            case DECORATION -> out.addAll(java.util.List.of("none", "underline", "line-through", "overline", "underline line-through"));
             case WEIGHT -> out.addAll(java.util.List.of("normal", "bold", "bolder", "lighter", "400", "700"));
         }
         out.add("inherit");
@@ -212,6 +223,26 @@ final class PropValues {
             }
             case ANIMATION -> {
                 return dev.magyul.betteruiux.core.anim.AnimSyntax.checkAnimation(low);
+            }
+            case FAMILY -> {
+                boolean known = false;
+                for (String part : Selector.splitList(v)) {
+                    String name = part.trim().replace("\"", "").replace("'", "").toLowerCase(Locale.ROOT);
+                    if (GENERIC_FAMILIES.contains(name) || TextStyle.fontId(name) != null || Set.of("default", "minecraft", "mc").contains(name)) known = true;
+                }
+                if (!known) return "알 수 없는 글꼴입니다(사용 가능: default, uniform, alt, illageralt, 네임스페이스:경로; serif 같은 일반 이름은 기본 글꼴로 대신합니다)";
+            }
+            case CONTENT -> {
+                if (low.equals("none") || low.equals("normal")) return null;
+                for (String tok : CssMath.tokens(v)) {
+                    boolean quoted = tok.length() >= 2 && (tok.startsWith("\"") && tok.endsWith("\"") || tok.startsWith("'") && tok.endsWith("'"));
+                    if (!quoted && !tok.toLowerCase(Locale.ROOT).startsWith("attr(")) return "따옴표로 묶은 글자나 attr(이름)이 아닙니다: " + tok;
+                }
+            }
+            case DECORATION -> {
+                for (String tok : low.split("[ \t]+")) {
+                    if (!Set.of("none", "underline", "line-through", "overline").contains(tok)) return "가능한 값: none, underline, line-through, overline: " + tok;
+                }
             }
             case WEIGHT -> {
                 if (!Set.of("normal", "bold", "bolder", "lighter").contains(low) && !LENGTH.matcher(low).matches()) return "normal, bold 또는 숫자(100~900)가 아닙니다";

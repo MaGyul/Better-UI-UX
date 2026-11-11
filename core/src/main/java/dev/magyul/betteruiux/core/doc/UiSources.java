@@ -22,10 +22,10 @@ public final class UiSources {
     /** XML 문서 id(확장자 없음) 검증. */
     public static boolean validId(String id) { return validName(id); }
 
-    /** {@code <id>.xml} 을 읽는다. */
+    /** {@code <id>.uiml} 을 읽는다. */
     public static Optional<String> load(Path userDir, String id) throws IOException {
         if (!validId(id)) return Optional.empty();
-        return loadFile(userDir, id + ".xml");
+        return loadFile(userDir, id + ".uiml");
     }
 
     /** 확장자를 포함한 파일 이름({@code demo.uicss} 등)으로 읽는다. */

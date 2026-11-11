@@ -166,7 +166,7 @@ public final class UiScreen extends Screen {
             error = null;
             LOG.info("[better-uiux] reloaded '{}'", id);
         } catch (NoSuchFileException e) {
-            error = id + ".xml 파일을 찾을 수 없습니다";
+            error = id + ".uiml 파일을 찾을 수 없습니다";
         } catch (UiParseException e) {
             error = "XML 오류 (줄 " + e.line() + "): " + e.getMessage();
         } catch (IOException e) {
@@ -191,7 +191,7 @@ public final class UiScreen extends Screen {
             error = null;
             LOG.info("[better-uiux] editor on ('{}')", id);
         } catch (NoSuchFileException e) {
-            UiOpener.say(this.minecraft, "에디터: " + id + ".xml 을 찾을 수 없습니다");
+            UiOpener.say(this.minecraft, "에디터: " + id + ".uiml 을 찾을 수 없습니다");
         } catch (UiParseException e) {
             error = "에디터: XML 오류 (줄 " + e.line() + "): " + e.getMessage();
         } catch (IOException e) {
@@ -218,7 +218,7 @@ public final class UiScreen extends Screen {
         UiDocument edited = editor.document();
         editor.close();   // 편집 중이던 칸 취소 + 글자 입력 끄기
         editor = null;
-        if (!id.isEmpty() && !java.nio.file.Files.exists(userDir.resolve(id + ".xml"))) NewDocs.remove(userDir, id);   // 저장하지 않고 떠난 새 화면은 버린다
+        if (!id.isEmpty() && !java.nio.file.Files.exists(userDir.resolve(id + ".uiml"))) NewDocs.remove(userDir, id);   // 저장하지 않고 떠난 새 화면은 버린다
         edited.setAnimationsEnabled(true);
         bind(edited);
         doc = edited;

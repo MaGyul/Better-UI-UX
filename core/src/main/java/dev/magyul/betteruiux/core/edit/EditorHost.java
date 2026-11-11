@@ -17,7 +17,7 @@ public interface EditorHost {
     /** 텍스트를 저장한다(원자적 쓰기). */
     void save(String text) throws IOException;
 
-    /** 도구 모음에 표시할 이름(예: demo.xml). */
+    /** 도구 모음에 표시할 이름(예: demo.uiml). */
     String title();
 
     /**

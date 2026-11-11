@@ -25,7 +25,7 @@ class EditorFileMenuTest {
 
         @Override public void save(String text) throws IOException { }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
 
         @Override public List<String> screens() { return List.of("alpha", "beta"); }
 

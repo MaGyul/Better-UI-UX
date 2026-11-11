@@ -1,5 +1,5 @@
 <screen use="blur,dim">
-  <script src="scripting.js"/>
+  <script src="scripting.uijs"/>
   <style>
     .card { background: #181A24E0; border: 1; border-color: var(--accent, #3A3F55FF); padding: 8; }
     .hot { color: #FFAA00FF; }

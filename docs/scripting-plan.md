@@ -53,13 +53,13 @@
 문서에 연결:
 ```xml
 <screen>
-  <script src="shop.js"/>            <!-- 같은 폴더(또는 리소스팩) 파일, 핫리로드 대상 -->
+  <script src="shop.uijs"/>            <!-- 같은 폴더(또는 리소스팩) 파일, 핫리로드 대상 -->
   <slider id="volume" min="0" max="100" onChange="script:onVolume"/>
   <button text="Buy" onClick="script:buy"/>
 </screen>
 ```
 ```js
-// shop.js — 전역 `ui` 객체만 제공된다(데이터 타입만 주고받는 얇은 래퍼)
+// shop.uijs — 전역 `ui` 객체만 제공된다(데이터 타입만 주고받는 얇은 래퍼)
 function onVolume(ev) {
   ui.setText('#label', '볼륨 ' + ev.value);
   ui.setVar('bar-color', ev.value > 80 ? '#FF5555FF' : '#55FF55FF');

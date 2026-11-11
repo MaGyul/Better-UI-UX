@@ -30,7 +30,7 @@ class EditorTextEditTest {
 
         @Override public void save(String text) throws IOException { }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
 
         @Override public String clipboard() { return clipboard; }
 

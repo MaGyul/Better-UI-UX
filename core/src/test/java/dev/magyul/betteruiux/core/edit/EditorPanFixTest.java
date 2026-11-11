@@ -27,7 +27,7 @@ class EditorPanFixTest {
     private static final String XML = """
         <screen>
           <panel id="p" x="240" y="100" width="50" height="30" background="#336699FF"/>
-          <label id="far" anchor="bottom-right" margin="4" text="demo.xml"/>
+          <label id="far" anchor="bottom-right" margin="4" text="demo.uiml"/>
         </screen>""";
 
     private static class Host implements EditorHost {
@@ -39,7 +39,7 @@ class EditorPanFixTest {
 
         @Override public void save(String text) throws IOException { }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
 
         @Override public boolean panAnimation() { return animate; }
     }

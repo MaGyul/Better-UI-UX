@@ -40,7 +40,7 @@ final class EditorBackend {
             throws IOException, UiParseException {
         boolean blank = id.isEmpty();   // 빈 에디터(/uiux editor): 열린 화면 없이 파일을 고르는 목록만 보인다
         String text = blank ? "<screen/>" : UiSources.load(userDir, id).or(() -> java.util.Optional.ofNullable(NewDocs.get(userDir, id)))
-                .orElseThrow(() -> new NoSuchFileException(id + ".xml"));
+                .orElseThrow(() -> new NoSuchFileException(id + ".uiml"));
         EditorHost host = new EditorHost() {
             @Override public boolean isBlank() { return blank; }
 
@@ -57,14 +57,14 @@ final class EditorBackend {
 
             @Override public void save(String xml) throws IOException {
                 if (blank) throw new IOException("저장할 화면이 없습니다");
-                AtomicFiles.write(userDir.resolve(id + ".xml"), xml);
+                AtomicFiles.write(userDir.resolve(id + ".uiml"), xml);
                 NewDocs.remove(userDir, id);                      // 새 화면은 처음 저장할 때 비로소 파일이 된다
             }
 
             @Override public String title() {
                 if (blank) return "(열린 화면 없음)";
-                boolean unsavedNew = NewDocs.has(userDir, id) && !java.nio.file.Files.exists(userDir.resolve(id + ".xml"));
-                return id + ".xml" + (unsavedNew ? " (새 파일 - 저장 전)" : "");
+                boolean unsavedNew = NewDocs.has(userDir, id) && !java.nio.file.Files.exists(userDir.resolve(id + ".uiml"));
+                return id + ".uiml" + (unsavedNew ? " (새 파일 - 저장 전)" : "");
             }
 
             @Override public boolean canPublish() { return !blank && ClientSync.active(); }
@@ -94,11 +94,11 @@ final class EditorBackend {
 
             @Override public void requestExit() { screen.exitEditor(); }
 
-            /** 사용자 폴더의 .xml 화면들(지금 것 제외). */
+            /** 사용자 폴더의 .uiml 화면들(지금 것 제외). */
             @Override public java.util.List<String> screens() {
                 try (var s = java.nio.file.Files.list(userDir)) {
-                    return s.map(p -> p.getFileName().toString()).filter(n -> n.endsWith(".xml"))
-                            .map(n -> n.substring(0, n.length() - 4)).filter(n -> !n.equals(id) && UiSources.validId(n)).sorted().toList();
+                    return s.map(p -> p.getFileName().toString()).filter(n -> n.endsWith(".uiml"))
+                            .map(n -> n.substring(0, n.length() - ".uiml".length())).filter(n -> !n.equals(id) && UiSources.validId(n)).sorted().toList();
                 } catch (IOException e) {
                     return java.util.List.of();
                 }
@@ -136,9 +136,9 @@ final class EditorBackend {
                         """;
                 for (int n = 1; n < 1000; n++) {
                     String nid = "new_" + n;
-                    if (java.nio.file.Files.exists(userDir.resolve(nid + ".xml"))) continue;
+                    if (java.nio.file.Files.exists(userDir.resolve(nid + ".uiml"))) continue;
                     NewDocs.put(userDir, nid, body);              // 파일은 만들지 않는다: 저장하기 전에 닫으면 아무것도 남지 않는다
-                    java.nio.file.Files.deleteIfExists(userDir.getParent().resolve("autosave").resolve(nid + ".xml"));   // 지난번 새 화면의 임시 저장본이 복구 대화상자로 뜨지 않게
+                    java.nio.file.Files.deleteIfExists(userDir.getParent().resolve("autosave").resolve(nid + ".uiml"));   // 지난번 새 화면의 임시 저장본이 복구 대화상자로 뜨지 않게
                     return nid;
                 }
                 throw new IOException("new_1..new_999 가 모두 사용 중입니다");
@@ -168,15 +168,15 @@ final class EditorBackend {
             /** 저장 파일이 에디터 밖에서 바뀌었는지 확인하는 데 쓴다(없으면 null). */
             @Override public String diskText() {
                 try {
-                    Path f = userDir.resolve(id + ".xml");
+                    Path f = userDir.resolve(id + ".uiml");
                     return java.nio.file.Files.exists(f) ? java.nio.file.Files.readString(f) : null;
                 } catch (IOException e) {
                     return null;
                 }
             }
 
-            /** 저장 전 편집 내용은 config/better-uiux/autosave/<id>.xml 에 임시로 남긴다(저장하거나 정상 종료하면 지운다). */
-            private Path autosaveFile() { return userDir.getParent().resolve("autosave").resolve(id + ".xml"); }
+            /** 저장 전 편집 내용은 config/better-uiux/autosave/<id>.uiml 에 임시로 남긴다(저장하거나 정상 종료하면 지운다). */
+            private Path autosaveFile() { return userDir.getParent().resolve("autosave").resolve(id + ".uiml"); }
 
             @Override public void autosave(String text) {
                 if (blank) return;

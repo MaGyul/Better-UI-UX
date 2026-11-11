@@ -113,7 +113,7 @@ class SyncIntegrationTest {
         ServerSyncCore s = new ServerSyncCore(0);
         byte[] big = new byte[SyncLimits.CHUNK * 3 + 17];
         for (int i = 0; i < big.length; i++) big[i] = (byte) (i * 31);
-        Map<String, byte[]> f = files("shop.xml", "<ui/>");
+        Map<String, byte[]> f = files("shop.uiml", "<ui/>");
         f.put("img/big.png", big);
         s.setBundle(f);
 
@@ -138,18 +138,18 @@ class SyncIntegrationTest {
     @Test
     void changedFileDownloadsOnlyThatFile() throws Exception {
         ServerSyncCore s = new ServerSyncCore(0);
-        s.setBundle(files("a.xml", "<ui id='a'/>", "b.xml", "<ui id='b'/>"));
+        s.setBundle(files("a.uiml", "<ui id='a'/>", "b.uiml", "<ui id='b'/>"));
         Link a = new Link(s);
         a.client.connected();
         a.pump();
 
-        s.setBundle(files("a.xml", "<ui id='a'/>", "b.xml", "<ui id='b2'/>"));
+        s.setBundle(files("a.uiml", "<ui id='a'/>", "b.uiml", "<ui id='b2'/>"));
         Link b = new Link(s);
         b.cache.hash = a.cache.hash;
         b.cache.files.putAll(a.cache.files);
         b.client.connected();
         b.pump();
-        assertEquals("<ui id='b2'/>", new String(b.cache.files.get("b.xml"), StandardCharsets.UTF_8));
+        assertEquals("<ui id='b2'/>", new String(b.cache.files.get("b.uiml"), StandardCharsets.UTF_8));
         assertEquals(1, b.rec.ready);
     }
 
@@ -227,7 +227,7 @@ class SyncIntegrationTest {
         l.pump();
 
         // 요청하지 않은 조각
-        l.client.onMessage(new SyncMessage.BundleChunk("evil.xml", 0, 1, new byte[] {1}));
+        l.client.onMessage(new SyncMessage.BundleChunk("evil.uiml", 0, 1, new byte[] {1}));
         assertEquals(1, l.rec.disabled);
         assertFalse(l.client.active());
         l.client.onMessage(new SyncMessage.OpenUi("shop", Map.of()));
@@ -236,7 +236,7 @@ class SyncIntegrationTest {
         // 경로 탈출이 담긴 매니페스트
         Link n = new Link(s);
         n.client.onMessage(new SyncMessage.ServerHello(SyncLimits.PROTOCOL, "", 0));
-        BundleManifest bad = new BundleManifest("00", List.of(new SyncMessage.FileEntry("../evil.xml", Bundle.sha256(new byte[0]), 0)));
+        BundleManifest bad = new BundleManifest("00", List.of(new SyncMessage.FileEntry("../evil.uiml", Bundle.sha256(new byte[0]), 0)));
         n.client.onMessage(bad);
         assertEquals(1, n.rec.disabled);
         assertTrue(n.cache.files.isEmpty());
@@ -245,7 +245,7 @@ class SyncIntegrationTest {
     @Test
     void tamperedChunkIsRejected() throws Exception {
         ServerSyncCore s = new ServerSyncCore(0);
-        s.setBundle(files("a.xml", "<ui/>"));
+        s.setBundle(files("a.uiml", "<ui/>"));
         Link l = new Link(s);
         l.client.connected();
         // 수동으로 진행해 청크 내용을 바꾼다
@@ -365,7 +365,7 @@ class SyncIntegrationTest {
     @Test
     void publishRequiresPermissionAndUpdatesBundleForEveryone() throws Exception {
         ServerSyncCore s = new ServerSyncCore(0);
-        s.setBundle(files("a.xml", "<screen/>"));
+        s.setBundle(files("a.uiml", "<screen/>"));
         TestPublisher pub = new TestPublisher(s);
         s.setPublisher(pub);
         Link editor = new Link(s), viewer = new Link(s);
@@ -375,7 +375,7 @@ class SyncIntegrationTest {
 
         // 권한 없음: 거부되고 아무것도 바뀌지 않는다
         pub.allowed = false;
-        assertTrue(editor.client.publish(files("b.xml", "<screen id='b'/>")));
+        assertTrue(editor.client.publish(files("b.uiml", "<screen id='b'/>")));
         editor.pump();
         assertEquals(List.of("0:false"), editor.rec.publishResults);
         assertEquals(1, s.bundle().files().size());
@@ -383,12 +383,12 @@ class SyncIntegrationTest {
         // 권한 있음: 서버 번들에 합쳐지고, 접속 중인 다른 클라이언트도 새 파일을 받는다
         pub.allowed = true;
         editor.rec.publishResults.clear();
-        assertTrue(editor.client.publish(files("b.xml", "<screen id='b'/>", "style.uicss", ".x{}")));
+        assertTrue(editor.client.publish(files("b.uiml", "<screen id='b'/>", "style.uicss", ".x{}")));
         editor.pump();
         viewer.pump();
         assertEquals(List.of("0:true", "1:true"), editor.rec.publishResults);
         assertEquals(3, s.bundle().files().size());
-        assertTrue(viewer.cache.files.containsKey("b.xml"));
+        assertTrue(viewer.cache.files.containsKey("b.uiml"));
         assertTrue(viewer.cache.files.containsKey("style.uicss"));
         assertTrue(viewer.client.active());
     }
@@ -410,8 +410,8 @@ class SyncIntegrationTest {
         assertTrue(threw);
 
         // 악의적인 클라이언트: 경로 탈출 / 조각을 보내지 않고 시작만 / 승인 없이 조각만
-        l.ss.onMessage(new SyncMessage.PublishBegin(new BundleManifest("00", List.of(new SyncMessage.FileEntry("../evil.xml", Bundle.sha256(new byte[0]), 0)))));
-        l.ss.onMessage(new SyncMessage.BundleChunk("a.xml", 0, 1, new byte[] {1}));
+        l.ss.onMessage(new SyncMessage.PublishBegin(new BundleManifest("00", List.of(new SyncMessage.FileEntry("../evil.uiml", Bundle.sha256(new byte[0]), 0)))));
+        l.ss.onMessage(new SyncMessage.BundleChunk("a.uiml", 0, 1, new byte[] {1}));
         l.pump();
         assertTrue(s.bundle().files().isEmpty());
         assertTrue(l.rec.publishResults.contains("0:false"));

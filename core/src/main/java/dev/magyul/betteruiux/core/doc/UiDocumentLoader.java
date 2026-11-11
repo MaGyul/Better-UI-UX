@@ -26,7 +26,7 @@ public final class UiDocumentLoader {
      */
     public static UiDocument load(Path userDir, String id, TextMetrics text) throws IOException, UiParseException {
         Optional<String> xml = UiSources.load(userDir, id);
-        if (xml.isEmpty()) throw new NoSuchFileException(id + ".xml");
+        if (xml.isEmpty()) throw new NoSuchFileException(id + ".uiml");
         return loadText(userDir, xml.get(), text);
     }
 

@@ -20,7 +20,7 @@ class EditorPreviewSizeTest {
 
         @Override public void save(String text) throws IOException { }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
     }
 
     private static int[] panelPos(EditorController e) {

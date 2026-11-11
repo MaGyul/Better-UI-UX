@@ -108,7 +108,7 @@ class AtRulesTest {
     void importedSheetComesBeforeImporter(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("base.uicss"), "panel { width: 5; height: 6 }");
         Files.writeString(dir.resolve("loop.uicss"), "@import 'loop.uicss'; panel { height: 7 }");
-        Files.writeString(dir.resolve("m.xml"), """
+        Files.writeString(dir.resolve("m.uiml"), """
             <screen>
               <style>@import 'base.uicss'; panel { width: 50 }</style>
               <panel id='p'/>
@@ -118,7 +118,7 @@ class AtRulesTest {
         assertEquals("50", d.findById("p").style.get("width"));      // 가져온 시트보다 뒤의 규칙이 이긴다
         assertEquals("6", d.findById("p").style.get("height"));
 
-        Files.writeString(dir.resolve("c.xml"), "<screen><link href='loop.uicss'/><panel id='p'/></screen>");
+        Files.writeString(dir.resolve("c.uiml"), "<screen><link href='loop.uicss'/><panel id='p'/></screen>");
         UiDocument c = UiDocumentLoader.load(dir, "c", new FixedMetrics());
         assertTrue(c.warnings().stream().anyMatch(w -> w.contains("순환")), c.warnings().toString());
     }
@@ -126,7 +126,7 @@ class AtRulesTest {
     @Test
     void importMediaAppliesToWholeImportedSheet(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("wide.uicss"), "panel { width: 77 }");
-        Files.writeString(dir.resolve("m.xml"), """
+        Files.writeString(dir.resolve("m.uiml"), """
             <screen>
               <style>@import 'wide.uicss' (min-width: 300px);</style>
               <panel id='p' width='1'/>

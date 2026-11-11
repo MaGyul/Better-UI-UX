@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 /** 화면 결과(드로우 리스트) 스냅샷: 레이아웃/그리기가 의도치 않게 바뀌면 여기서 걸린다. */
 class GoldenSnapshotsTest {
     private static String demo(String name) throws IOException {
-        return Files.readString(Path.of("../backend-mc26/src/main/resources/assets/better_uiux/ui/" + name + ".xml"));
+        return Files.readString(Path.of("../backend-mc26/src/main/resources/assets/better_uiux/ui/" + name + ".uiml"));
     }
 
     private static DrawList paintDoc(String xml, int w, int h) throws UiParseException {
@@ -51,7 +51,7 @@ class GoldenSnapshotsTest {
 
         @Override public void save(String text) { }
 
-        @Override public String title() { return "golden.xml"; }
+        @Override public String title() { return "golden.uiml"; }
     }
 
     private static final String EDIT_XML = """

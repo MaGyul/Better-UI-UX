@@ -178,7 +178,7 @@ public class Css3BehaviorClientGameTest implements FabricClientGameTest {
             Files.writeString(base.resolve("config.toml"), "[editor]\nenabled = true\n");
             Files.writeString(base.resolve("ui/gt_base.uicss"), "#imp { width: 30; height: 10; background: #AB00CD; }\n");
             Files.writeString(base.resolve("ui/gt_imp.uicss"), "@import \"gt_base.uicss\";\n");
-            Files.writeString(base.resolve("ui/gt_beh2.xml"), """
+            Files.writeString(base.resolve("ui/gt_beh2.uiml"), """
                     <screen>
                       <style>
                         #hw { width: 40; height: 10; background: #3366CC; transition: width 200ms linear; }
@@ -198,7 +198,7 @@ public class Css3BehaviorClientGameTest implements FabricClientGameTest {
                       </column>
                     </screen>
                     """);
-            Files.writeString(base.resolve("ui/gt_beh.xml"), """
+            Files.writeString(base.resolve("ui/gt_beh.uiml"), """
                     <screen>
                       <link rel="style" href="gt_imp.uicss"/>
                       <style>

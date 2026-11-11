@@ -2,12 +2,12 @@
 
 ## HUD
 
-게임 화면(인게임)에 항상 그려지는 XML 문서. 입력은 받지 않는 읽기 전용이다. 데모: `hud_demo.xml`.
+게임 화면(인게임)에 항상 그려지는 XML 문서. 입력은 받지 않는 읽기 전용이다. 데모: `hud_demo.uiml`.
 
 ```toml
 # config/better-uiux/config.toml
 [hud]
-ids = "hud_demo,my_hud"      # config/better-uiux/ui/<id>.xml (없으면 기본 제공). 비워 두면 HUD 없음
+ids = "hud_demo,my_hud"      # config/better-uiux/ui/<id>.uiml (없으면 기본 제공). 비워 두면 HUD 없음
 ```
 
 - 루트는 `<hud>` 를 권장한다(`<screen>` 도 된다). 요소 배치는 `anchor`/`margin`/row/column 으로 한다.

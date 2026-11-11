@@ -20,7 +20,7 @@ class EditorMediaLabelTest {
 
         @Override public void save(String text) throws IOException { }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
     }
 
     private static final String XML = "<screen><style>.card { padding: 8; } @media (max-width: 100) { .card { padding: 2; } }</style>"

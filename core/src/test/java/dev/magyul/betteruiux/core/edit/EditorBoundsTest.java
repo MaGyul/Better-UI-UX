@@ -40,7 +40,7 @@ class EditorBoundsTest {
 
         @Override public void save(String text) throws IOException { }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
     }
 
     private static EditorController editor(String xml) throws Exception {

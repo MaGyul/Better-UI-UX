@@ -112,7 +112,7 @@ public final class ClientSync {
             "<(?:include)\\b[^>]*?\\bsrc\\s*=\\s*\"([^\"]+)\"|<link\\b[^>]*?\\bhref\\s*=\\s*\"([^\"]+)\"");
 
     /**
-     * {@code ui/<id>.xml} 과 그 문서가 쓰는 스타일시트/include 파일을 서버로 발행한다(권한은 서버가 확인한다).
+     * {@code ui/<id>.uiml} 과 그 문서가 쓰는 스타일시트/include 파일을 서버로 발행한다(권한은 서버가 확인한다).
      * @return 시작했으면 true
      */
     public static boolean publishUi(String id) {
@@ -129,7 +129,7 @@ public final class ClientSync {
         Path ui = baseDir.resolve("ui");
         Map<String, byte[]> files = new java.util.LinkedHashMap<>();
         try {
-            collect(ui, id + ".xml", files, 0);
+            collect(ui, id + ".uiml", files, 0);
             if (c.publish(files)) UiOpener.say(mc, "서버로 발행하는 중: " + String.join(", ", files.keySet()));
             return true;
         } catch (dev.magyul.betteruiux.core.sync.SyncException | java.io.IOException e) {
@@ -149,10 +149,10 @@ public final class ClientSync {
         }
         byte[] data = Files.readAllBytes(p);
         out.put(file, data);
-        if (!file.endsWith(".xml")) return;
+        if (!file.endsWith(".uiml")) return;
         var m = REF.matcher(new String(data, StandardCharsets.UTF_8));
         while (m.find()) {
-            String ref = m.group(1) != null ? m.group(1) + (m.group(1).endsWith(".xml") ? "" : ".xml") : m.group(2);
+            String ref = m.group(1) != null ? m.group(1) + (m.group(1).endsWith(".uiml") ? "" : ".uiml") : m.group(2);
             collect(ui, ref, out, depth + 1);
         }
     }
@@ -201,19 +201,19 @@ public final class ClientSync {
             UiOpener.say(mc, "서버가 잘못된 화면 id 를 보냈습니다: " + id);
             return;
         }
-        if (!Files.isRegularFile(dir.resolve(id + ".xml"))) {
+        if (!Files.isRegularFile(dir.resolve(id + ".uiml"))) {
             if (PENDING_OPENS.size() < 8 && !PENDING_OPENS.contains(id)) PENDING_OPENS.add(id);
             LOG.info("[better-uiux] '{}' 은(는) 번들을 받는 중이라 잠시 뒤에 엽니다", id);
             return;
         }
-        // 정책: 같은 id 의 로컬 파일(config/better-uiux/ui/<id>.xml)이 있을 때 어느 쪽을 열까.
+        // 정책: 같은 id 의 로컬 파일(config/better-uiux/ui/<id>.uiml)이 있을 때 어느 쪽을 열까.
         //  - 기본(local-first): 내 파일이 이긴다 — 플레이어가 서버 화면을 자기 취향대로 꾸밀 수 있다(서버 동작/값은 그대로 동작).
         //  - 서버가 server-first 를 요청해도, 내가 설정 server.allowOverride=true 로 허락한 경우에만 서버 파일이 이긴다.
         UiConfig cfg0 = UiConfig.load(baseDir.resolve("config.toml"));
         ClientSyncCore c0 = core;
         boolean serverWins = c0 != null && c0.policy() == 0 && cfg0.bool("server.allowOverride", false);
         Path localUi = baseDir.resolve("ui");
-        if (!serverWins && Files.isRegularFile(localUi.resolve(id + ".xml"))) {
+        if (!serverWins && Files.isRegularFile(localUi.resolve(id + ".uiml"))) {
             dir = localUi;
             LOG.info("[better-uiux] 서버 화면 '{}': 로컬 파일을 우선 사용합니다(local-first)", id);
         }

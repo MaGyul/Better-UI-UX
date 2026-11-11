@@ -45,7 +45,7 @@ class SyncProtocolTest {
         values.put("on", true);
         assertEquals(new ClientHello(1, "abc"), roundTrip(new ClientHello(1, "abc")));
         assertEquals(new ServerHello(1, "def", 0), roundTrip(new ServerHello(1, "def", 0)));
-        assertEquals(new BundleNeed(List.of("a.xml", "img/b.png")), roundTrip(new BundleNeed(List.of("a.xml", "img/b.png"))));
+        assertEquals(new BundleNeed(List.of("a.uiml", "img/b.png")), roundTrip(new BundleNeed(List.of("a.uiml", "img/b.png"))));
         assertEquals(new OpenUi("shop", values), roundTrip(new OpenUi("shop", values)));
         assertEquals(new CloseUi("shop"), roundTrip(new CloseUi("shop")));
         assertEquals(new StateSet("coins", 5L), roundTrip(new StateSet("coins", 5L)));
@@ -54,10 +54,10 @@ class SyncProtocolTest {
         assertEquals(new StateSnapshot(values), roundTrip(new StateSnapshot(values)));
         assertEquals(new Action("shop", "mymod:buy", Map.of("item", "apple", "count", 3L)),
                 roundTrip(new Action("shop", "mymod:buy", Map.of("item", "apple", "count", 3L))));
-        BundleChunk c = (BundleChunk) roundTrip(new BundleChunk("a.xml", 2, 5, new byte[] {1, 2, 3}));
-        assertEquals("a.xml", c.path());
+        BundleChunk c = (BundleChunk) roundTrip(new BundleChunk("a.uiml", 2, 5, new byte[] {1, 2, 3}));
+        assertEquals("a.uiml", c.path());
         assertArrayEquals(new byte[] {1, 2, 3}, c.data());
-        BundleManifest m = Bundle.manifestOf(Map.of("a.xml", bytes("<screen/>"), "b.png", new byte[] {9}));
+        BundleManifest m = Bundle.manifestOf(Map.of("a.uiml", bytes("<screen/>"), "b.png", new byte[] {9}));
         BundleManifest back = (BundleManifest) roundTrip(m);
         assertEquals(m.hash(), back.hash());
         assertEquals(2, back.files().size());
@@ -95,9 +95,9 @@ class SyncProtocolTest {
         Map<String, Object> many = new LinkedHashMap<>();
         for (int i = 0; i <= SyncLimits.MAX_ARGS; i++) many.put("k" + i, 1L);
         assertThrows(SyncException.class, () -> SyncCodec.encode(new Action("ui", "a", many)));
-        assertThrows(SyncException.class, () -> SyncCodec.encode(new BundleChunk("a.xml", 0, 1, new byte[SyncLimits.CHUNK + 1])));
+        assertThrows(SyncException.class, () -> SyncCodec.encode(new BundleChunk("a.uiml", 0, 1, new byte[SyncLimits.CHUNK + 1])));
         // 디코딩 쪽: 직접 만든 거짓 조각 길이
-        byte[] chunk = SyncCodec.encode(new BundleChunk("a.xml", 0, 1, new byte[4]));
+        byte[] chunk = SyncCodec.encode(new BundleChunk("a.uiml", 0, 1, new byte[4]));
         chunk[chunk.length - 4 - 1] = 0x7F;                                  // 길이 필드를 크게 바꾼다
         assertThrows(SyncException.class, () -> SyncCodec.decode(chunk));
     }
@@ -106,11 +106,11 @@ class SyncProtocolTest {
 
     @Test
     void bundlePathsMustStayInsideAndUseAnAllowedExtension() {
-        assertNull(Bundle.checkPath("shop.xml"));
+        assertNull(Bundle.checkPath("shop.uiml"));
         assertNull(Bundle.checkPath("img/icons/coin.png"));
         assertNull(Bundle.checkPath("video/clip.MP4"));
-        for (String bad : new String[] {"", "../x.xml", "a/../b.xml", "/etc/x.xml", "C:/x.xml", "a\\b.xml", "a//b.xml", "./a.xml", "a/./b.xml",
-                "a.exe", "a.class", "noext", "a.xml.", "a b.xml ", "x".repeat(300) + ".xml", "a/b.", "..hidden", "con?.xml"}) {
+        for (String bad : new String[] {"", "../x.uiml", "a/../b.uiml", "/etc/x.uiml", "C:/x.uiml", "a\\b.uiml", "a//b.uiml", "./a.uiml", "a/./b.uiml",
+                "a.exe", "a.class", "noext", "a.xml.", "a b.uiml ", "x".repeat(300) + ".uiml", "a/b.", "..hidden", "con?.uiml"}) {
             assertNotNull(Bundle.checkPath(bad), bad);
         }
     }
@@ -119,11 +119,11 @@ class SyncProtocolTest {
 
     private static Map<String, byte[]> sampleFiles() {
         Map<String, byte[]> files = new LinkedHashMap<>();
-        files.put("shop.xml", bytes("<screen><label text=\"hi\"/></screen>"));
+        files.put("shop.uiml", bytes("<screen><label text=\"hi\"/></screen>"));
         byte[] big = new byte[SyncLimits.CHUNK * 2 + 123];
         for (int i = 0; i < big.length; i++) big[i] = (byte) (i * 31);
         files.put("img/big.png", big);
-        files.put("empty.xml", new byte[0]);
+        files.put("empty.uiml", new byte[0]);
         return files;
     }
 
@@ -133,7 +133,7 @@ class SyncProtocolTest {
         BundleManifest b = Bundle.manifestOf(new java.util.TreeMap<>(sampleFiles()));
         assertEquals(a.hash(), b.hash(), "순서와 무관");
         Map<String, byte[]> changed = sampleFiles();
-        changed.get("shop.xml")[0] ^= 1;
+        changed.get("shop.uiml")[0] ^= 1;
         assertTrue(!Bundle.manifestOf(changed).hash().equals(a.hash()));
         Bundle.validate(a);
         BundleManifest lie = new BundleManifest("0".repeat(64), a.files());
@@ -142,15 +142,15 @@ class SyncProtocolTest {
 
     @Test
     void manifestValidationRejectsEscapesDuplicatesAndOversize() throws Exception {
-        assertThrows(SyncException.class, () -> Bundle.manifestOf(Map.of("../evil.xml", bytes("x"))));
+        assertThrows(SyncException.class, () -> Bundle.manifestOf(Map.of("../evil.uiml", bytes("x"))));
         assertThrows(SyncException.class, () -> Bundle.manifestOf(Map.of("a.exe", bytes("x"))));
-        FileEntry ok = Bundle.manifestOf(Map.of("a.xml", bytes("x"))).files().get(0);
+        FileEntry ok = Bundle.manifestOf(Map.of("a.uiml", bytes("x"))).files().get(0);
         List<FileEntry> dup = List.of(ok, new FileEntry("A.XML", ok.sha256(), 1));
         assertThrows(SyncException.class, () -> Bundle.validate(new BundleManifest(Bundle.bundleHash(dup), dup)), "대소문자만 다른 중복");
-        List<FileEntry> huge = List.of(new FileEntry("a.xml", ok.sha256(), SyncLimits.MAX_FILE_BYTES + 1L));
+        List<FileEntry> huge = List.of(new FileEntry("a.uiml", ok.sha256(), SyncLimits.MAX_FILE_BYTES + 1L));
         assertThrows(SyncException.class, () -> Bundle.validate(new BundleManifest(Bundle.bundleHash(huge), huge)));
         List<FileEntry> tooMany = new ArrayList<>();
-        for (int i = 0; i <= SyncLimits.MAX_FILES; i++) tooMany.add(new FileEntry("f" + i + ".xml", ok.sha256(), 1));
+        for (int i = 0; i <= SyncLimits.MAX_FILES; i++) tooMany.add(new FileEntry("f" + i + ".uiml", ok.sha256(), 1));
         assertThrows(SyncException.class, () -> Bundle.validate(new BundleManifest(Bundle.bundleHash(tooMany), tooMany)));
         List<FileEntry> sixteen = new ArrayList<>();
         for (int i = 0; i < 3; i++) sixteen.add(new FileEntry("w" + i + ".mp4", ok.sha256(), SyncLimits.MAX_FILE_BYTES));
@@ -166,10 +166,10 @@ class SyncProtocolTest {
         Map<String, byte[]> files = sampleFiles();
         BundleManifest m = Bundle.manifestOf(files);
         Map<String, byte[]> cached = new LinkedHashMap<>();
-        cached.put("shop.xml", Bundle.sha256(files.get("shop.xml")));                    // 같음
+        cached.put("shop.uiml", Bundle.sha256(files.get("shop.uiml")));                    // 같음
         cached.put("img/big.png", Bundle.sha256(bytes("old")));                          // 다름
         List<String> need = Bundle.missing(m, cached);
-        assertEquals(List.of("empty.xml", "img/big.png"), need.stream().sorted().toList());
+        assertEquals(List.of("empty.uiml", "img/big.png"), need.stream().sorted().toList());
 
         BundleAssembler asm = new BundleAssembler(m, need);
         for (String path : need) {
@@ -177,19 +177,19 @@ class SyncProtocolTest {
         }
         assertTrue(asm.complete());
         assertArrayEquals(files.get("img/big.png"), asm.files().get("img/big.png"));
-        assertEquals(0, asm.files().get("empty.xml").length);
+        assertEquals(0, asm.files().get("empty.uiml").length);
     }
 
     @Test
     void assemblerRejectsTamperedUnrequestedAndMisorderedChunks() throws Exception {
         Map<String, byte[]> files = sampleFiles();
         BundleManifest m = Bundle.manifestOf(files);
-        assertThrows(SyncException.class, () -> new BundleAssembler(m, List.of("not-in-manifest.xml")));
+        assertThrows(SyncException.class, () -> new BundleAssembler(m, List.of("not-in-manifest.uiml")));
 
         BundleAssembler a = new BundleAssembler(m, List.of("img/big.png"));
         List<BundleChunk> chunks = Bundle.chunks("img/big.png", files.get("img/big.png"));
         assertEquals(3, chunks.size());
-        assertThrows(SyncException.class, () -> a.accept(new BundleChunk("shop.xml", 0, 1, new byte[1])), "요청하지 않은 파일");
+        assertThrows(SyncException.class, () -> a.accept(new BundleChunk("shop.uiml", 0, 1, new byte[1])), "요청하지 않은 파일");
         assertThrows(SyncException.class, () -> a.accept(chunks.get(1)), "순서 어긋남");
         assertNull(a.accept(chunks.get(0)));
         assertThrows(SyncException.class, () -> a.accept(chunks.get(0)), "중복 조각");

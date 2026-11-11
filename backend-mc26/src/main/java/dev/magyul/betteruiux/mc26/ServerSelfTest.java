@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory;
 /**
  * 개발용 자동 시험(-Dbetteruiux.serverselftest=true): 서버에 접속한 클라이언트가 스스로 {@code /serverui open Dev shop} 을 치고,
  * 서버 화면의 버튼을 누르고, 결과를 로그({@code [selftest]})에 남긴 뒤 게임을 끝낸다. 사람이 화면을 조작하지 않아도 서버↔클라이언트를 확인할 수 있다.
- * 서버에 {@code server-ui/shop.xml}(demo:ping / demo:say 버튼)과 이름이 Dev 인 관리자 계정이 있어야 한다.
+ * 서버에 {@code server-ui/shop.uiml}(demo:ping / demo:say 버튼)과 이름이 Dev 인 관리자 계정이 있어야 한다.
  */
 final class ServerSelfTest {
     private static final Logger LOG = LoggerFactory.getLogger("better_uiux");
@@ -144,8 +144,8 @@ final class ServerSelfTest {
     private static void luckPermsPhase(Minecraft mc) throws Exception {
         Path ui = ClientSync.baseDir().resolve("ui");
         Files.createDirectories(ui);
-        Files.writeString(ui.resolve("lpcheck.xml"), String.format(SHOPTEST, "LP VERSION"));
-        Path cached = ClientSync.cacheFiles().resolve("lpcheck.xml");
+        Files.writeString(ui.resolve("lpcheck.uiml"), String.format(SHOPTEST, "LP VERSION"));
+        Path cached = ClientSync.cacheFiles().resolve("lpcheck.uiml");
         Files.deleteIfExists(cached);
 
         lp(mc, "better_uiux.publish", false);                                          // 거부(레벨 4 여도)
@@ -174,14 +174,14 @@ final class ServerSelfTest {
             sleep(2500);
             check("[LuckPerms] 관리자가 아니고 노드도 없으면 발행 거부", !Files.exists(cached));
         }
-        Files.deleteIfExists(ui.resolve("lpcheck.xml"));
+        Files.deleteIfExists(ui.resolve("lpcheck.uiml"));
     }
 
     private static void publishAndPolicy(Minecraft mc) throws Exception {
         Path ui = ClientSync.baseDir().resolve("ui");
         Files.createDirectories(ui);
-        Files.writeString(ui.resolve("shoptest.xml"), String.format(SHOPTEST, "SERVER VERSION"));
-        Path cached = ClientSync.cacheFiles().resolve("shoptest.xml");
+        Files.writeString(ui.resolve("shoptest.uiml"), String.format(SHOPTEST, "SERVER VERSION"));
+        Path cached = ClientSync.cacheFiles().resolve("shoptest.uiml");
         Files.deleteIfExists(cached);
 
         // 권한 노드: 권한 제공자(개발용 파일, Fabric)가 거부하면 레벨 4 여도 거부, 허용하면 성공. 파일이 없으면 기본 권한 레벨(NeoForge 는 이 부분만 확인).
@@ -200,19 +200,19 @@ final class ServerSelfTest {
         if (permFile != null) Files.deleteIfExists(permFile);                       // 이후는 기본 권한 레벨로 판단
 
         // 정책: 같은 id 의 로컬 파일이 있을 때(기본 local-first 라 로컬이 이긴다)
-        Files.writeString(ui.resolve("shoptest.xml"), String.format(SHOPTEST, "LOCAL VERSION"));
+        Files.writeString(ui.resolve("shoptest.uiml"), String.format(SHOPTEST, "LOCAL VERSION"));
         openAndExpectLabel(mc, "정책 local-first(기본): 로컬 파일이 이김", "LOCAL VERSION");
         setCfg("server.allowOverride", "true");                                      // 서버(server-first 요청) + 내가 허락 → 서버 파일이 이긴다
         openAndExpectLabel(mc, "정책 server-first + allowOverride: 서버 파일이 이김", "SERVER VERSION");
         setCfg("server.allowOverride", "false");
-        Files.deleteIfExists(ui.resolve("shoptest.xml"));
+        Files.deleteIfExists(ui.resolve("shoptest.uiml"));
 
         // 권한 레벨: 관리자 권한을 잃으면(/deop) 발행은 거부된다. ops.json 은 끝에 원래대로 되돌린다(같은 개발용 실행 폴더).
         Path ops = ClientSync.baseDir().getParent().getParent().resolve("ops.json");
         String opsBackup = Files.exists(ops) ? Files.readString(ops) : null;
         try {
-            Files.writeString(ui.resolve("shoptest2.xml"), String.format(SHOPTEST, "NO PERMISSION"));
-            Path cached2 = ClientSync.cacheFiles().resolve("shoptest2.xml");
+            Files.writeString(ui.resolve("shoptest2.uiml"), String.format(SHOPTEST, "NO PERMISSION"));
+            Path cached2 = ClientSync.cacheFiles().resolve("shoptest2.uiml");
             Files.deleteIfExists(cached2);
             main(() -> { mc.getConnection().sendCommand("deop Dev"); return null; });
             sleep(1000);
@@ -221,7 +221,7 @@ final class ServerSelfTest {
             check("관리자(레벨 4) 권한이 없으면 발행 거부", !Files.exists(cached2));
         } finally {
             if (opsBackup != null) Files.writeString(ops, opsBackup);
-            Files.deleteIfExists(ui.resolve("shoptest2.xml"));
+            Files.deleteIfExists(ui.resolve("shoptest2.uiml"));
         }
     }
 

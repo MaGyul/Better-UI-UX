@@ -23,7 +23,7 @@ public final class Bundle {
     private Bundle() {}
 
     /** 번들에 넣을 수 있는 파일 형식. */
-    public static final Set<String> ALLOWED_EXTENSIONS = Set.of("xml", "uicss", "png", "jpg", "jpeg", "gif", "mp4", "m4v", "mov", "js");
+    public static final Set<String> ALLOWED_EXTENSIONS = Set.of("uiml", "uicss", "uijs", "png", "jpg", "jpeg", "gif", "mp4", "m4v", "mov");
 
     // ---- 경로 ----
 

@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
 /**
  * XML 로 정의한 HUD 를 게임 화면(인게임)에 그린다. 입력은 받지 않는 읽기 전용 화면이라 마우스/키 처리가 없다.
  *
- * <p>설정({@code config.toml}): {@code [hud] ids = "hud_demo,my_hud"} — 켤 문서 id 들({@code config/better-uiux/ui/<id>.xml} 또는 기본 제공).
+ * <p>설정({@code config.toml}): {@code [hud] ids = "hud_demo,my_hud"} — 켤 문서 id 들({@code config/better-uiux/ui/<id>.uiml} 또는 기본 제공).
  * 값은 {@link DataSources} 의 {@code {player.health}} 같은 바인딩으로 채우고, 파일을 고치면 바로 다시 불러온다(핫리로드).
  * 로더(Fabric/NeoForge)가 자기 HUD 훅에서 {@link #render} 를 부른다.
  */

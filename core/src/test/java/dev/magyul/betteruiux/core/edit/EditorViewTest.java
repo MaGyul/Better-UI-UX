@@ -40,7 +40,7 @@ class EditorViewTest {
 
         @Override public void save(String text) throws IOException { }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
 
         @Override public void textInput(boolean active, int x, int y, int w, int h) {
             textInputCalls.add(active ? "on@" + x + "," + y + " " + w + "x" + h : "off");

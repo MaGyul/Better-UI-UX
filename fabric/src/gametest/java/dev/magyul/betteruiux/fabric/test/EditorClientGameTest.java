@@ -134,8 +134,8 @@ public class EditorClientGameTest implements FabricClientGameTest {
      * 변경 없이 닫으면 아무 파일도 남지 않는다. 고친 뒤 Ctrl+S 를 하면 그때 파일이 생긴다.
      */
     private void blankEditorAndLazyNewFile(ClientGameTestContext ctx) {
-        Path newFile = base.resolve("ui/new_1.xml");
-        check(!Files.exists(newFile), "시작할 때 new_1.xml 이 없어야 한다");
+        Path newFile = base.resolve("ui/new_1.uiml");
+        check(!Files.exists(newFile), "시작할 때 new_1.uiml 이 없어야 한다");
 
         ctx.runOnClient(mc -> dev.magyul.betteruiux.mc26.UiApi.editor());
         ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen sc && sc.uiId().isEmpty() && sc.editor() != null);
@@ -152,7 +152,7 @@ public class EditorClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(3);
         ctx.takeScreenshot("6c-new-unsaved");
         check(!Files.exists(newFile), "새 화면은 저장하기 전에는 파일이 없어야 한다");
-        check(find(ctx, "new_1.xml (새 파일 - 저장 전)") != null, "제목에 저장 전 표시가 있어야 한다");
+        check(find(ctx, "new_1.uiml (새 파일 - 저장 전)") != null, "제목에 저장 전 표시가 있어야 한다");
         check(!editor(ctx, EditorController::isDirty), "고치지 않았으면 변경 없음");
         ctx.getInput().pressKey(KEY_ESCAPE);                                   // 변경 없이 닫기: 묻지 않고 닫힌다
         ctx.waitFor(mc -> !(mc.gui.screen() instanceof UiScreen));
@@ -174,8 +174,8 @@ public class EditorClientGameTest implements FabricClientGameTest {
         ctx.waitTicks(3);
         ctx.takeScreenshot("6d-new-saved");
         check(Files.exists(newFile), "Ctrl+S 를 하면 파일이 생겨야 한다");
-        check(read("ui/new_1.xml").contains("<label"), "저장된 파일에 추가한 요소가 있어야 한다: " + read("ui/new_1.xml"));
-        check(find(ctx, "new_1.xml (새 파일 - 저장 전)") == null && find(ctx, "new_1.xml") != null, "저장 뒤에는 저장 전 표시가 사라진다");
+        check(read("ui/new_1.uiml").contains("<label"), "저장된 파일에 추가한 요소가 있어야 한다: " + read("ui/new_1.uiml"));
+        check(find(ctx, "new_1.uiml (새 파일 - 저장 전)") == null && find(ctx, "new_1.uiml") != null, "저장 뒤에는 저장 전 표시가 사라진다");
         for (int i = 0; i < 3 && ctx.computeOnClient(mc -> mc.gui.screen() instanceof UiScreen); i++) {   // 선택이 있으면 첫 Esc 는 선택만 푼다
             ctx.getInput().pressKey(KEY_ESCAPE);
             ctx.waitTicks(3);
@@ -211,16 +211,16 @@ public class EditorClientGameTest implements FabricClientGameTest {
             Files.createDirectories(base.resolve("ui"));
             Files.createDirectories(base.resolve("autosave"));
             Files.writeString(base.resolve("config.toml"), "[editor]\nenabled = true\n");
-            Files.writeString(base.resolve("ui/gt_ext.xml"),
+            Files.writeString(base.resolve("ui/gt_ext.uiml"),
                     "<screen>\n  <link rel=\"style\" href=\"gt_ext.uicss\"/>\n  <panel id=\"box\" class=\"card\" anchor=\"center\" width=\"160\" height=\"70\">\n"
                             + "    <label text=\"external style\"/>\n  </panel>\n</screen>\n");
             Files.writeString(base.resolve("ui/gt_ext.uicss"), ".card { padding: 8; background: #181A24E0; }\n");
-            Files.writeString(base.resolve("ui/gt_kf.xml"),
+            Files.writeString(base.resolve("ui/gt_kf.uiml"),
                     "<screen>\n  <style>\n    .p { animation: pulse 1s infinite; }\n    @keyframes pulse {\n      from { opacity: 0; }\n      to { opacity: 1; }\n    }\n  </style>\n"
                             + "  <panel id=\"box\" class=\"p\" anchor=\"center\" width=\"120\" height=\"50\" background=\"#181A24E0\"/>\n</screen>\n");
-            Files.writeString(base.resolve("ui/gt_other.xml"), "<screen>\n  <label text=\"other\"/>\n</screen>\n");
-            Files.writeString(base.resolve("ui/gt_auto.xml"), "<screen>\n  <label text=\"saved\"/>\n</screen>\n");
-            Files.writeString(base.resolve("autosave/gt_auto.xml"), "<screen>\n  <label text=\"recovered\"/>\n</screen>\n");
+            Files.writeString(base.resolve("ui/gt_other.uiml"), "<screen>\n  <label text=\"other\"/>\n</screen>\n");
+            Files.writeString(base.resolve("ui/gt_auto.uiml"), "<screen>\n  <label text=\"saved\"/>\n</screen>\n");
+            Files.writeString(base.resolve("autosave/gt_auto.uiml"), "<screen>\n  <label text=\"recovered\"/>\n</screen>\n");
         } catch (IOException e) {
             throw new AssertionError("테스트 파일을 만들지 못했다: " + e, e);
         }

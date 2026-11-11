@@ -3,6 +3,17 @@
 CSS3 의 게임 UI 에 의미 있는 부분집합. 구현 계획과 진행 상황은 [css3-plan.md](css3-plan.md).
 좌표 단위는 GUI 픽셀이며 `1em = 1rem = 8px`(마인크래프트 글꼴 높이).
 
+## 파일 형식
+
+| 확장자 | 내용 | 위치 |
+|---|---|---|
+| `.uiml` | 화면 레이아웃(UI Markup Language): XML 문법 + HTML 같은 `<style>`/`<link>`/`<script>` | `config/better-uiux/ui/<id>.uiml` (기본 제공은 모드 안의 `assets/better_uiux/ui/`) |
+| `.uicss` | 스타일시트(이 문서) | `<link rel="style" href="x.uicss"/>` 또는 `@import` |
+| `.uijs` | 스크립트(JavaScript) | `<script src="x.uijs"/>`, [scripting.md](scripting.md) |
+
+`.uiml` 은 내용이 XML 이라 IDE 에서 XML 로 연결해 두면 문법 강조를 받을 수 있다(예: IntelliJ 의 Settings › Editor › File Types › XML 에 `*.uiml` 추가).
+서버 동기화 번들은 `uiml uicss uijs` 와 이미지/영상만 허용한다. 예전 `.xml`/`.js` 이름은 더 이상 읽지 않는다.
+
 ## 문법
 
 | 기능 | 지원 |

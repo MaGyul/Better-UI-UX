@@ -28,7 +28,7 @@ class EditorAutosaveTest {
 
         @Override public void save(String text) throws IOException { }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
 
         @Override public void autosave(String text) { auto = text; }
 

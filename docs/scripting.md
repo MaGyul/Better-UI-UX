@@ -25,7 +25,7 @@ Better UI/UX 와 같이 `mods` 폴더에 넣으면 된다. 스크립트가 필�
 
 ```xml
 <screen>
-  <script src="shop.js"/>                 <!-- config/better-uiux/ui/shop.js (없으면 기본 제공 리소스) -->
+  <script src="shop.uijs"/>                 <!-- config/better-uiux/ui/shop.uijs (없으면 기본 제공 리소스) -->
   <slider id="volume" onChange="script:volume"/>
   <button text="Buy" onClick="script:buy"/>
 </screen>

@@ -1,4 +1,4 @@
-/* demo.xml 의 스타일. config/better-uiux/ui/demo.uicss 를 만들면 이 파일을 덮어쓰고, 저장 즉시 화면에 반영된다. */
+/* demo.uiml 의 스타일. config/better-uiux/ui/demo.uicss 를 만들면 이 파일을 덮어쓰고, 저장 즉시 화면에 반영된다. */
 :root {
   --accent: #FFFF55;
   --panel: #202030E0;

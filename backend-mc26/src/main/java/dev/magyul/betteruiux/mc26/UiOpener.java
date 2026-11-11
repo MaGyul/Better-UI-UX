@@ -56,7 +56,7 @@ public final class UiOpener {
             } catch (NoSuchFileException e) {
                 String unsaved = NewDocs.get(userDir, id);        // 에디터에서 새로 만들었지만 아직 저장하지 않은 화면
                 if (unsaved == null) {
-                    say(mc, "UI '" + id + "' 를 찾을 수 없습니다 (config/better-uiux/ui/" + id + ".xml)");
+                    say(mc, "UI '" + id + "' 를 찾을 수 없습니다 (config/better-uiux/ui/" + id + ".uiml)");
                     return;
                 }
                 try {

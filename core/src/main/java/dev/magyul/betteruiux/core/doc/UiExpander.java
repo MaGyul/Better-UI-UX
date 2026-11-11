@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
  * 문서 조립 단계: 레이아웃/스타일 전에 XML 트리를 확장한다.
  * <ul>
  *   <li>{@code <include src="card" title="Hi">...</include>} — 다른 파일을 그 자리에 끼워 넣는다.
- *       {@code src} 는 {@code card} 또는 {@code card.xml}. 나머지 속성은 매개변수가 된다.
+ *       {@code src} 는 {@code card} 또는 {@code card.uiml}. 나머지 속성은 매개변수가 된다.
  *       불러온 파일의 루트가 {@code fragment}/{@code screen} 이면 그 자식들만, 아니면 루트 요소 자체를 넣는다.</li>
  *   <li>{@code <template id="item" text="기본값"> ... </template>} + {@code <use template="item" text="Hi"/>} —
  *       같은 문서 안에서 반복해서 쓰는 조각. template 의 속성(id 제외)은 매개변수 기본값.</li>
@@ -64,7 +64,7 @@ public final class UiExpander {
                 inc.detach();
                 continue;
             }
-            String file = src.endsWith(".xml") ? src : src + ".xml";
+            String file = src.endsWith(".uiml") ? src : src + ".uiml";
             if (stack.contains(file) || stack.size() >= MAX_DEPTH) {
                 warnings.add("include '" + src + "': " + (stack.contains(file) ? "순환 참조" : "너무 깊게 중첩됨"));
                 inc.detach();

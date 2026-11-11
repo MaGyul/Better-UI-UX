@@ -10,11 +10,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
-/** 기본 제공 widgets.xml 데모가 경고 없이 열리고 위젯이 모두 배치되는지. */
+/** 기본 제공 widgets.uiml 데모가 경고 없이 열리고 위젯이 모두 배치되는지. */
 class WidgetsDemoTest {
     @Test
     void bundledWidgetsDemoLoadsWithoutWarnings() throws Exception {
-        Path file = Path.of("../backend-mc26/src/main/resources/assets/better_uiux/ui/widgets.xml");
+        Path file = Path.of("../backend-mc26/src/main/resources/assets/better_uiux/ui/widgets.uiml");
         UiDocument d = UiDocument.parse(Files.readString(file), new FixedMetrics());
         d.layout(480, 270);
         assertEquals(java.util.List.of(), d.warnings());

@@ -97,19 +97,19 @@ class ScriptHostTest {
 
     @Test
     void scriptsInTheDocumentAreLoadedAndInitIsSent() throws Exception {
-        UiDocument d = doc("<script src=\"shop.js\"/><script>var x = 1;</script><label id=\"l\" text=\"a\"/>");
+        UiDocument d = doc("<script src=\"shop.uijs\"/><script>var x = 1;</script><label id=\"l\" text=\"a\"/>");
         ScriptHost h = host(d, CommandPolicy.denyAll());
-        h.loadScripts(name -> name.equals("shop.js") ? "function buy(){}" : null);
-        assertEquals(List.of("shop.js:function buy(){}", "(인라인):var x = 1;"), rt.loaded);
+        h.loadScripts(name -> name.equals("shop.uijs") ? "function buy(){}" : null);
+        assertEquals(List.of("shop.uijs:function buy(){}", "(인라인):var x = 1;"), rt.loaded);
         h.init();
         assertTrue(rt.messages.get(0).contains("\"type\":\"init\""));
     }
 
     @Test
     void missingScriptFilesBecomeWarnings() throws Exception {
-        UiDocument d = doc("<script src=\"nope.js\"/>");
+        UiDocument d = doc("<script src=\"nope.uijs\"/>");
         host(d, CommandPolicy.denyAll()).loadScripts(n -> null);
-        assertTrue(d.warnings().stream().anyMatch(w -> w.contains("nope.js")));
+        assertTrue(d.warnings().stream().anyMatch(w -> w.contains("nope.uijs")));
     }
 
     // ---- 허용 연산 ----
@@ -164,7 +164,7 @@ class ScriptHostTest {
     void appendRejectsScriptsIncludesAndNonScriptEvents() throws Exception {
         UiDocument d = doc("<panel id=\"p\"/>");
         ScriptHost h = host(d, CommandPolicy.denyAll());
-        h.apply("[{\"op\":\"append\",\"target\":\"#p\",\"xml\":\"<script src=\\\"x.js\\\"/>\"},"
+        h.apply("[{\"op\":\"append\",\"target\":\"#p\",\"xml\":\"<script src=\\\"x.uijs\\\"/>\"},"
                 + "{\"op\":\"append\",\"target\":\"#p\",\"xml\":\"<include src=\\\"x\\\"/>\"},"
                 + "{\"op\":\"append\",\"target\":\"#p\",\"xml\":\"<column><button onClick=\\\"close\\\"/></column>\"},"
                 + "{\"op\":\"append\",\"target\":\"#p\",\"xml\":\"<column><button onClick=\\\"script:ok\\\"/></column>\"}]");

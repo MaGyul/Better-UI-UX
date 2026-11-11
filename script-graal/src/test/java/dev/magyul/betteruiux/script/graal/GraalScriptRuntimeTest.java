@@ -35,7 +35,7 @@ class GraalScriptRuntimeTest {
 
     @Test
     void functionsCollectRequestsAsJson() throws Exception {
-        rt.load("t.js", "function hi(ev) { ui.setText('#out', 'hello ' + ev.id); ui.addClass('#out', 'x'); ui.command('say hi'); }");
+        rt.load("t.uijs", "function hi(ev) { ui.setText('#out', 'hello ' + ev.id); ui.addClass('#out', 'x'); ui.command('say hi'); }");
         Object ops = Json.parse(call("hi"));
         assertEquals("[{\"op\":\"setText\",\"target\":\"#out\",\"value\":\"hello b\"},{\"op\":\"addClass\",\"target\":\"#out\",\"name\":\"x\"},"
                 + "{\"op\":\"command\",\"line\":\"say hi\"}]", Json.write(ops));
@@ -44,22 +44,22 @@ class GraalScriptRuntimeTest {
 
     @Test
     void initCallsOnInitWithTheState() throws Exception {
-        rt.load("t.js", "function onInit(state) { ui.setVar('seen', Object.keys(state).join(',')); }");
+        rt.load("t.uijs", "function onInit(state) { ui.setVar('seen', Object.keys(state).join(',')); }");
         String out = rt.call("{\"type\":\"init\",\"state\":{\"a\":{},\"b\":{}}}");
         assertTrue(out.contains("\"value\":\"a,b\""), out);
     }
 
     @Test
     void syntaxAndRuntimeErrorsAreScriptExceptions() throws Exception {
-        assertThrows(ScriptRuntime.ScriptException.class, () -> rt.load("bad.js", "function ("));
-        rt.load("t.js", "function boom() { throw new Error('nope'); }");
+        assertThrows(ScriptRuntime.ScriptException.class, () -> rt.load("bad.uijs", "function ("));
+        rt.load("t.uijs", "function boom() { throw new Error('nope'); }");
         ScriptRuntime.ScriptException e = assertThrows(ScriptRuntime.ScriptException.class, () -> call("boom"));
         assertTrue(e.getMessage().contains("nope"));
     }
 
     @Test
     void scriptsCannotTouchJavaFilesProcessesOrTheEnvironment() throws Exception {
-        rt.load("t.js", String.join("\n",
+        rt.load("t.uijs", String.join("\n",
                 "function tryHost() { Java.type('java.lang.System').exit(1); }",
                 "function tryIo() { return load('/etc/passwd'); }",
                 "function tryRequire() { return require('fs'); }",
@@ -69,13 +69,13 @@ class GraalScriptRuntimeTest {
             assertThrows(ScriptRuntime.ScriptException.class, () -> call(fn), fn);
         }
         // 위의 시도들이 컨텍스트를 망가뜨리지 않았다
-        rt.load("ok.js", "function fine() { ui.setText('#a', 'ok'); }");
+        rt.load("ok.uijs", "function fine() { ui.setText('#a', 'ok'); }");
         assertTrue(call("fine").contains("ok"));
     }
 
     @Test
     void infiniteLoopsAreStoppedAndTheRuntimeKeepsWorking() throws Exception {
-        rt.load("t.js", "function spin() { while (true) {} } function fine() { ui.log('alive'); }");
+        rt.load("t.uijs", "function spin() { while (true) {} } function fine() { ui.log('alive'); }");
         long t0 = System.nanoTime();
         ScriptRuntime.ScriptException e = assertThrows(ScriptRuntime.ScriptException.class, () -> call("spin"));
         assertTrue((System.nanoTime() - t0) / 1_000_000 < 5_000, "한도 안에 끝난다");
@@ -85,7 +85,7 @@ class GraalScriptRuntimeTest {
 
     @Test
     void hugeStringsAreRefused() throws Exception {
-        rt.load("t.js", "function big() { var s = 'x'; for (var i = 0; i < 40; i++) s = s + s; ui.log(s.length); }");
+        rt.load("t.uijs", "function big() { var s = 'x'; for (var i = 0; i < 40; i++) s = s + s; ui.log(s.length); }");
         assertThrows(ScriptRuntime.ScriptException.class, () -> call("big"));
     }
 
@@ -134,8 +134,8 @@ class GraalScriptRuntimeTest {
     void runtimesShareOneEngineButNotTheirState() throws Exception {
         GraalScriptRuntime other = new GraalScriptRuntime();
         try {
-            rt.load("a.js", "var secret = 'A'; function who() { ui.log(typeof globalThis.secret + ':' + secret); }");
-            other.load("b.js", "function who() { ui.log(typeof globalThis.secret); }");
+            rt.load("a.uijs", "var secret = 'A'; function who() { ui.log(typeof globalThis.secret + ':' + secret); }");
+            other.load("b.uijs", "function who() { ui.log(typeof globalThis.secret); }");
             assertTrue(call("who").contains("string:A"));
             String b = other.call("{\"type\":\"call\",\"fn\":\"who\",\"event\":{},\"state\":{}}");
             assertTrue(b.contains("undefined"), "다른 런타임의 전역은 보이지 않는다: " + b);

@@ -106,16 +106,16 @@ class UiExpanderTest {
 
     @Test
     void includeSplicesFragmentChildrenAndPassesParameters() throws Exception {
-        write("card.xml", """
+        write("card.uiml", """
             <fragment>
               <link rel="style" href="card.uicss"/>
               <panel class="card"><label text="${title:untitled}"/><slot/></panel>
             </fragment>""");
         write("card.uicss", ".card { background: #112233FF }");
-        write("main.xml", """
+        write("main.uiml", """
             <screen>
               <include src="card" title="Hello"><label id="extra" text="x"/></include>
-              <include src="card.xml"/>
+              <include src="card.uiml"/>
             </screen>""");
         UiDocument d = load("main");
         List<UiElement> cards = d.queryAll(".card");
@@ -129,12 +129,12 @@ class UiExpanderTest {
 
     @Test
     void includeOfNonFragmentRootInsertsRootItselfAndTemplatesSpanFiles() throws Exception {
-        write("parts.xml", """
+        write("parts.uiml", """
             <fragment>
               <template id="btn"><button text="${t}"/></template>
             </fragment>""");
-        write("one.xml", "<label id='one' text='1'/>");
-        write("main.xml", """
+        write("one.uiml", "<label id='one' text='1'/>");
+        write("main.uiml", """
             <screen>
               <include src="parts"/>
               <include src="one"/>
@@ -147,10 +147,10 @@ class UiExpanderTest {
 
     @Test
     void includeProblemsAreWarningsNotErrors() throws Exception {
-        write("a.xml", "<fragment><include src='b'/><label text='a'/></fragment>");
-        write("b.xml", "<fragment><include src='a'/><label text='b'/></fragment>");
-        write("broken.xml", "<fragment>\n<column>\n</fragment>");
-        write("main.xml", """
+        write("a.uiml", "<fragment><include src='b'/><label text='a'/></fragment>");
+        write("b.uiml", "<fragment><include src='a'/><label text='b'/></fragment>");
+        write("broken.uiml", "<fragment>\n<column>\n</fragment>");
+        write("main.uiml", """
             <screen>
               <include src="a"/>
               <include src="missing"/>
@@ -173,11 +173,11 @@ class UiExpanderTest {
 
     @Test
     void expandedDocumentIsLaidOutAndHotReloadsThroughLoader() throws Exception {
-        write("row.xml", "<fragment><button id='b' text='${t}' width='40' height='10'/></fragment>");
-        write("main.xml", "<screen><column><include src='row' t='A'/><include src='row' t='B'/></column></screen>");
+        write("row.uiml", "<fragment><button id='b' text='${t}' width='40' height='10'/></fragment>");
+        write("main.uiml", "<screen><column><include src='row' t='A'/><include src='row' t='B'/></column></screen>");
         UiDocument d = load("main");
         assertEquals(10, d.queryAll("button").get(1).y() - d.queryAll("button").get(0).y(), "두 버튼이 세로로 배치");
-        write("row.xml", "<fragment><button text='${t}!' width='40' height='20'/></fragment>");
+        write("row.uiml", "<fragment><button text='${t}!' width='40' height='20'/></fragment>");
         UiDocument again = load("main");
         assertEquals("A!", again.queryAll("button").get(0).attr("text"));
         assertEquals(20, again.queryAll("button").get(1).y() - again.queryAll("button").get(0).y());

@@ -19,7 +19,7 @@ class EditorResourcePickerTest {
 
         @Override public void save(String text) throws IOException { }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
 
         @Override public List<String> suggestions(String key) {
             return key.equals("src") ? List.of("file:a.png", "file:spin.gif", "file:clip.mp4") : List.of();

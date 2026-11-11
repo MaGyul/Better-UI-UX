@@ -101,4 +101,20 @@ class PropValuesTest {
         assertTrue(PropValues.suggest("grid-template-columns").contains("repeat(3, 1fr)"));
         assertTrue(PropValues.suggest("flex").contains("1"));
     }
+
+    @Test
+    void contentCursorFamilyAndDecorationAreChecked() {
+        for (String[] ok : new String[][] {{"content", "\"> \""}, {"content", "attr(title)"}, {"content", "\"a\" attr(x) \"b\""}, {"content", "none"},
+                {"cursor", "pointer"}, {"cursor", "not-allowed"}, {"font-family", "uniform"}, {"font-family", "\"Arial\", sans-serif"},
+                {"font-family", "mymod:fancy/title"}, {"font-family", "default"}, {"text-decoration", "underline line-through"}, {"text-decoration", "none"}}) {
+            assertNull(PropValues.check(ok[0], ok[1]), ok[0] + ": " + ok[1]);
+        }
+        assertNotNull(PropValues.check("content", "hello"));
+        assertNotNull(PropValues.check("content", "\"a\" b"));
+        assertNotNull(PropValues.check("cursor", "hand"));
+        assertTrue(PropValues.check("font-family", "Arial").contains("글꼴"));
+        assertNotNull(PropValues.check("text-decoration", "underlined"));
+        assertTrue(PropValues.suggest("cursor").contains("pointer"));
+        assertTrue(PropValues.suggest("font-family").contains("uniform"));
+    }
 }

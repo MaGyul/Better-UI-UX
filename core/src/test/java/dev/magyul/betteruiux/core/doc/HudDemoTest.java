@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 /** 기본 제공 HUD 데모가 데이터 소스 바인딩으로 채워져 그려지는지. */
 class HudDemoTest {
     private static UiDocument hud(int health) throws Exception {
-        UiDocument d = UiDocument.parse(Files.readString(Path.of("../backend-mc26/src/main/resources/assets/better_uiux/ui/hud_demo.xml")), new FixedMetrics());
+        UiDocument d = UiDocument.parse(Files.readString(Path.of("../backend-mc26/src/main/resources/assets/better_uiux/ui/hud_demo.uiml")), new FixedMetrics());
         d.setClock(() -> 0);
         d.set("fps", 60);
         d.set("player.health", health);

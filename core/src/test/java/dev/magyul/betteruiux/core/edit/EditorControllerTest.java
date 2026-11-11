@@ -46,7 +46,7 @@ class EditorControllerTest {
             saved.add(text);
         }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
     }
 
     private FakeHost host;

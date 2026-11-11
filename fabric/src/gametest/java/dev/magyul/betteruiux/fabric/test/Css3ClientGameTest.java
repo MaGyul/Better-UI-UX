@@ -119,7 +119,7 @@ public class Css3ClientGameTest implements FabricClientGameTest {
         try {
             Files.createDirectories(base.resolve("ui"));
             Files.writeString(base.resolve("config.toml"), "[editor]\nenabled = true\n");
-            Files.writeString(base.resolve("ui/gt_css.xml"), """
+            Files.writeString(base.resolve("ui/gt_css.uiml"), """
                     <screen>
                       <style>
                         #deco { width: 120; height: 40; background: linear-gradient(#2255AA, #112244);

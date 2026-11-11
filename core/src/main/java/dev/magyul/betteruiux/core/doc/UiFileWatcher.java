@@ -55,7 +55,7 @@ public final class UiFileWatcher implements AutoCloseable {
     private static boolean relevant(Object ctx) {
         if (!(ctx instanceof Path p)) return true;
         String n = p.getFileName().toString().toLowerCase();
-        return n.endsWith(".xml") || n.endsWith(".uicss");
+        return n.endsWith(".uiml") || n.endsWith(".uicss") || n.endsWith(".uijs");
     }
 
     /**

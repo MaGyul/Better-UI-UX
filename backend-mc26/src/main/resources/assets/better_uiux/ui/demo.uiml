@@ -25,5 +25,5 @@
     </column>
   </panel>
 
-  <label class="muted" anchor="bottom-right" margin="4" text="demo.xml" />
+  <label class="muted" anchor="bottom-right" margin="4" text="demo.uiml" />
 </screen>

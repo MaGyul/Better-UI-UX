@@ -7,14 +7,14 @@
 
 ## 서버: 화면 배포
 
-`config/better-uiux/server-ui/` 에 `*.xml`, `*.uicss`, 이미지 등을 둔다(서버 시작 시 읽음). 이 폴더가 **번들**이다.
+`config/better-uiux/server-ui/` 에 `*.uiml`, `*.uicss`, 이미지 등을 둔다(서버 시작 시 읽음). 이 폴더가 **번들**이다.
 번들은 매니페스트(경로·sha256·크기)로 관리되고, 클라이언트는 **바뀐 파일만** 받아 `config/better-uiux/server-cache/<서버>/files/` 에 저장한다.
 허용 확장자: xml, uicss, png, jpg, jpeg, gif, mp4, m4v, mov, js. 경로에 `..`, 절대경로, 역슬래시는 불가.
 
 ## 서버: 화면 열기와 값
 
 ```
-/serverui open <플레이어> <화면id>      # 화면 id = server-ui/<id>.xml (권한 레벨 2)
+/serverui open <플레이어> <화면id>      # 화면 id = server-ui/<id>.uiml (권한 레벨 2)
 /serverui close <플레이어> <화면id>
 /serverui state <플레이어> <키> <값>    # 문서에서 {server.<키>} 로 읽는다
 ```
@@ -66,7 +66,7 @@ ServerSync.core().registerAction("shop:buy",
 
 ## server-first / local-first 정책
 
-서버 화면의 id 와 같은 로컬 파일(`config/better-uiux/ui/<id>.xml`)이 있을 때 어느 쪽을 열지 정한다.
+서버 화면의 id 와 같은 로컬 파일(`config/better-uiux/ui/<id>.uiml`)이 있을 때 어느 쪽을 열지 정한다.
 
 - **기본: local-first** — 내 파일이 이긴다. 플레이어가 서버 화면을 자기 취향대로 꾸밀 수 있다(서버 값과 서버 동작은 그대로 동작).
 - 서버는 `config.toml` 의 `[server] policy = "server-first"`(기본) 또는 `"local-first"` 로 자기 의도를 알린다.
@@ -87,7 +87,7 @@ ServerSync.core().registerAction("shop:buy",
 ## 에디터에서 서버로 발행
 
 - 에디터 도구 모음의 **Pub** 버튼(저장 후 발행) 또는 클라이언트 명령 `/uiux publish <id>`. 서버에 모드가 있어 서버 기능이 켜져 있을 때만 쓸 수 있다.
-- 올라가는 파일: `ui/<id>.xml` 과 그 문서가 `<include src>` / `<link href>` 로 쓰는 로컬 파일(최대 64개, 합계 2MB). 이미지/영상은 올리지 않는다(https 주소 사용).
+- 올라가는 파일: `ui/<id>.uiml` 과 그 문서가 `<include src>` / `<link href>` 로 쓰는 로컬 파일(최대 64개, 합계 2MB). 이미지/영상은 올리지 않는다(https 주소 사용).
 - **권한**: 권한 노드 `better_uiux:publish`(기본 권한 레벨 4). 권한 플러그인(예: LuckPerms)이 있으면 그 노드로 개별 허용/거부할 수 있고, 값을 주지 않으면 기본 레벨로 판단한다. 시작할 때와 저장할 때 모두 서버가 확인하고, 거부는 위반으로 센다.
 - 서버는 파일 경로/해시/크기를 다시 검증하고 `server-ui/` 에 원자적으로 저장한 뒤 번들을 갱신해, 접속 중인 모든 클라이언트가 바뀐 파일만 새로 받는다. 서버 로그에 발행자와 파일 목록이 남는다.
 

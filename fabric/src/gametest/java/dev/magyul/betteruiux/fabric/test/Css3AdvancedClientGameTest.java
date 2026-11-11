@@ -154,7 +154,7 @@ public class Css3AdvancedClientGameTest implements FabricClientGameTest {
         for (int radius : new int[] {13, 17, 19, 23, 29}) {                          // 처음 보는 조합 5개를 하나씩 열어 본다
             String id = "gt_adv_hitch_" + radius;
             try {
-                Files.writeString(base().resolve("ui/" + id + ".xml"),
+                Files.writeString(base().resolve("ui/" + id + ".uiml"),
                         "<screen><style>#a { width: 60; height: 40; background: linear-gradient(#FF0000, #0000FF); border-radius: " + radius
                                 + "; border: 3 solid #FFFFFF; box-shadow: 0 2 " + (radius % 7 + 3) + " #000000AA; }</style><panel id='a' anchor='center'/></screen>");
             } catch (IOException e) {
@@ -179,7 +179,7 @@ public class Css3AdvancedClientGameTest implements FabricClientGameTest {
         try {
             Files.createDirectories(base.resolve("ui"));
             Files.writeString(base.resolve("config.toml"), "[editor]\nenabled = true\n");
-            Files.writeString(base.resolve("ui/gt_adv_widgets.xml"), """
+            Files.writeString(base.resolve("ui/gt_adv_widgets.uiml"), """
                     <screen>
                       <style>
                         checkbox, button { text-transform: uppercase; font-weight: bold; letter-spacing: 1; }
@@ -190,7 +190,7 @@ public class Css3AdvancedClientGameTest implements FabricClientGameTest {
                       </column>
                     </screen>
                     """);
-            Files.writeString(base.resolve("ui/gt_adv_media.xml"), """
+            Files.writeString(base.resolve("ui/gt_adv_media.uiml"), """
                     <screen>
                       <style>
                         #m { width: 60; height: 30; background: #00AA00; }
@@ -199,7 +199,7 @@ public class Css3AdvancedClientGameTest implements FabricClientGameTest {
                       <panel anchor="top-left" x="10" y="10"><panel id="m"/></panel>
                     </screen>
                     """);
-            Files.writeString(base.resolve("ui/gt_adv_editor.xml"), """
+            Files.writeString(base.resolve("ui/gt_adv_editor.uiml"), """
                     <screen>
                       <style>
                         .card { padding: 8; background: #181A24E0; }
@@ -224,7 +224,7 @@ public class Css3AdvancedClientGameTest implements FabricClientGameTest {
                 + "<grid columns=\"24\" anchor=\"top-left\" x=\"4\" y=\"4\">");
         for (int i = 0; i < 240; i++) grid.append("<panel class=\"c\"/>");
         grid.append("</grid></screen>");
-        Files.writeString(base.resolve("ui/" + name + ".xml"), grid.toString());
+        Files.writeString(base.resolve("ui/" + name + ".uiml"), grid.toString());
     }
 
     private void setGuiScale(ClientGameTestContext ctx, int scale) {

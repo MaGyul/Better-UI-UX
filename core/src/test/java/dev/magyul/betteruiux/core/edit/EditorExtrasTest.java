@@ -29,7 +29,7 @@ class EditorExtrasTest {
             saves++;
         }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
 
         @Override public String diskText() { return disk; }
     }

@@ -1,6 +1,6 @@
 # 내장 태그 (입력 / 레이아웃)
 
-`/uiux open widgets` 로 모든 태그가 들어 있는 데모를 볼 수 있다(`assets/better_uiux/ui/widgets.xml`).
+`/uiux open widgets` 로 모든 태그가 들어 있는 데모를 볼 수 있다(`assets/better_uiux/ui/widgets.uiml`).
 입력 위젯의 값은 XML 속성에 그대로 저장되므로 Java 에서 `doc.query("#volume").attr("value")` 로 읽고,
 `setAttr` 로 바꿀 수 있다. 사용자가 값을 바꾸면 `onChange` 액션(`UiActions` 에 등록한 id)과
 `UiEvent.Type.CHANGE` 이벤트가 발생한다.

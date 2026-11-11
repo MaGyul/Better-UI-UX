@@ -232,13 +232,16 @@ final class StyleText {
         rows.add(new PropRow(label, headerKey, "", false, Kind.HEADER, List.of()));
         for (Decl d : r.decls()) rows.add(new PropRow(d.prop(), declPrefix + d.prop(), text.substring(d.valueStart(), d.valueEnd()), true));
         rows.add(new PropRow("+ 추가", addKey, "", true));
+        if (addKey.startsWith(ADD_KEY) || addKey.startsWith(X_ADD_KEY)) {            // CSS 중첩: 이 규칙 안에 새 규칙(&:hover, .title …)을 만든다
+            rows.add(new PropRow("+ 중첩", (addKey.startsWith(X_ADD_KEY) ? X_NEST_KEY + addKey.substring(X_ADD_KEY.length()) : NEST_KEY + addKey.substring(ADD_KEY.length())), "", true));
+        }
     }
 
     static final String NEW_KEY = "css*:";
 
     // ---- 외부 스타일시트({@code <link href="x.uicss"/>}) ----
 
-    static final String X_KEY = "xcss:", X_ADD_KEY = "xcss+:", X_NEW_KEY = "xcss*:";
+    static final String X_KEY = "xcss:", X_ADD_KEY = "xcss+:", X_NEW_KEY = "xcss*:", X_NEST_KEY = "xcss&:";
 
     /** 문서가 불러오는 외부 스타일시트 하나: 파일 이름과 그 내용. */
     record Sheet(String href, String text) {}
@@ -279,7 +282,7 @@ final class StyleText {
             String sheet = keyframeSheet(key);
             return INLINE_SHEET.equals(sheet) ? null : sheet;
         }
-        for (String p : new String[] {X_KEY, X_ADD_KEY, X_NEW_KEY}) {
+        for (String p : new String[] {X_KEY, X_ADD_KEY, X_NEW_KEY, X_NEST_KEY}) {
             if (key.startsWith(p)) {
                 int c = key.indexOf(':', p.length());
                 return c < 0 ? null : key.substring(p.length(), c);
@@ -293,9 +296,10 @@ final class StyleText {
         String href = externalHref(key);
         if (href == null) throw new IllegalArgumentException("알 수 없는 키: " + key);
         if (isKeyframeKey(key)) return applyKeyframe(css, cssKeyframes(css), key, raw);
-        String prefix = key.startsWith(X_KEY) ? X_KEY : key.startsWith(X_ADD_KEY) ? X_ADD_KEY : X_NEW_KEY;
+        String prefix = key.startsWith(X_KEY) ? X_KEY : key.startsWith(X_ADD_KEY) ? X_ADD_KEY : key.startsWith(X_NEST_KEY) ? X_NEST_KEY : X_NEW_KEY;
         String rest = key.substring(prefix.length() + href.length() + 1);
         List<Rule> rules = cssRules(css);
+        if (prefix.equals(X_NEST_KEY)) return addNested(css, rules, Integer.parseInt(rest), raw);
         if (prefix.equals(X_NEW_KEY)) {
             if (raw == null || raw.isBlank()) return css;
             String[] d = parseDecl(raw);
@@ -508,8 +512,46 @@ final class StyleText {
         }
     }
 
+    static final String NEST_KEY = "css&:";
+
+    /**
+     * 규칙({@code ruleNo})의 본문 끝에 중첩 규칙을 더한다. {@code raw} 는 선택자({@code &:hover}, {@code .title}, {@code > .x}) 또는
+     * {@code 선택자 { 선언; }} 전체. 선택자만 주면 빈 블록({@code &:hover { }})을 만든다(선언은 새로 나온 규칙의 "+ 추가" 로 채운다).
+     */
+    static String addNested(String t, List<Rule> rules, int ruleNo, String raw) {
+        if (raw == null || raw.isBlank()) return t;
+        if (ruleNo < 0 || ruleNo >= rules.size()) throw new IllegalArgumentException("규칙이 없습니다: " + ruleNo);
+        Rule r = rules.get(ruleNo);
+        String text = raw.trim();
+        int brace = text.indexOf('{');
+        String selector = (brace < 0 ? text : text.substring(0, brace)).trim();
+        if (selector.isEmpty() || selector.contains(";") || selector.contains("}")) throw new IllegalArgumentException("중첩 규칙의 선택자를 써 주세요(예: &:hover, .title, > .icon)");
+        try {
+            for (String one : Selector.splitList(dev.magyul.betteruiux.core.style.NestedCss.combine(r.selector(), selector))) Selector.parse(one.trim());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("선택자를 읽을 수 없어요: " + selector);
+        }
+        String block = brace < 0 ? selector + " { }" : text.endsWith("}") ? text : text + " }";
+        String body = t.substring(r.bodyStart(), r.bodyEnd());
+        int last = body.length();
+        while (last > 0 && Character.isWhitespace(body.charAt(last - 1))) last--;
+        int at = r.bodyStart() + last;
+        boolean needSemi = last > 0 && body.charAt(last - 1) != ';' && body.charAt(last - 1) != '}';
+        String insert;
+        if (body.contains("\n")) {
+            String indent = !r.decls().isEmpty() ? indentOf(t, r.decls().get(0).declStart()) : "  " + indentOf(t, r.bodyStart());
+            insert = (needSemi ? ";" : "") + "\n" + indent + block;
+            if (!t.substring(at, r.bodyEnd()).contains("\n")) insert += "\n" + indentOf(t, Math.max(0, t.lastIndexOf('\n', r.bodyStart()) + 1));
+        } else {
+            insert = (needSemi ? ";" : "") + " " + block;
+            if (last == 0) at = r.bodyStart();
+        }
+        return t.substring(0, at) + insert + t.substring(at);
+    }
+
     static String apply(XmlSource src, String key, String raw) {
         if (isKeyframeKey(key)) return applyKeyframe(src.text(), keyframes(src), key, raw);
+        if (key.startsWith(NEST_KEY)) return addNested(src.text(), rules(src), Integer.parseInt(key.substring(NEST_KEY.length())), raw);
         if (key.startsWith(NEW_KEY)) {
             if (raw == null || raw.isBlank()) return src.text();
             return addRule(src, key.substring(NEW_KEY.length()), raw);

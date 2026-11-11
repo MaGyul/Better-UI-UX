@@ -2034,7 +2034,7 @@ public final class EditorController {
             applyExternalEdit(sheetHref, key, raw);
             return;
         }
-        if (key.startsWith(StyleText.KEY) || key.startsWith(StyleText.ADD_KEY) || key.startsWith(StyleText.NEW_KEY) || StyleText.isKeyframeKey(key)) {       // <style> 규칙의 선언 편집
+        if (key.startsWith(StyleText.KEY) || key.startsWith(StyleText.ADD_KEY) || key.startsWith(StyleText.NEW_KEY) || key.startsWith(StyleText.NEST_KEY) || StyleText.isKeyframeKey(key)) {       // <style> 규칙의 선언 편집
             try {
                 String next = StyleText.apply(session.source(), key, raw);
                 int before = session.source().all().size();

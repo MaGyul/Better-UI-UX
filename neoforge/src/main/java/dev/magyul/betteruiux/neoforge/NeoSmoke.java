@@ -44,7 +44,7 @@ final class NeoSmoke {
 
     private static void write(Path baseDir) throws IOException {
         Files.createDirectories(baseDir.resolve("ui"));
-        Files.writeString(baseDir.resolve("ui/smoke_css.xml"),
+        Files.writeString(baseDir.resolve("ui/smoke_css.uiml"),
                 "<screen><style>#d { width: 80; height: 30; background: linear-gradient(#2255AA, #112244); border-radius: 6;"
                         + " border: 1 solid #FFFFFF; box-shadow: 0 2 4 #000000AA; } #d::before { content: \"* \"; }"
                         + " .row { flex-wrap: wrap; width: 60; } .row > panel { width: 25; height: 8; background: #888888; }</style>"

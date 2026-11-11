@@ -23,7 +23,7 @@ class UiDocumentLoaderTest {
     @Test
     void loadsLinkedAndInlineStylesInDocumentOrder() throws Exception {
         Files.writeString(dir.resolve("t.uicss"), ".a { color: red }");
-        Files.writeString(dir.resolve("t.xml"), """
+        Files.writeString(dir.resolve("t.uiml"), """
             <screen>
               <link rel="style" href="t.uicss"/>
               <style>.a { color: blue }</style>
@@ -38,21 +38,21 @@ class UiDocumentLoaderTest {
 
     @Test
     void missingStylesheetIsAWarningNotAnError() throws Exception {
-        Files.writeString(dir.resolve("t.xml"), "<screen><link href='nope.uicss'/><label text='a'/></screen>");
+        Files.writeString(dir.resolve("t.uiml"), "<screen><link href='nope.uicss'/><label text='a'/></screen>");
         UiDocument d = UiDocumentLoader.load(dir, "t", new FixedMetrics());
         assertEquals(1, d.warnings().size());
     }
 
     @Test
     void cssWarningsAreCollected() throws Exception {
-        Files.writeString(dir.resolve("t.xml"), "<screen><style>a:bogus { color: red }</style></screen>");
+        Files.writeString(dir.resolve("t.uiml"), "<screen><style>a:bogus { color: red }</style></screen>");
         assertEquals(1, UiDocumentLoader.load(dir, "t", new FixedMetrics()).warnings().size());
     }
 
     @Test
     void missingXmlAndBrokenXml() throws Exception {
         assertThrows(NoSuchFileException.class, () -> UiDocumentLoader.load(dir, "nothing", new FixedMetrics()));
-        Files.writeString(dir.resolve("bad.xml"), "<screen>\n<column>\n</screen>");
+        Files.writeString(dir.resolve("bad.uiml"), "<screen>\n<column>\n</screen>");
         UiParseException e = assertThrows(UiParseException.class,
                 () -> UiDocumentLoader.load(dir, "bad", new FixedMetrics()));
         assertTrue(e.line() >= 1);
@@ -60,11 +60,11 @@ class UiDocumentLoaderTest {
 
     @Test
     void userFileOverridesAndPathTraversalIsRejected() throws IOException {
-        Files.writeString(dir.resolve("a.xml"), "<screen/>");
+        Files.writeString(dir.resolve("a.uiml"), "<screen/>");
         assertTrue(UiSources.load(dir, "a").isPresent());
         assertFalse(UiSources.load(dir, "../a").isPresent());
         assertFalse(UiSources.load(dir, "sub/a").isPresent());
-        assertFalse(UiSources.loadFile(dir, "..\\a.xml").isPresent());
+        assertFalse(UiSources.loadFile(dir, "..\\a.uiml").isPresent());
     }
 
     @Test
@@ -103,7 +103,7 @@ class UiDocumentLoaderTest {
     void watcherReportsChangeOnlyAfterQuietPeriod() throws Exception {
         try (UiFileWatcher w = UiFileWatcher.start(dir)) {
             assertFalse(w.pollChanged(0));
-            Files.writeString(dir.resolve("x.xml"), "<screen/>");
+            Files.writeString(dir.resolve("x.uiml"), "<screen/>");
             Files.writeString(dir.resolve("ignored.txt"), "no");
             boolean got = false;
             long end = System.currentTimeMillis() + 5000;
@@ -124,7 +124,7 @@ class UiDocumentLoaderTest {
         d.layout(100, 100);
         assertEquals("red", d.findById("x").style.get("color"), "텍스트로 만들어도 link 스타일시트를 읽는다");
 
-        Path f = dir.resolve("sub").resolve("out.xml");
+        Path f = dir.resolve("sub").resolve("out.uiml");
         AtomicFiles.write(f, "<screen/>");
         assertEquals("<screen/>", Files.readString(f));
         AtomicFiles.write(f, "<screen><label/></screen>");

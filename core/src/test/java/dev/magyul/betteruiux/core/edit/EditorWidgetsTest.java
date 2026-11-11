@@ -21,7 +21,7 @@ class EditorWidgetsTest {
 
         @Override public void save(String text) throws IOException { }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
     }
 
     private static EditorController editor(String xml) throws Exception {
@@ -140,7 +140,7 @@ class EditorWidgetsTest {
 
         @Override public void save(String text) throws IOException { }
 
-        @Override public String title() { return "t.xml"; }
+        @Override public String title() { return "t.uiml"; }
 
         final java.util.List<Boolean> textInput = new java.util.ArrayList<>();
 

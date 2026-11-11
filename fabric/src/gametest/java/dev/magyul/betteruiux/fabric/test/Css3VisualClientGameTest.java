@@ -145,6 +145,8 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
         selectById(ctx, "card");
         ctx.waitTicks(2);
         LayoutBox card = box(ctx, "card");
+        ctx.getInput().setCursorPos(2, 2);                              // 앞 시나리오에서 남은 마우스 위치가 카드 위면 :hover 가 켜진다
+        ctx.waitTicks(3);
         check(hasFill(paint(ctx), card, 0xFF00AA00), "처음에는 기본(초록)이어야 한다");
 
         click(ctx, find(ctx, "View"));
@@ -188,7 +190,7 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
         try {
             Files.createDirectories(base.resolve("ui"));
             Files.writeString(base.resolve("config.toml"), "[editor]\nenabled = true\n");
-            Files.writeString(base.resolve("ui/gt_vis.xml"), """
+            Files.writeString(base.resolve("ui/gt_vis.uiml"), """
                     <screen>
                       <style>
                         #solid { width: 80; height: 30; background: #00DD00; border-radius: 10; }
@@ -205,7 +207,7 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
             BufferedImage magenta = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
             for (int y = 0; y < 32; y++) for (int x = 0; x < 32; x++) magenta.setRGB(x, y, 0xFFFF00FF);
             ImageIO.write(magenta, "png", images.resolve("gt_magenta.png").toFile());
-            Files.writeString(base.resolve("ui/gt_vis_new.xml"), """
+            Files.writeString(base.resolve("ui/gt_vis_new.uiml"), """
                     <screen>
                       <style>
                         #pic { border-radius: 14; }
@@ -240,7 +242,7 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
                       </column>
                     </screen>
                     """);
-            Files.writeString(base.resolve("ui/gt_vis_editor.xml"), """
+            Files.writeString(base.resolve("ui/gt_vis_editor.uiml"), """
                     <screen>
                       <style>
                         #card { width: 80; height: 30; background: #00AA00; }
