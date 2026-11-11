@@ -261,7 +261,7 @@ public final class LayoutEngine {
     private static Integer limit(Size s, int avail, int adj) {
         return switch (s.kind()) {
             case PX -> Math.round(s.value()) + adj;
-            case PERCENT -> Math.round(s.value() * avail) + adj;
+            case PERCENT -> Math.round(s.percentOf(avail)) + adj;
             default -> null;
         };
     }
@@ -403,7 +403,7 @@ public final class LayoutEngine {
         Size s = c.style.size(key, Size.AUTO);
         return switch (s.kind()) {
             case PX -> Math.round(s.value());
-            case PERCENT -> Math.round(s.value() * full);
+            case PERCENT -> Math.round(s.percentOf(full));
             default -> null;
         };
     }
@@ -679,7 +679,7 @@ public final class LayoutEngine {
                 Size cs = c.style.size(horiz ? "height" : "width", Size.AUTO);
                 int size = switch (cs.kind()) {
                     case PX -> Math.round(cs.value()) + adj(c, !horiz);
-                    case PERCENT -> Math.round(cs.value() * crossAvail) + adj(c, !horiz);
+                    case PERCENT -> Math.round(cs.percentOf(crossAvail)) + adj(c, !horiz);
                     default -> horiz ? prefH(c) : prefW(c);
                 };
                 lineCross[i] = Math.max(lineCross[i], clamp(c, !horiz, size, crossAvail) + (horiz ? m.vertical() : m.horizontal()));
@@ -700,7 +700,7 @@ public final class LayoutEngine {
         Size s = c.style.size(horiz ? "width" : "height", Size.AUTO);
         int v = switch (s.kind()) {
             case PX -> Math.round(s.value()) + adj(c, horiz);
-            case PERCENT -> Math.round(s.value() * mainAvail) + adj(c, horiz);
+            case PERCENT -> Math.round(s.percentOf(mainAvail)) + adj(c, horiz);
             default -> basis(c, horiz, mainAvail, horiz ? prefW(c) : prefH(c));
         };
         return clamp(c, horiz, v, mainAvail);
@@ -713,7 +713,7 @@ public final class LayoutEngine {
         Size ws = c.style.size("width", Size.AUTO);
         int w = switch (ws.kind()) {
             case PX -> Math.round(ws.value()) + adj(c, true);
-            case PERCENT -> Math.round(ws.value() * crossAvail) + adj(c, true);
+            case PERCENT -> Math.round(ws.percentOf(crossAvail)) + adj(c, true);
             case FILL -> room;
             case AUTO -> align.equals("stretch") ? room : Math.min(prefW(c), room);
         };
@@ -725,7 +725,7 @@ public final class LayoutEngine {
         Size bs = c.style.size("flex-basis", Size.AUTO);
         return switch (bs.kind()) {
             case PX -> Math.round(bs.value()) + adj(c, horiz);
-            case PERCENT -> Math.round(bs.value() * mainAvail) + adj(c, horiz);
+            case PERCENT -> Math.round(bs.percentOf(mainAvail)) + adj(c, horiz);
             default -> fallback;
         };
     }
@@ -764,7 +764,7 @@ public final class LayoutEngine {
             Size s = c.style.size(mainKey, Size.AUTO);
             switch (s.kind()) {
                 case PX -> main[i] = Math.round(s.value()) + adj(c, horiz);
-                case PERCENT -> main[i] = Math.round(s.value() * mainAvail) + adj(c, horiz);
+                case PERCENT -> main[i] = Math.round(s.percentOf(mainAvail)) + adj(c, horiz);
                 case AUTO -> main[i] = basis(c, horiz, mainAvail, horiz ? prefW(c) : prefHFor(c, guessWidth(c, crossAvail, norm(c.style.get("align-self", b.style.get("align", "start"))))));
                 case FILL -> {
                     float g = s.value();
@@ -858,7 +858,7 @@ public final class LayoutEngine {
             Size cs = c.style.size(crossKey, Size.AUTO);
             int crossSize = switch (cs.kind()) {
                 case PX -> Math.round(cs.value()) + adj(c, !horiz);
-                case PERCENT -> Math.round(cs.value() * crossAvail) + adj(c, !horiz);
+                case PERCENT -> Math.round(cs.percentOf(crossAvail)) + adj(c, !horiz);
                 case FILL -> Math.max(0, crossAvail - mCrossLead - mCrossTrail);
                 case AUTO -> a.equals("stretch") && !autoCrossLead && !autoCrossTrail
                         ? Math.max(0, crossAvail - mCrossLead - mCrossTrail)
@@ -921,7 +921,7 @@ public final class LayoutEngine {
     private static int resolve(Size s, int avail, int auto, int adj) {
         return switch (s.kind()) {
             case PX -> Math.round(s.value()) + adj;
-            case PERCENT -> Math.round(s.value() * avail) + adj;
+            case PERCENT -> Math.round(s.percentOf(avail)) + adj;
             case FILL -> Math.max(0, avail);
             case AUTO -> auto;
         };

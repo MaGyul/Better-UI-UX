@@ -29,18 +29,69 @@ public final class Stylesheet {
 
     private static final int MAX_NESTING = 8;
 
-    /** {@code @supports} 가 "지원함"으로 보는 프로퍼티(엔진이 읽는 것들 + {@code --변수}). */
-    private static final java.util.Set<String> KNOWN_PROPS = java.util.Set.of(
-            "width", "height", "min-width", "max-width", "min-height", "max-height", "margin", "padding", "gap",
-            "justify", "align", "align-self", "grow", "anchor", "x", "y", "visible", "display", "background",
-            "background-color", "border", "border-width", "border-color", "color", "shadow", "text-align", "opacity",
-            "overflow", "cursor", "translate-x", "translate-y", "scale", "rotate", "src", "uv", "tex", "tint",
-            "transition", "animation", "columns", "backdrop");
+    /** 엔진이 읽는 속성들(+ 위젯이 쓰는 속성). {@code @supports} 판정과 "알 수 없는 속성" 경고에 쓴다. */
+    public static final java.util.Set<String> KNOWN_PROPS = java.util.Set.of(
+            // 크기·배치
+            "width", "height", "min-width", "max-width", "min-height", "max-height", "box-sizing", "aspect-ratio",
+            "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
+            "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
+            "gap", "row-gap", "column-gap", "grid-gap", "justify", "justify-content", "align", "align-items", "align-self",
+            "justify-self", "grow", "flex-grow", "flex-shrink", "flex-basis", "flex", "flex-wrap", "flex-direction", "order",
+            "anchor", "x", "y", "position", "top", "right", "bottom", "left", "z-index", "display", "visible", "overflow",
+            "columns", "grid-template-columns", "grid-template-rows", "grid-column", "grid-row",
+            // 모양
+            "background", "background-color", "background-image", "border", "border-width", "border-color", "border-style",
+            "border-top", "border-right", "border-bottom", "border-left",
+            "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+            "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+            "border-radius", "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius",
+            "border-bottom-left-radius", "box-shadow", "outline", "outline-width", "outline-color", "outline-style",
+            "outline-offset", "opacity", "cursor", "backdrop", "tint", "src", "uv", "tex", "item", "count", "size",
+            "translate-x", "translate-y", "scale", "rotate", "transition", "animation",
+            // 글자
+            "color", "shadow", "text-shadow", "text-align", "font-size", "font-weight", "line-height", "letter-spacing",
+            "vertical-align", "white-space", "text-transform", "text-overflow", "text-decoration", "text-decoration-line",
+            "text", "content",
+            // 상태·위젯
+            "hover-background", "pressed-background", "disabled-background", "bar-color", "fill-color", "check-color",
+            "use", "block-size", "block-tint", "enabled", "checked", "value", "min", "max", "step", "maxlength",
+            "placeholder", "options", "group", "title", "tooltip", "modal", "onclick", "onchange", "onsubmit");
+
+    /** 모르는 속성이면 가장 비슷한 알려진 이름(편집 거리 2 이하), 없으면 null; 알려진 속성이면 빈 문자열. */
+    static String unknownHint(String prop) {
+        if (prop.startsWith("--") || prop.startsWith("-") || KNOWN_PROPS.contains(prop)) return "";
+        String best = null;
+        int bestD = 3;
+        for (String k : KNOWN_PROPS) {
+            int d = distance(prop, k);
+            if (d < bestD) {
+                bestD = d;
+                best = k;
+            }
+        }
+        return best;
+    }
+
+    private static int distance(String a, String b) {
+        int[] prev = new int[b.length() + 1], cur = new int[b.length() + 1];
+        for (int j = 0; j <= b.length(); j++) prev[j] = j;
+        for (int i = 1; i <= a.length(); i++) {
+            cur[0] = i;
+            for (int j = 1; j <= b.length(); j++) {
+                cur[j] = Math.min(Math.min(cur[j - 1], prev[j]) + 1, prev[j - 1] + (a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1));
+            }
+            int[] t = prev;
+            prev = cur;
+            cur = t;
+        }
+        return prev[b.length()];
+    }
 
     private final List<Rule> rules = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
     private final Map<String, Keyframes> keyframes = new LinkedHashMap<>();
     private final List<Import> imports = new ArrayList<>();
+    private final java.util.Set<String> warnedProps = new java.util.HashSet<>();
 
     public List<Rule> rules() { return rules; }
 
@@ -116,6 +167,13 @@ public final class Stylesheet {
                 continue;
             }
             List<Declaration> decls = parseDeclarations(body);
+            for (Declaration d : decls) {
+                String hint = unknownHint(d.prop());
+                if (hint != null && hint.isEmpty()) continue;
+                if (sheet.warnedProps.add(d.prop())) {
+                    sheet.warnings.add("스타일: 알 수 없는 속성 '" + d.prop() + "'" + (hint == null ? "" : " (혹시 '" + hint + "'?)"));
+                }
+            }
             for (String single : Selector.splitList(selectorText)) {
                 try {
                     sheet.rules.add(new Rule(Selector.parse(single.trim()), decls, media));
