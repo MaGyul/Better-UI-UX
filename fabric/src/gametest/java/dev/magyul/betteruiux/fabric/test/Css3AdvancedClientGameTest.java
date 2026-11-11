@@ -35,6 +35,7 @@ public class Css3AdvancedClientGameTest implements FabricClientGameTest {
             mediaQueryFollowsGuiScale(ctx);
             editorPanelAndOriginTooltip(ctx);
             renderCost(ctx);
+            firstUseHitch(ctx);
         }
     }
 
@@ -138,6 +139,39 @@ public class Css3AdvancedClientGameTest implements FabricClientGameTest {
         check(r[1] > 1000, "그리기 명령이 충분히 만들어져야 한다(합성 렌더링): " + r[1]);
         check(r[0] < 10.0, "한 프레임 그리기 명령 생성이 10ms 를 넘으면 안 된다: " + r[0] + "ms");
     }
+
+    /** 처음 쓰는 둥근 사각형 파이프라인(반지름·번짐 조합)을 처음 그릴 때 한 프레임이 얼마나 튀는지 잰다(조합마다 셰이더를 컴파일하므로). */
+    private void firstUseHitch(ClientGameTestContext ctx) {
+        open(ctx, "gt_adv_widgets", false);
+        ctx.waitTicks(20);
+        long base = 0;
+        for (int i = 0; i < 10; i++) {
+            long t0 = System.nanoTime();
+            ctx.waitTick();
+            base = Math.max(base, System.nanoTime() - t0);
+        }
+        long worst = 0;
+        for (int radius : new int[] {13, 17, 19, 23, 29}) {                          // 처음 보는 조합 5개를 하나씩 열어 본다
+            String id = "gt_adv_hitch_" + radius;
+            try {
+                Files.writeString(base().resolve("ui/" + id + ".xml"),
+                        "<screen><style>#a { width: 60; height: 40; background: linear-gradient(#FF0000, #0000FF); border-radius: " + radius
+                                + "; border: 3 solid #FFFFFF; box-shadow: 0 2 " + (radius % 7 + 3) + " #000000AA; }</style><panel id='a' anchor='center'/></screen>");
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+            open(ctx, id, false);
+            for (int i = 0; i < 4; i++) {
+                long t0 = System.nanoTime();
+                ctx.waitTick();
+                worst = Math.max(worst, System.nanoTime() - t0);
+            }
+        }
+        System.out.printf("[PERF] first-use pipeline hitch: worst tick %.1f ms (steady tick max %.1f ms)%n", worst / 1e6, base / 1e6);
+        check(worst < 1_500_000_000L, "처음 쓰는 파이프라인 때문에 한 프레임이 1.5초를 넘으면 안 된다: " + worst / 1e6 + " ms");
+    }
+
+    private Path base() { return base; }
 
     // ---- 준비/도우미 ----
 
