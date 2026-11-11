@@ -549,31 +549,30 @@ public final class EditorController {
             paintRecoverDialog(g);
             return;
         }
-        String l1 = "저장하지 않은 변경이 있습니다.", l2 = "저장하고 닫을까요?";
-        String b1 = "저장 후 닫기", b2 = "저장 안 함", b3 = "취소";
-        int bw1 = tm.width(b1) + 8, bw2 = tm.width(b2) + 8, bw3 = tm.width(b3) + 8;
-        int w = Math.max(Math.max(tm.width(l1), tm.width(l2)) + 24, bw1 + bw2 + bw3 + 6 + 24);
-        int h = tm.lineHeight() * 2 + TOOLBAR_H + 26;
-        int x = (viewW - w) / 2, y = (viewH - h) / 2;
-        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
-        g.fillRect(x, y, w, h, 0xFF161820);
-        g.drawText(l1, x + (w - tm.width(l1)) / 2, y + 8, C_TEXT, false);
-        g.drawText(l2, x + (w - tm.width(l2)) / 2, y + 10 + tm.lineHeight(), C_DIM, false);
-        int by = y + h - TOOLBAR_H - 4;
-        int bx = x + (w - (bw1 + bw2 + bw3 + 6)) / 2;
-        bx += button(g, bx, by, b1, true, this::saveAndExit, 0xFF2A6A3A);
-        bx += button(g, bx, by, b2, true, () -> {
-            exitDialog = false;
-            host.clearAutosave();
-            host.requestExit();
-        }, 0xFF7A2A2A);
-        button(g, bx, by, b3, true, () -> exitDialog = false);
+        paintChoiceDialog(g, "저장하지 않은 변경이 있습니다.", "저장하고 닫을까요?",
+                new String[] {"저장 후 닫기", "저장 안 함", "취소"},
+                new int[] {0xFF2A6A3A, 0xFF7A2A2A, C_BTN},
+                new Runnable[] {this::saveAndExit, () -> {
+                    exitDialog = false;
+                    host.clearAutosave();
+                    host.requestExit();
+                }, () -> exitDialog = false});
     }
 
     private void paintRecoverDialog(UiGfx g) {
-        String l1 = "저장하지 못하고 끝난 편집 내용이 남아 있습니다.", l2 = "복구할까요?";
-        String b1 = "복구", b2 = "버리기", b3 = "나중에";
-        int bw1 = tm.width(b1) + 8, bw2 = tm.width(b2) + 8, bw3 = tm.width(b3) + 8;
+        paintChoiceDialog(g, "저장하지 못하고 끝난 편집 내용이 남아 있습니다.", "복구할까요?",
+                new String[] {"복구", "버리기", "나중에"},
+                new int[] {0xFF2A6A3A, 0xFF7A2A2A, C_BTN},
+                new Runnable[] {this::recoverNow, this::discardRecovery, () -> {   // 자동 저장본은 그대로 두고 지금 파일로 계속한다(이번엔 덮어쓰지 않음)
+                    dialogRecover = false;
+                    exitDialog = false;
+                    recovery = null;
+                }});
+    }
+
+    /** 가운데에 안내 두 줄과 버튼 세 개를 가진 확인 상자(닫기 확인/복구 확인이 같이 쓴다). */
+    private void paintChoiceDialog(UiGfx g, String l1, String l2, String[] labels, int[] colors, Runnable[] actions) {
+        int bw1 = tm.width(labels[0]) + 8, bw2 = tm.width(labels[1]) + 8, bw3 = tm.width(labels[2]) + 8;
         int w = Math.max(Math.max(tm.width(l1), tm.width(l2)) + 24, bw1 + bw2 + bw3 + 6 + 24);
         int h = tm.lineHeight() * 2 + TOOLBAR_H + 26;
         int x = (viewW - w) / 2, y = (viewH - h) / 2;
@@ -583,13 +582,7 @@ public final class EditorController {
         g.drawText(l2, x + (w - tm.width(l2)) / 2, y + 10 + tm.lineHeight(), C_DIM, false);
         int by = y + h - TOOLBAR_H - 4;
         int bx = x + (w - (bw1 + bw2 + bw3 + 6)) / 2;
-        bx += button(g, bx, by, b1, true, this::recoverNow, 0xFF2A6A3A);
-        bx += button(g, bx, by, b2, true, this::discardRecovery, 0xFF7A2A2A);
-        button(g, bx, by, b3, true, () -> {              // 자동 저장본은 그대로 두고 지금 파일로 계속한다(다음에 다시 묻지 않도록 이번엔 덮어쓰지 않음)
-            dialogRecover = false;
-            exitDialog = false;
-            recovery = null;
-        });
+        for (int i = 0; i < 3; i++) bx += button(g, bx, by, labels[i], true, actions[i], colors[i]);
     }
 
     /**
@@ -2512,24 +2505,16 @@ public final class EditorController {
                 new ToolItem(panned ? "Fit!" : "Fit", panned, r -> resetView(), C_BTN_HOT, 0));
         int exitW = tm.width("Exit") + 8;
         int exitX = viewW - exitW - 2, limit = exitX - 2;
-        int total = 2;
-        for (ToolItem it : items) total += it.gap() + tm.width(it.label()) + 8 + 2;
-        boolean overflow = total - 2 > limit;
-        int ovW = tm.width("...") + 8;
-        int x = 2;
-        List<ToolItem> hidden = new ArrayList<>();
-        for (ToolItem it : items) {
-            int w = tm.width(it.label()) + 8;
-            if (!hidden.isEmpty() || (overflow && x + it.gap() + w + 2 + ovW > limit)) {   // 안 들어가는 버튼은 "..." 메뉴로
-                hidden.add(it);
-                continue;
-            }
-            x += it.gap();
-            Rect r = new Rect(x, y, w, h);
-            x += button(g, x, y, it.label(), it.enabled(), () -> it.action().accept(r), it.bg());
+        ToolbarLayout.Result lay = ToolbarLayout.layout(items.stream().map(it -> new ToolbarLayout.Item(it.label(), it.gap())).toList(), tm, limit);
+        int x = lay.endX();
+        for (ToolbarLayout.Placed pl : lay.placed()) {                                      // 들어가는 버튼
+            ToolItem it = items.get(pl.index());
+            Rect r = new Rect(pl.x(), y, pl.w(), h);
+            button(g, pl.x(), y, it.label(), it.enabled(), () -> it.action().accept(r), it.bg());
         }
+        List<ToolItem> hidden = lay.hidden().stream().map(items::get).toList();            // 안 들어가는 버튼은 "..." 메뉴로
         if (!hidden.isEmpty()) {
-            Rect r = new Rect(x, y, ovW, h);
+            Rect r = new Rect(x, y, lay.overflowW(), h);
             List<String> labels = new ArrayList<>();
             for (ToolItem it : hidden) labels.add(it.label());
             x += button(g, x, y, "...", true, () -> menu.open(r, labels, label -> {
