@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.core.layout;
 
 import dev.magyul.betteruiux.core.doc.UiWidget;
+import dev.magyul.betteruiux.core.style.Selector;
 import dev.magyul.betteruiux.core.xml.UiNode;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,9 +20,15 @@ public final class LayoutBox {
 
     /** 레이아웃 기준 스타일(상태 무관). */
     public StyleMap style = new StyleMap();
-    /** 동적 의사 클래스별 추가 스타일: 키는 "hover", "active", "active+hover". 그리기에만 영향(레이아웃 불변). */
-    public Map<String, StyleMap> overlays = Map.of();
-    private final StyleMap[] effectiveCache = new StyleMap[4];
+    /**
+     * :hover/:active/:focus 가 들어간 규칙들(우선순위 오름차순). 규칙마다 일반/!important 선언이 따로 해석돼 있다.
+     * 어떤 요소가 어떤 상태인지는 그릴 때 판정하므로 부모나 형제의 상태에 따른 규칙({@code .card:hover .title})도 된다.
+     * 그리기에만 영향을 주고 레이아웃은 바꾸지 않는다.
+     */
+    public List<DynRule> dynRules = List.of();
+    private final Map<Long, StyleMap> dynCache = new java.util.HashMap<>();
+
+    public record DynRule(Selector selector, StyleMap normal, StyleMap important, int specificity, int ordinal) {}
 
     LayoutBox(UiNode node) { this.node = node; }
 
@@ -48,17 +55,42 @@ public final class LayoutBox {
         return r;
     }
 
-    /** 호버/눌림 상태를 반영한 그리기용 스타일. 오버레이가 없으면 {@link #style} 그대로. */
+    /** 호버/눌림 상태를 반영한 그리기용 스타일(이 요소 자신의 상태만 아는 단순 형태). 규칙이 없으면 {@link #style} 그대로. */
     public StyleMap effective(boolean hovered, boolean active) {
-        if (overlays.isEmpty() || (!hovered && !active)) return style;
-        int k = (hovered ? 1 : 0) | (active ? 2 : 0);
-        StyleMap cached = effectiveCache[k];
-        if (cached != null) return cached;
+        if (dynRules.isEmpty()) return style;
+        return effective(new Selector.DynState() {
+            @Override public boolean hovered(UiNode n) { return hovered && n == node; }
+
+            @Override public boolean pressed(UiNode n) { return active && n == node; }
+
+            @Override public boolean focused(UiNode n) { return false; }
+        });
+    }
+
+    /** 문서 전체의 상태({@code st})를 반영한 그리기용 스타일. 맞은 규칙 조합별로 결과를 캐시한다. */
+    public StyleMap effective(Selector.DynState st) {
+        if (dynRules.isEmpty()) return style;
+        int n = dynRules.size();
+        long mask = 0;
+        boolean[] hit = new boolean[n];
+        boolean any = false;
+        for (int i = 0; i < n; i++) {
+            if (dynRules.get(i).selector().matches(node, st)) {
+                hit[i] = true;
+                any = true;
+                if (i < 62) mask |= 1L << i;
+            }
+        }
+        if (!any) return style;
+        boolean cacheable = n <= 62;
+        if (cacheable) {
+            StyleMap cached = dynCache.get(mask);
+            if (cached != null) return cached;
+        }
         StyleMap m = style.copy();
-        if (hovered && overlays.containsKey("hover")) m.putAll(overlays.get("hover"));
-        if (active && overlays.containsKey("active")) m.putAll(overlays.get("active"));
-        if (hovered && active && overlays.containsKey("active+hover")) m.putAll(overlays.get("active+hover"));
-        effectiveCache[k] = m;
+        for (int i = 0; i < n; i++) if (hit[i]) m.putAll(dynRules.get(i).normal());
+        for (int i = 0; i < n; i++) if (hit[i]) m.putAll(dynRules.get(i).important());
+        if (cacheable) dynCache.put(mask, m);
         return m;
     }
 }

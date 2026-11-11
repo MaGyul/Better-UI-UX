@@ -63,14 +63,16 @@ public final class StyleResolver {
         }
 
         List<Applied> staticRules = new ArrayList<>();
-        Map<String, List<Applied>> dynamicRules = new LinkedHashMap<>();
+        List<Entry> dynamicEntries = new ArrayList<>();
         for (Entry e : entries) {
-            if (!mediaOk(e.media()) || !e.selector().matches(box)) continue;
-            Set<String> dyn = e.selector().dynamicPseudos();
-            List<Applied> target = dyn.isEmpty() ? staticRules
-                    : dynamicRules.computeIfAbsent(String.join("+", dyn), k -> new ArrayList<>());
+            if (!mediaOk(e.media())) continue;
+            if (e.selector().hasDynamic()) {                 // :hover/:active/:focus 가 어느 단계에든 있는 규칙: 그리기 때 판정
+                if (e.selector().maybeMatches(box.node)) dynamicEntries.add(e);
+                continue;
+            }
+            if (!e.selector().matches(box)) continue;
             for (Stylesheet.Declaration d : e.declarations()) {
-                target.add(new Applied(d, e.selector().specificity(), e.ordinal()));
+                staticRules.add(new Applied(d, e.selector().specificity(), e.ordinal()));
             }
         }
         Set<String> sheetImportant = apply(base, staticRules);
@@ -87,15 +89,18 @@ public final class StyleResolver {
         finish(base, parent, null);
         box.style = base;
 
-        Map<String, StyleMap> overlays = new HashMap<>();
-        for (Map.Entry<String, List<Applied>> e : dynamicRules.entrySet()) {
-            StyleMap overlay = new StyleMap();
-            apply(overlay, e.getValue());
-            substituteVars(overlay, base);
-            finish(overlay, parent, base);
-            overlays.put(e.getKey(), overlay);
+        List<LayoutBox.DynRule> dyn = new ArrayList<>();
+        for (Entry e : dynamicEntries) {
+            StyleMap normal = new StyleMap(), important = new StyleMap();
+            for (Stylesheet.Declaration d : e.declarations()) put(d.important() ? important : normal, d.prop(), d.value());
+            for (StyleMap m : new StyleMap[] {normal, important}) {
+                substituteVars(m, base);
+                finish(m, parent, base);
+            }
+            dyn.add(new LayoutBox.DynRule(e.selector(), normal, important, e.selector().specificity(), e.ordinal()));
         }
-        box.overlays = overlays;
+        dyn.sort(Comparator.comparingInt(LayoutBox.DynRule::specificity).thenComparingInt(LayoutBox.DynRule::ordinal));
+        box.dynRules = dyn;
     }
 
     // ---- 값 후처리: 숏핸드 마무리, inherit/initial/unset, currentColor, 단위/calc ----

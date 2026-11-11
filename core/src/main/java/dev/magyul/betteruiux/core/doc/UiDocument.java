@@ -69,15 +69,19 @@ public final class UiDocument {
     }
 
     private UiNode forcedNode;
-    private boolean forcedHover, forcedActive;
+    private boolean forcedHover, forcedActive, forcedFocus;
 
     /**
      * 요소의 :hover / :active 모양을 강제로 보여 준다(에디터의 상태 미리보기). {@code sourceIndex} 가 음수이거나 둘 다 false 면 해제.
      */
-    public void forcePseudo(int sourceIndex, boolean hover, boolean active) {
+    public void forcePseudo(int sourceIndex, boolean hover, boolean active) { forcePseudo(sourceIndex, hover, active, false); }
+
+    /** :hover / :active / :focus 를 강제로 보여 준다. */
+    public void forcePseudo(int sourceIndex, boolean hover, boolean active, boolean focus) {
         forcedHover = hover;
         forcedActive = active;
-        forcedNode = sourceIndex < 0 || !(hover || active) ? null : findBySource(root, sourceIndex);
+        forcedFocus = focus;
+        forcedNode = sourceIndex < 0 || !(hover || active || focus) ? null : findBySource(root, sourceIndex);
     }
 
     private static UiNode findBySource(UiNode n, int index) {
@@ -112,20 +116,28 @@ public final class UiDocument {
     private Runnable onClose = () -> { };
 
     private final UiPainter.PaintState state = new UiPainter.PaintState() {
-        @Override public boolean hovered(LayoutBox b) {
+        @Override public boolean hovered(UiNode n) {
             UiNode h = forcedNode != null && (forcedHover || forcedActive) ? forcedNode : hoverNode;
-            return h != null && b.node.isAncestorOf(h);
+            return h != null && n.isAncestorOf(h);
         }
 
-        @Override public boolean pressed(LayoutBox b) {
+        @Override public boolean pressed(UiNode n) {
             UiNode p = forcedNode != null && forcedActive ? forcedNode : pressNode;
-            return p != null && b.node.isAncestorOf(p) && hovered(b);
+            return p != null && n.isAncestorOf(p) && hovered(n);
         }
 
-        @Override public boolean focused(LayoutBox b) { return focusNode != null && b.node == focusNode; }
+        @Override public boolean focused(UiNode n) {
+            UiNode f = forcedNode != null && forcedFocus ? forcedNode : focusNode;
+            return f != null && n == f;
+        }
+
+        @Override public boolean focusWithin(UiNode n) {
+            UiNode f = forcedNode != null && forcedFocus ? forcedNode : focusNode;
+            return f != null && n.isAncestorOf(f);
+        }
 
         @Override public StyleMap style(LayoutBox b) {
-            StyleMap s = b.effective(hovered(b), pressed(b));
+            StyleMap s = b.effective(this);
             return animationsEnabled ? anim.apply(b.node, s, frameNow) : s;
         }
 

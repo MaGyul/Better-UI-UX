@@ -16,18 +16,25 @@ import java.util.function.Function;
 /** 레이아웃 결과를 {@link UiGfx} 명령으로 그린다. 입력/시간 상태는 {@link PaintState} 로 받는다. */
 public final class UiPainter {
     /** 호버/눌림/마우스/시간 상태 조회. 상태 없는 정적 렌더는 {@link #NONE}. */
-    public interface PaintState {
+    public interface PaintState extends dev.magyul.betteruiux.core.style.Selector.DynState {
         PaintState NONE = new PaintState() { };
 
-        default boolean hovered(LayoutBox b) { return false; }
+        /** 요소 단위 상태(선택자의 :hover/:active/:focus 판정에도 쓰인다). */
+        @Override default boolean hovered(dev.magyul.betteruiux.core.xml.UiNode n) { return false; }
 
-        default boolean pressed(LayoutBox b) { return false; }
+        @Override default boolean pressed(dev.magyul.betteruiux.core.xml.UiNode n) { return false; }
 
-        /** 키보드 포커스가 있는 박스(Tab 으로 고른 버튼 등). */
-        default boolean focused(LayoutBox b) { return false; }
+        /** 키보드 포커스가 있는 요소(Tab 으로 고른 버튼 등). */
+        @Override default boolean focused(dev.magyul.betteruiux.core.xml.UiNode n) { return false; }
 
-        /** 이 박스를 그릴 때 쓸 스타일(호버/눌림 오버레이, 전환·애니메이션 적용 후). */
-        default StyleMap style(LayoutBox b) { return b.effective(hovered(b), pressed(b)); }
+        default boolean hovered(LayoutBox b) { return hovered(b.node); }
+
+        default boolean pressed(LayoutBox b) { return pressed(b.node); }
+
+        default boolean focused(LayoutBox b) { return focused(b.node); }
+
+        /** 이 박스를 그릴 때 쓸 스타일(호버/눌림/포커스 규칙 반영, 전환·애니메이션 적용 전). */
+        default StyleMap style(LayoutBox b) { return b.effective(this); }
 
         default int mouseX() { return -1; }
 

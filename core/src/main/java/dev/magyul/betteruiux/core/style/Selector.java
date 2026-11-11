@@ -37,7 +37,28 @@ public final class Selector {
     /** {@code combinator}: 바로 왼쪽 단계와의 관계(첫 단계에서는 의미 없음). */
     public record Step(Compound compound, Combinator combinator) {}
 
-    private static final Set<String> DYNAMIC = Set.of("hover", "active");
+    private static final Set<String> DYNAMIC = Set.of("hover", "active", "focus", "focus-within");
+
+    /** 동적 의사 클래스({@code :hover :active :focus :focus-within})를 판정하는 상태. 요소(UiNode) 단위로 묻는다. */
+    public interface DynState {
+        boolean hovered(UiNode n);
+
+        boolean pressed(UiNode n);
+
+        boolean focused(UiNode n);
+
+        /** 자신이나 자손이 포커스를 가졌는지(기본: 자신만). */
+        default boolean focusWithin(UiNode n) { return focused(n); }
+    }
+
+    private static boolean dynTest(String name, UiNode n, DynState st) {
+        return switch (name) {
+            case "hover" -> st.hovered(n);
+            case "active" -> st.pressed(n);
+            case "focus" -> st.focused(n);
+            default -> st.focusWithin(n);
+        };
+    }
     private static final Set<String> STATIC = Set.of("first-child", "last-child", "only-child", "root", "empty",
             "disabled", "enabled", "checked", "first-of-type", "last-of-type", "only-of-type");
     private static final Set<String> NTH = Set.of("nth-child", "nth-last-child", "nth-of-type", "nth-last-of-type");
@@ -126,14 +147,6 @@ public final class Selector {
         }
         if (steps.isEmpty() || pendingExplicit) throw new IllegalArgumentException("불완전한 선택자: " + src);
 
-        // 동적 의사 클래스는 대상(가장 오른쪽) 요소의 최상위에만 허용한다.
-        for (int k = 0; k < steps.size() - 1; k++) {
-            for (Pseudo p : steps.get(k).compound().pseudos()) {
-                if (p.dynamic()) {
-                    throw new IllegalArgumentException("':" + p.name() + "' 은(는) 선택자의 마지막 요소에만 쓸 수 있습니다: " + src);
-                }
-            }
-        }
         return new Selector(steps, src);
     }
 
@@ -180,9 +193,6 @@ public final class Selector {
                 } else {
                     if (!DYNAMIC.contains(name) && !STATIC.contains(name)) {
                         throw new IllegalArgumentException("지원하지 않는 의사 클래스 ':" + name + "' (" + whole + ")");
-                    }
-                    if (nested && DYNAMIC.contains(name)) {
-                        throw new IllegalArgumentException("':" + name + "' 은(는) :not()/:is() 안에서 쓸 수 없습니다: " + whole);
                     }
                     pseudos.add(new Pseudo(name, 0, 0, List.of()));
                     i = e;
@@ -299,28 +309,64 @@ public final class Selector {
 
     public boolean matches(LayoutBox box) { return matches(box.node); }
 
-    public boolean matches(UiNode node) { return matchFrom(steps.size() - 1, node); }
+    /** 구조/속성만 본다(동적 의사 클래스는 항상 참). */
+    public boolean matches(UiNode node) { return matchFrom(steps.size() - 1, node, null); }
 
-    private boolean matchFrom(int idx, UiNode node) {
-        if (!compoundMatches(steps.get(idx).compound(), node)) return false;
+    /** 동적 의사 클래스를 {@code st} 로 판정해서 맞는지. */
+    public boolean matches(UiNode node, DynState st) { return matchFrom(steps.size() - 1, node, st); }
+
+    /** 어느 단계에든 동적 의사 클래스({@code :not()} 안 포함)가 있는지. */
+    public boolean hasDynamic() {
+        for (Step s : steps) if (compoundHasDynamic(s.compound())) return true;
+        return false;
+    }
+
+    private static boolean compoundHasDynamic(Compound c) {
+        for (Pseudo p : c.pseudos()) {
+            if (p.dynamic()) return true;
+            for (Selector sub : p.list()) if (sub.hasDynamic()) return true;
+        }
+        return false;
+    }
+
+    /** 어떤 상태 조합에서든 맞을 수 있는지(규칙 분류용: hover/active/focus/focus-within 의 16 조합을 시험). */
+    public boolean maybeMatches(UiNode node) {
+        for (int mask = 0; mask < 16; mask++) {
+            final int m = mask;
+            DynState st = new DynState() {
+                @Override public boolean hovered(UiNode n) { return (m & 1) != 0; }
+
+                @Override public boolean pressed(UiNode n) { return (m & 2) != 0; }
+
+                @Override public boolean focused(UiNode n) { return (m & 4) != 0; }
+
+                @Override public boolean focusWithin(UiNode n) { return (m & 8) != 0; }
+            };
+            if (matchFrom(steps.size() - 1, node, st)) return true;
+        }
+        return false;
+    }
+
+    private boolean matchFrom(int idx, UiNode node, DynState dyn) {
+        if (!compoundMatches(steps.get(idx).compound(), node, dyn)) return false;
         if (idx == 0) return true;
         UiNode parent = node.parent();
         switch (steps.get(idx).combinator()) {
             case CHILD:
-                return parent != null && matchFrom(idx - 1, parent);
+                return parent != null && matchFrom(idx - 1, parent, dyn);
             case ADJACENT: {
                 UiNode prev = previousSibling(node);
-                return prev != null && matchFrom(idx - 1, prev);
+                return prev != null && matchFrom(idx - 1, prev, dyn);
             }
             case SIBLING: {
                 for (UiNode p = previousSibling(node); p != null; p = previousSibling(p)) {
-                    if (matchFrom(idx - 1, p)) return true;
+                    if (matchFrom(idx - 1, p, dyn)) return true;
                 }
                 return false;
             }
             default:
                 for (UiNode a = parent; a != null; a = a.parent()) {
-                    if (matchFrom(idx - 1, a)) return true;
+                    if (matchFrom(idx - 1, a, dyn)) return true;
                 }
                 return false;
         }
@@ -365,7 +411,7 @@ public final class Selector {
         return cls == null || cls.isBlank() ? List.of() : List.of(cls.trim().split("\\s+"));
     }
 
-    private static boolean compoundMatches(Compound c, UiNode n) {
+    private static boolean compoundMatches(Compound c, UiNode n, DynState dyn) {
         if (c.tag() != null && !c.tag().equals(n.tag())) return false;
         if (c.id() != null && !c.id().equals(n.attr("id"))) return false;
         if (!c.classes().isEmpty()) {
@@ -373,11 +419,11 @@ public final class Selector {
             for (String want : c.classes()) if (!have.contains(want)) return false;
         }
         for (AttrSel a : c.attrs()) if (!attrMatches(a, n.attr(a.name()))) return false;
-        for (Pseudo p : c.pseudos()) if (!pseudoMatches(p, n)) return false;
+        for (Pseudo p : c.pseudos()) if (!pseudoMatches(p, n, dyn)) return false;
         return true;
     }
 
-    private static boolean pseudoMatches(Pseudo p, UiNode n) {
+    private static boolean pseudoMatches(Pseudo p, UiNode n, DynState dyn) {
         switch (p.name()) {
             case "first-child": return siblings(n).get(0) == n;
             case "last-child": { List<UiNode> s = siblings(n); return s.get(s.size() - 1) == n; }
@@ -395,14 +441,14 @@ public final class Selector {
             case "nth-of-type": return nth(n, true, false, p.a(), p.b());
             case "nth-last-of-type": return nth(n, true, true, p.a(), p.b());
             case "not": {
-                for (Selector s : p.list()) if (s.matches(n)) return false;
+                for (Selector s : p.list()) if (s.matches(n, dyn)) return false;
                 return true;
             }
             case "is", "where": {
-                for (Selector s : p.list()) if (s.matches(n)) return true;
+                for (Selector s : p.list()) if (s.matches(n, dyn)) return true;
                 return false;
             }
-            default: return true; // hover/active 는 StyleResolver 가 상태별 오버레이로 처리
+            default: return dyn == null || dynTest(p.name(), n, dyn);   // 상태 판정자가 없으면 구조만 본다
         }
     }
 

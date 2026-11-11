@@ -77,6 +77,5 @@ class StylesheetTest {
         assertThrows(IllegalArgumentException.class, () -> Selector.parse("> a"));
         assertThrows(IllegalArgumentException.class, () -> Selector.parse("a >"));
         assertThrows(IllegalArgumentException.class, () -> Selector.parse("a:bogus"));
-        assertThrows(IllegalArgumentException.class, () -> Selector.parse("a:hover b"));
     }
 }

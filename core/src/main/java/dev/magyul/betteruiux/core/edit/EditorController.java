@@ -2268,7 +2268,7 @@ public final class EditorController {
 
     /** 편집 중인 문서를 현재 화면 이동 위치에 맞춰 그린다. (호버/클릭 효과는 끈다.) */
     public void paintDocument(UiGfx g) {
-        doc.forcePseudo(selected, previewState == 1, previewState == 2);   // 상태 미리보기(선택한 요소만)
+        doc.forcePseudo(selected, previewState == 1, previewState == 2, previewState == 3);   // 상태 미리보기(선택한 요소만)
         g.pushTransform(panX, panY, 1f, 0f, 0f, 0f);
         doc.paint(g, -1, -1);
         g.popTransform();
@@ -2511,6 +2511,7 @@ public final class EditorController {
                     else if (item.contains("없음")) previewState = 0;
                     else if (item.contains("hover")) previewState = 1;
                     else if (item.contains("active")) previewState = 2;
+                    else if (item.contains("focus")) previewState = 3;
                     else help.open = true;
                 }), C_BTN, 0),
                 new ToolItem("Pub", host.canPublish(), r -> { if (!session.isDirty() || save()) host.publish(); }, C_BTN, 4),
@@ -2916,7 +2917,7 @@ public final class EditorController {
     private final MenuOverlay menu = new MenuOverlay();
 
     private static List<String> viewItems() {
-        List<String> l = new ArrayList<>(List.of("XML 보기", "상태 미리보기: 없음", "상태 미리보기: hover", "상태 미리보기: active", "도움말"));
+        List<String> l = new ArrayList<>(List.of("XML 보기", "상태 미리보기: 없음", "상태 미리보기: hover", "상태 미리보기: active", "상태 미리보기: focus", "도움말"));
         l.addAll(SIZE_ITEMS);
         return l;
     }
@@ -3022,7 +3023,7 @@ public final class EditorController {
     }
 
     private String elementClip = "";
-    /** 선택한 요소의 상태 미리보기: 0 없음, 1 :hover, 2 :active. */
+    /** 선택한 요소의 상태 미리보기: 0 없음, 1 :hover, 2 :active, 3 :focus. */
     private int previewState;
 
     private void copyElement(boolean cut) {

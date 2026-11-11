@@ -118,7 +118,6 @@ class SelectorCss3Test {
         assertThrows(IllegalArgumentException.class, () -> Selector.parse("a + "));
         assertThrows(IllegalArgumentException.class, () -> Selector.parse("a > > b"));
         assertThrows(IllegalArgumentException.class, () -> Selector.parse(":nth-child(foo)"));
-        assertThrows(IllegalArgumentException.class, () -> Selector.parse(":not(:hover)"));
         assertThrows(IllegalArgumentException.class, () -> Selector.parse("a::before"));
     }
 }
