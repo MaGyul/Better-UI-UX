@@ -46,6 +46,18 @@ public interface UiGfx {
      */
     default boolean fillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, int mode, int[] colors, float[] stops) { return false; }
 
+    /**
+     * 텍스처(이미지/영상) 전체를 둥근 사각형 모양으로 잘라 그린다(부드러운 가장자리). 텍스처의 일부 영역(uv)은 지원하지 않는다.
+     * 지원하지 않으면 아무것도 그리지 않고 false.
+     */
+    default boolean drawRoundTexture(String texture, int x, int y, int w, int h, int tl, int tr, int br, int bl, int argb) { return false; }
+
+    /**
+     * 둥근 사각형(x,y,w,h) 안쪽 그림자({@code inset}): 모양을 ({@code ox},{@code oy}) 만큼 옮기고 {@code spread} 만큼 줄인 구멍 밖이 {@code blur} 만큼
+     * 부드럽게 칠해진다. 사각형 밖은 칠하지 않는다. 지원하지 않으면 false.
+     */
+    default boolean insetShadowRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int ox, int oy, int blur, int spread, int argb) { return false; }
+
     /** 이후 그리기를 사각형 안으로 제한한다. 중첩 가능, {@link #popClip()} 으로 복원. */
     void pushClip(int x, int y, int w, int h);
 

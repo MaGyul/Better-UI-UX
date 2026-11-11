@@ -565,6 +565,8 @@ final class BoxPainter {
             if (!s.inset()) continue;
             int color = scaleAlpha(s.color(), opacity), alpha = color >>> 24;
             if (alpha == 0) continue;
+            Radii ir = r.fit(w, h);
+            if (g.insetShadowRoundRect(x, y, w, h, ir.tl(), ir.tr(), ir.br(), ir.bl(), s.ox(), s.oy(), s.blur(), s.spread(), color)) continue;   // 지원하면 셰이더로 한 번에
             int n = s.blur() <= 0 ? 0 : Math.max(1, Math.min((s.blur() + 1) / 2, 6));
             double prev = 0;
             for (int layer = 1; layer <= n + 1; layer++) {                 // 가장 두꺼운(옅은) 층부터 겹쳐서 가장자리일수록 진해진다

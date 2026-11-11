@@ -76,6 +76,10 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
         check(!(rgCorner[0] > 200 && rgCorner[2] < 80), "둥근 그라디언트의 모서리 끝은 비어 있어야 한다: " + hex(rgCorner));
         int[] hgL = px(img, sx, hg.x + 3, hg.y + hg.h / 2, s), hgR = px(img, sx, hg.x + hg.w - 4, hg.y + hg.h / 2, s);
         check(hgL[0] > hgL[2] + 60 && hgR[2] > hgR[0] + 60, "가로 그라디언트: 왼쪽 빨강 → 오른쪽 파랑: " + hex(hgL) + " / " + hex(hgR));
+        LayoutBox ins2 = box(ctx, "ins2");
+        int[] insEdge = px(img, sx, ins2.x + ins2.w / 2, ins2.y + 1, s), insMid = px(img, sx, ins2.x + ins2.w / 2, ins2.y + ins2.h / 2, s);
+        check(insEdge[1] < insMid[1] - 60, "블러 안쪽 그림자: 가장자리가 가운데보다 어두워야 한다: " + hex(insEdge) + " vs " + hex(insMid));
+        check(isNear(insMid, 0x00, 0xDD, 0x00, 70), "블러 안쪽 그림자: 가운데는 배경색에 가까워야 한다: " + hex(insMid));
         int[] conTop = px(img, sx, con.x + con.w / 2 + 2, con.y + 3, s), conBottom = px(img, sx, con.x + con.w / 2, con.y + con.h - 4, s);
         check(conTop[0] > conTop[1] + 60, "원뿔 그라디언트: 위쪽(0도)은 첫 색(빨강)이어야 한다: " + hex(conTop));
         check(conBottom[1] > conBottom[0] + 60 && conBottom[1] > conBottom[2] + 60, "원뿔 그라디언트: 아래쪽(180도)은 가운데 색(초록)이어야 한다: " + hex(conBottom));
@@ -215,6 +219,7 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
                         <panel id="asym" width="40" height="40" style="background: #00DD00; border-radius: 14 0 0 0"/>
                         <panel id="rg" width="60" height="40" style="background: linear-gradient(#FF0000, #0000FF); border-radius: 12"/>
                         <panel id="hg" width="60" height="20" style="background: linear-gradient(to right, #FF0000, #0000FF)"/>
+                        <panel id="ins2" width="60" height="30" style="background: #00DD00; border-radius: 8; box-shadow: inset 0 2 10 #000000FF"/>
                         <panel id="con" width="50" height="50" style="background: conic-gradient(#FF0000, #00FF00, #0000FF)"/>
                       </column>
                     </screen>

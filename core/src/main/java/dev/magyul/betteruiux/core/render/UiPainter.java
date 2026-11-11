@@ -241,6 +241,8 @@ public final class UiPainter {
             g.drawTexture(src, ix, iy, iw, ih, u, v, rw, rh, tw, th, tint);
             return;
         }
+        boolean whole = uv == null && tex == null;               // 일부 영역(uv)을 쓰지 않는 이미지는 셰이더로 한 번에 둥글게 잘라 그린다
+        if (whole && g.drawRoundTexture(src, ix, iy, iw, ih, r.tl(), r.tr(), r.br(), r.bl(), tint)) return;
         // 둥근 모서리: 이미지를 같은 모양의 행 묶음으로 잘라 그린다(모서리 행만 따로, 가운데는 한 번). 원본 영역도 같은 비율로 자른다.
         int[][] sp = BoxPainter.spans(iw, ih, r);
         float sx = rw / (float) iw, sy = rh / (float) ih;

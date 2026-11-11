@@ -28,6 +28,10 @@ public final class DrawList implements UiGfx {
                 case DrawCommand.ShadowRoundRect f -> target.shadowRoundRect(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(), f.blur(), f.argb());
                 case DrawCommand.FillRoundGradient f ->
                         target.fillRoundGradient(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(), f.mode(), f.colors(), f.stops());
+                case DrawCommand.DrawRoundTexture t ->
+                        target.drawRoundTexture(t.texture(), t.x(), t.y(), t.w(), t.h(), t.tl(), t.tr(), t.br(), t.bl(), t.argb());
+                case DrawCommand.InsetShadowRoundRect f -> target.insetShadowRoundRect(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(),
+                        f.ox(), f.oy(), f.blur(), f.spread(), f.argb());
                 case DrawCommand.DrawStyledText t -> target.drawStyledText(t.text(), t.x(), t.y(), t.argb(), t.shadow(), t.italic(), t.font());
                 case DrawCommand.PushClip p -> target.pushClip(p.x(), p.y(), p.w(), p.h());
                 case DrawCommand.PopClip p -> target.popClip();
@@ -52,6 +56,18 @@ public final class DrawList implements UiGfx {
     @Override public boolean fillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, int mode, int[] colors, float[] stops) {
         if (!roundRects) return false;
         commands.add(new DrawCommand.FillRoundGradient(x, y, w, h, tl, tr, br, bl, mode, colors, stops));
+        return true;
+    }
+
+    @Override public boolean drawRoundTexture(String texture, int x, int y, int w, int h, int tl, int tr, int br, int bl, int argb) {
+        if (!roundRects) return false;
+        commands.add(new DrawCommand.DrawRoundTexture(texture, x, y, w, h, tl, tr, br, bl, argb));
+        return true;
+    }
+
+    @Override public boolean insetShadowRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int ox, int oy, int blur, int spread, int argb) {
+        if (!roundRects) return false;
+        commands.add(new DrawCommand.InsetShadowRoundRect(x, y, w, h, tl, tr, br, bl, ox, oy, blur, spread, argb));
         return true;
     }
 

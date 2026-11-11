@@ -58,6 +58,26 @@ public final class McGfx implements UiGfx {
     }
 
     @Override
+    public boolean drawRoundTexture(String texture, int x, int y, int w, int h, int tl, int tr, int br, int bl, int argb) {
+        com.mojang.renderpearl.api.pipeline.RenderPipeline p = RoundPipelines.get(tl, tr, br, bl, 0, 0);
+        if (p == null || w <= 0 || h <= 0) return false;
+        Identifier id;
+        if (ExternalImages.handles(texture)) {
+            ExternalImages.Frame f = ExternalVideos.handles(texture) ? ExternalVideos.texture(texture) : ExternalImages.texture(texture);
+            if (f == null) return true;                              // 아직 불러오는 중: 그 자리는 비워 둔다(근사로 그려도 비어 있다)
+            id = f.id();
+        } else {
+            try {
+                id = Identifier.parse(texture);
+            } catch (RuntimeException e) {
+                return false;
+            }
+        }
+        g.blit(p, id, x, y, 0f, 0f, w, h, 1, 1, 1, 1, argb);        // UV 0..1 로 텍스처 전체를 사각형에 맞춘다(셰이더가 모양대로 자른다)
+        return true;
+    }
+
+    @Override
     public void drawText(String text, int x, int y, int argb, boolean shadow) {
         g.text(font, text, x, y, argb, shadow);
     }
@@ -77,6 +97,14 @@ public final class McGfx implements UiGfx {
         Identifier lut = p == null ? null : GradientTextures.get(colors, stops);
         if (lut == null) return false;
         g.blit(p, lut, x, y, 0f, 0f, w, h, 1, 1, 1, 1, 0xFFFFFFFF);
+        return true;
+    }
+
+    @Override
+    public boolean insetShadowRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int ox, int oy, int blur, int spread, int argb) {
+        com.mojang.renderpearl.api.pipeline.RenderPipeline p = RoundPipelines.getInset(tl, tr, br, bl, blur, ox, oy, spread);
+        if (p == null || w <= 0 || h <= 0) return false;
+        g.blit(p, RoundPipelines.WHITE, x, y, 0f, 0f, w, h, 1, 1, 1, 1, argb);
         return true;
     }
 

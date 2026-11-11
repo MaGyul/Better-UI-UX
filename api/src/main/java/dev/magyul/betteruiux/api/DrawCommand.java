@@ -21,6 +21,10 @@ public sealed interface DrawCommand {
 
     record FillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, int mode, int[] colors, float[] stops) implements DrawCommand {}
 
+    record DrawRoundTexture(String texture, int x, int y, int w, int h, int tl, int tr, int br, int bl, int argb) implements DrawCommand {}
+
+    record InsetShadowRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int ox, int oy, int blur, int spread, int argb) implements DrawCommand {}
+
     record FillGradient(int x, int y, int w, int h, int topArgb, int bottomArgb) implements DrawCommand {}
 
     record DrawTexture(String texture, int x, int y, int w, int h,

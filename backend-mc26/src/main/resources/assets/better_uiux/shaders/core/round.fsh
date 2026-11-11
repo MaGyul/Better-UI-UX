@@ -3,7 +3,7 @@
 
 // 둥근 사각형 셰이더(부드러운 가장자리). 사각형 전체에 UV 0..1 을 입혀 그리고, 크기는 화면 좌표와 UV 의 미분 비율로 구한다.
 // 파이프라인마다 정수 정의: RTL/RTR/RBR/RBL(네 모서리 반지름, GUI 픽셀), THICK(0 이 아니면 안쪽으로 이 두께의 고리만), BLUR(0 이 아니면 바깥 그림자:
-// 그려진 사각형은 실제 모양보다 BLUR 만큼 사방으로 크다), GRAD(0 이 아니면 Sampler0 가 가로 1줄 색 띠: 1 세로, 2 가로, 3 방사형, 4 원뿔).
+// 그려진 사각형은 실제 모양보다 BLUR 만큼 사방으로 크다), GRAD(0 이 아니면 Sampler0 가 가로 1줄 색 띠: 1 세로, 2 가로, 3 방사형, 4 원뿔), INSET(1 이면 안쪽 그림자: OX/OY/SPREAD/IBLUR).
 layout(std140) uniform DynamicTransforms {
     mat4 ModelViewMat;
     mat4 TextureMat;
@@ -38,7 +38,16 @@ void main() {
     vec2 shape = size - 2.0 * float(BLUR);
     float dist = roundBox(p, shape * 0.5, 0.0);
     float coverage;
-#if BLUR > 0
+#if INSET == 1
+    // 안쪽 그림자: 상자 안쪽만, (OX,OY) 만큼 옮기고 SPREAD 만큼 줄인 구멍 밖을 BLUR 만큼 부드럽게 칠한다.
+    float boxCover = clamp(0.5 - dist / pixel, 0.0, 1.0);
+    float hole = roundBox(p - vec2(float(OX), float(OY)), size * 0.5 - float(SPREAD), float(SPREAD));
+#if IBLUR > 0
+    coverage = boxCover * smoothstep(-float(IBLUR), float(IBLUR), hole);
+#else
+    coverage = boxCover * clamp(0.5 + hole / pixel, 0.0, 1.0);
+#endif
+#elif BLUR > 0
     coverage = 1.0 - smoothstep(-float(BLUR), float(BLUR), dist);
 #else
     coverage = clamp(0.5 - dist / pixel, 0.0, 1.0);
