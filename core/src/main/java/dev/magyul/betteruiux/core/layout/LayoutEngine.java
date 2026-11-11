@@ -120,8 +120,9 @@ public final class LayoutEngine {
     private Insets padding(LayoutBox b) {
         Insets def = b.tag().equals("button") ? new Insets(4, 8, 4, 8) : Insets.ZERO;
         Insets p = b.style.insets("padding", def);
-        int bw = Math.max(0, b.style.integer("border", 0));
-        return bw == 0 ? p : new Insets(p.top() + bw, p.right() + bw, p.bottom() + bw, p.left() + bw);
+        Insets bw = b.style.borderInsets(0);
+        return bw == Insets.ZERO || (bw.top() | bw.right() | bw.bottom() | bw.left()) == 0 ? p
+                : new Insets(p.top() + bw.top(), p.right() + bw.right(), p.bottom() + bw.bottom(), p.left() + bw.left());
     }
 
     private Insets margin(LayoutBox b) { return b.style.insets("margin", Insets.ZERO); }

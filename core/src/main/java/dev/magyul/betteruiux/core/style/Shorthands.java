@@ -40,8 +40,33 @@ final class Shorthands {
             expandFlex(m, value);
             return true;
         }
-        if (key.equals("border-width")) {
-            m.put("border", value);
+        if (key.equals("border-width") || key.equals("border-color")) {
+            List<String> t = CssMath.tokens(value);
+            if (t.size() <= 1 || value.contains("var(")) {
+                if (key.equals("border-width")) {
+                    m.put("border", value);
+                    return true;
+                }
+                return false;                                     // 색 하나는 그대로 border-color
+            }
+            List<String> f = four(value);
+            String suffix = key.equals("border-width") ? "-width" : "-color";
+            for (int i = 0; i < 4; i++) m.put("border-" + SIDES.get(i) + suffix, f.get(i));
+            return true;
+        }
+        for (String side : SIDES) {
+            if (key.equals("border-" + side) && !value.contains("var(")) {
+                String[] r = parseLine(CssMath.tokens(value));
+                m.put("border-" + side + "-width", r[0]);
+                if (r[2] != null) m.put("border-" + side + "-color", r[2]);
+                return true;
+            }
+        }
+        if (key.equals("outline") && !value.contains("var(")) {
+            String[] r = parseLine(CssMath.tokens(value));
+            m.put("outline-width", r[0]);
+            if (r[1] != null) m.put("outline-style", r[1]);
+            if (r[2] != null) m.put("outline-color", r[2]);
             return true;
         }
         if (key.equals("border") && !value.contains("var(")) {
@@ -103,6 +128,24 @@ final class Shorthands {
         }
     }
 
+    /** {@code 2px solid red} 류를 {width, style, color} 로 읽는다(style 이 none/hidden 이면 width 0). 없는 항목은 null(width 는 "1"). */
+    private static String[] parseLine(List<String> tokens) {
+        String width = null, style = null, color = null;
+        for (String tok : tokens) {
+            String low = tok.toLowerCase(Locale.ROOT);
+            if (BORDER_STYLES.contains(low)) style = low;
+            else if (isColor(tok)) color = tok;
+            else width = switch (low) {
+                case "thin" -> "1";
+                case "medium" -> "2";
+                case "thick" -> "3";
+                default -> tok;
+            };
+        }
+        if (style != null && (style.equals("none") || style.equals("hidden"))) width = "0";
+        return new String[] {width != null ? width : "1", style, color};
+    }
+
     private static boolean isColor(String tok) {
         return Colors.tryParse(tok) != null || tok.equalsIgnoreCase("currentcolor");
     }
@@ -123,6 +166,7 @@ final class Shorthands {
         if (style != null && (style.equals("none") || style.equals("hidden"))) width = "0";
         m.put("border", width != null ? width : "1");
         if (color != null) m.put("border-color", color);
+        if (style != null) m.put("border-style", style);
     }
 
     /** 1~4값을 top right bottom left 4값으로 펼친다(없으면 0). */

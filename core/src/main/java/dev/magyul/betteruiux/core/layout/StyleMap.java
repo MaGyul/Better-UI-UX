@@ -41,6 +41,20 @@ public final class StyleMap {
         }
     }
 
+    /**
+     * 변별 테두리 두께 {top,right,bottom,left}: {@code border}(전체) → {@code border-top-width} 등으로 덮어쓰기.
+     * {@code border-style: none|hidden} 이면 0. {@code def} 는 {@code border} 가 없을 때의 기본 두께.
+     */
+    public Insets borderInsets(int def) {
+        String style = get("border-style", "");
+        if (style.equalsIgnoreCase("none") || style.equalsIgnoreCase("hidden")) return Insets.ZERO;
+        int u = Math.max(0, integer("border", def));
+        return new Insets(side("border-top-width", u), side("border-right-width", u),
+                side("border-bottom-width", u), side("border-left-width", u));
+    }
+
+    private int side(String key, int u) { return has(key) ? Math.max(0, integer(key, u)) : u; }
+
     public boolean bool(String key, boolean def) {
         String v = values.get(key);
         return v == null ? def : v.equalsIgnoreCase("true") || v.equals("1");

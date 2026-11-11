@@ -5,6 +5,7 @@ import dev.magyul.betteruiux.api.UiGfx;
 import dev.magyul.betteruiux.core.doc.UiElement;
 import dev.magyul.betteruiux.core.doc.UiWidget;
 import dev.magyul.betteruiux.core.layout.Colors;
+import dev.magyul.betteruiux.core.layout.Insets;
 import dev.magyul.betteruiux.core.layout.LayoutBox;
 import dev.magyul.betteruiux.core.layout.LayoutEngine;
 import dev.magyul.betteruiux.core.layout.StyleMap;
@@ -79,15 +80,34 @@ public final class UiPainter {
             else if (hovered) defaultBg = s.color("hover-background", 0xFF777777);
             else defaultBg = 0xFF555555;
         }
-        fill(g, b.x, b.y, b.w, b.h, s.color("background", defaultBg), opacity);
+        BoxPainter.Radii radii = BoxPainter.radii(s, b.w, b.h);
+        String shadow = s.get("box-shadow");
+        if (shadow != null) BoxPainter.shadows(g, b.x, b.y, b.w, b.h, radii, BoxPainter.parseShadows(shadow), opacity);
 
-        int borderW = s.integer("border", button ? 1 : 0);
-        if (borderW > 0) {
+        String bgValue = s.get("background"), bgImage = s.get("background-image");
+        String gradientSrc = BoxPainter.isGradient(bgValue) ? bgValue : BoxPainter.isGradient(bgImage) ? bgImage : null;
+        int bgColor = BoxPainter.isGradient(bgValue) ? 0 : s.color("background", defaultBg);
+        BoxPainter.fillShape(g, b.x, b.y, b.w, b.h, radii, withOpacity(bgColor, opacity));
+        if (gradientSrc != null) {
+            BoxPainter.Gradient gr = BoxPainter.parseGradient(gradientSrc);
+            if (gr != null) BoxPainter.gradient(g, b.x, b.y, b.w, b.h, radii, gr, opacity);
+        }
+
+        Insets bw = s.borderInsets(button ? 1 : 0);
+        if ((bw.top() | bw.right() | bw.bottom() | bw.left()) > 0) {
             int bc = s.color("border-color", 0xFF000000);
-            fill(g, b.x, b.y, b.w, borderW, bc, opacity);
-            fill(g, b.x, b.y + b.h - borderW, b.w, borderW, bc, opacity);
-            fill(g, b.x, b.y + borderW, borderW, b.h - 2 * borderW, bc, opacity);
-            fill(g, b.x + b.w - borderW, b.y + borderW, borderW, b.h - 2 * borderW, bc, opacity);
+            int[] colors = {
+                withOpacity(s.color("border-top-color", bc), opacity), withOpacity(s.color("border-right-color", bc), opacity),
+                withOpacity(s.color("border-bottom-color", bc), opacity), withOpacity(s.color("border-left-color", bc), opacity)};
+            BoxPainter.ring(g, b.x, b.y, b.w, b.h, radii, bw, colors, s.get("border-style", "solid").toLowerCase());
+        }
+        int outlineW = "none".equalsIgnoreCase(s.get("outline-style", "")) ? 0 : Math.max(0, s.integer("outline-width", 0));
+        if (outlineW > 0) {
+            int off = s.integer("outline-offset", 0), grow = off + outlineW;
+            int oc = withOpacity(s.color("outline-color", s.color("color", 0xFFFFFFFF)), opacity);
+            BoxPainter.ring(g, b.x - grow, b.y - grow, b.w + 2 * grow, b.h + 2 * grow, radii.grow(grow),
+                    new Insets(outlineW, outlineW, outlineW, outlineW), new int[] {oc, oc, oc, oc},
+                    s.get("outline-style", "solid").toLowerCase());
         }
 
         if (button && state.focused(b)) {                    // Tab 으로 고른 버튼 표시

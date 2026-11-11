@@ -14,10 +14,10 @@
 - [~] Phase 1 선택자·캐스케이드 — 완료: `+ ~` 결합자, `:not/:is/:where`, `:nth-child/-last-child/-of-type/-last-of-type`, `:only-child/:first-of-type/:last-of-type/:only-of-type/:empty/:checked`, `[attr|=v]`·`i` 플래그, `inherit/initial/unset`. `@media`(width/height/aspect-ratio/orientation, min-/max-, 범위 문법, not/and/쉼표, 중첩), `@supports`(prop/selector()/not/and/or), `@import`(미디어 조건, 순환 방지, 가져온 시트가 앞 순서), 에디터 스캔이 조건 블록 안 규칙도 인식. 남음: `:focus`(상태 오버레이 배선 필요), `::before/::after`, 오버레이를 마지막 compound 외에도 허용
 - [~] Phase 2 값·단위·색 — 완료: `#RGB #RGBA #RRGGBB #RRGGBBAA`(CSS 순서로 전면 마이그레이션, 데모·테스트·문서 포함), `rgb/rgba/hsl/hsla/hwb`, CSS 색 이름 148개 + `mc-*` 팔레트, `currentColor`, 단위 `em rem pt pc in cm mm q vw vh vmin vmax`, `calc/min/max/clamp`(퍼센트 없는 식), 숏핸드 `border`, `border-width`, `margin-*`, `padding-*`. 남음: `%` 가 섞인 calc(레이아웃 단계 평가), `font`/`transition`/`background` 숏핸드
 - [x] Phase 3 박스 모델·레이아웃 (퍼센트가 섞인 calc 제외) — `min-/max-*`, `box-sizing`, 테두리가 레이아웃 공간 차지(안쪽 여백에 더해짐, 골든 재생성), `margin:auto`(row/column 주축·교차축), flex 완성(`flex-wrap`, `grow`/`flex-grow`, `flex-shrink`(명시한 항목만), `flex-basis`, `flex` 숏핸드, `order`, `justify-content`/`align-items` 별칭, `space-around/evenly`, `row-gap`/`column-gap`), `display:flex`+`flex-direction`(모든 태그), `position: relative|absolute|fixed` + top/right/bottom/left(부모 상자 기준), `z-index`(그리기·히트 순서), `aspect-ratio`, grid(`grid-template-columns/rows`, `fr`, `repeat()`, `minmax()`, `grid-column/row`의 span·시작 줄, `justify-self`/`align-self`, 기존 `columns` 유지)
-- [ ] Phase 4 렌더링
+- [x] Phase 4 렌더링 — **`UiGfx` API 는 늘리지 않고** 기존 `fillRect`/세로 `fillGradient` 만으로 구현(`render/BoxPainter`): `border-radius`(행 단위 근사), `background: linear-gradient()`/`background-image`(다중 정지점, 가장 가까운 축), `box-shadow`(번짐 층 근사), 변별 테두리(두께·색), `border-style: dashed|dotted`, `outline`+`outline-offset`. 이유: McGfx 를 실기 검증 없이 건드리지 않고, 두 렌더러에서 동일하며 골든으로 검증 가능. 한계: 안티앨리어싱 없음, 둥근 클립 없음, inset 그림자·radial/conic 없음, 이미지 모서리 라운딩 없음
 - [ ] Phase 5 텍스트
 - [ ] Phase 6 애니메이션
-- [ ] Phase 7 도구·문서 (에디터 `PropertyModel`/`StyleText` 신규 문법 대응 포함)
+- [~] Phase 7 도구·문서 — 완료: `docs/uicss-reference.md`. 남음: 에디터 패널에 새 속성 행(`min/max`, `border-radius` 등), 값 출처 표시, `:hover` 강제 미리보기 (에디터 `PropertyModel`/`StyleText` 신규 문법 대응 포함)
 
 ### 구현 메모
 - `red` 등 색 이름은 이제 CSS 표준값(`#FF0000`). 옛 마인크래프트 팔레트는 `mc-red` 등으로 접근.

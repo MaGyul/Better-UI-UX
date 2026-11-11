@@ -101,7 +101,10 @@ public final class StyleResolver {
 
     private static final Set<String> LENGTH_PROPS = Set.of("width", "height", "min-width", "max-width", "min-height",
             "max-height", "margin", "padding", "gap", "x", "y", "border", "translate-x", "translate-y",
-            "row-gap", "column-gap", "top", "left", "right", "bottom", "flex-basis");
+            "row-gap", "column-gap", "top", "left", "right", "bottom", "flex-basis", "border-radius",
+            "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
+            "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+            "outline-width", "outline-offset");
     private static final Set<String> COLOR_PROPS = Set.of("background", "border-color", "tint", "bar-color",
             "fill-color", "check-color", "block-tint", "hover-background", "pressed-background", "disabled-background");
 
