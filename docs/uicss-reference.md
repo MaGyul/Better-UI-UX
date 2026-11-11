@@ -42,7 +42,7 @@ CSS3 의 게임 UI 에 의미 있는 부분집합. 구현 계획과 진행 상�
 ## 그리기
 
 - `background`(색 또는 그라디언트), `background-image: linear-gradient(...)`.
-  그라디언트는 방향 `to top|bottom|left|right` / `Ndeg` 을 **가장 가까운 축**(세로·가로)으로 근사하고, 다중 정지점과 `%` 위치를 지원한다. `radial-gradient`/`conic-gradient` 는 첫 색 단색.
+  그라디언트는 방향 `to top|bottom|left|right` / `Ndeg` 을 **가장 가까운 축**(세로·가로)으로 근사하고, 다중 정지점과 `%` 위치를 지원한다. `radial-gradient`(가운데 기준 타원)과 `conic-gradient`(위에서 시계방향)는 모양/크기/위치 인자를 읽고 무시한다. 셰이더가 없는 백엔드에서는 radial 은 띠 근사, conic 은 첫 색 단색이다.
 - `border`(두께 또는 `1px solid red`), `border-width`(1~4값), `border-color`(1~4값), `border-top|right|bottom|left`, `border-style: solid|dashed|dotted|none`
   (dashed/dotted 는 둥글지 않은 테두리에서만, 둥글면 solid).
 - `border-radius`(1~4값, px/%, 타원 `/` 는 앞 값만), `border-top-left-radius` 등 모서리별.
@@ -100,7 +100,7 @@ View 메뉴의 상태 미리보기로 `:hover :active :focus` 를 선택한 요�
 - **둥근 클립**: `overflow: hidden` 과 `border-radius` 를 같이 쓰면 자식이 둥근 모양으로 잘린다. 모서리 행 묶음(최대 12개)마다 자식을 다시 그리므로 자식이 많고 무거우면 비용이 든다.
 - **글꼴**: `font-style: italic`, `font-family: uniform | alt | illageralt | 네임스페이스:경로`(목록의 첫 알려진 값; serif 같은 이름은 건너뜀). 글꼴별 폭으로 배치된다. 둘 다 상속된다.
 
-- **부드러운 가장자리**: 둥근 모서리의 채움·테두리(실선, 네 변 두께 같음)·번지는 `box-shadow` 는 셰이더로 안티앨리어싱되어 한 번에 그려진다. 반지름이 서로 다르거나 점선 테두리, 그라디언트·이미지·`inset` 그림자는 사각형 근사로 그려진다.
+- **부드러운 가장자리**: 둥근 모서리의 채움·테두리(실선, 네 변 두께 같음)·번지는 `box-shadow`·그라디언트(`linear/radial/conic`)는 셰이더로 안티앨리어싱되어 한 번에 그려진다(반지름이 서로 달라도 된다). 점선 테두리, 네 변 두께가 다른 테두리, 이미지, `inset` 그림자는 사각형 근사로 그려진다.
 
 ## 아직 없는 것
 
