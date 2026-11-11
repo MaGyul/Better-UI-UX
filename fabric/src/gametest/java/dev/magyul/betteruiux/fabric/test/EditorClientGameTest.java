@@ -40,6 +40,7 @@ public class EditorClientGameTest implements FabricClientGameTest {
             });
             ctx.waitTicks(3);
             externalStylesheet(ctx);
+            keyframes(ctx);
             fileMenuSwitchesScreens(ctx);
             sizePreview(ctx);
             autosaveRecovery(ctx);
@@ -80,6 +81,26 @@ public class EditorClientGameTest implements FabricClientGameTest {
         check(read("ui/gt_ext.uicss").contains(".card { padding: 16;"), "Ctrl+Y 로 다시 16 이어야 한다");
         ctrl(ctx, KEY_Z);                                                  // 다음 시나리오를 위해 원래대로
         ctx.takeScreenshot("3-external-style-undone");
+    }
+
+    /** 요소가 쓰는 @keyframes 가 패널에 나오고, 지점의 값을 고치면 문서에 반영되며 Ctrl+Z 로 되돌아간다. */
+    private void keyframes(ClientGameTestContext ctx) {
+        openEditor(ctx, "gt_kf");
+        selectById(ctx, "box");
+        ctx.waitTicks(2);
+        ctx.takeScreenshot("3b-keyframes-panel");
+        check(find(ctx, "- 키프레임: pulse") != null, "키프레임 구역이 보여야 한다");
+        int[] value = find(ctx, "1");                                   // 마지막 지점(to) 의 opacity 값
+        check(value != null, "to 지점의 opacity 값을 찾지 못했다");
+        click(ctx, value[0] + 1, value[1] + 1);
+        check(editor(ctx, ed -> ed.isEditingField()), "값 칸을 누르면 편집 상태가 된다");
+        ctx.getInput().typeChars("0.5");
+        ctx.getInput().pressKey(KEY_ENTER);
+        ctx.waitTicks(2);
+        ctx.takeScreenshot("3c-keyframes-edited");
+        check(editor(ctx, ed -> ed.text().contains("to { opacity: 0.5; }")), "지점 값이 문서에 반영돼야 한다");
+        ctrl(ctx, KEY_Z);
+        check(editor(ctx, ed -> ed.text().contains("to { opacity: 1; }")), "Ctrl+Z 로 되돌아가야 한다");
     }
 
     /** File 메뉴에서 다른 화면을 열 수 있다. */
@@ -133,6 +154,9 @@ public class EditorClientGameTest implements FabricClientGameTest {
                     "<screen>\n  <link rel=\"style\" href=\"gt_ext.uicss\"/>\n  <panel id=\"box\" class=\"card\" anchor=\"center\" width=\"160\" height=\"70\">\n"
                             + "    <label text=\"external style\"/>\n  </panel>\n</screen>\n");
             Files.writeString(base.resolve("ui/gt_ext.uicss"), ".card { padding: 8; background: #E0181A24; }\n");
+            Files.writeString(base.resolve("ui/gt_kf.xml"),
+                    "<screen>\n  <style>\n    .p { animation: pulse 1s infinite; }\n    @keyframes pulse {\n      from { opacity: 0; }\n      to { opacity: 1; }\n    }\n  </style>\n"
+                            + "  <panel id=\"box\" class=\"p\" anchor=\"center\" width=\"120\" height=\"50\" background=\"#E0181A24\"/>\n</screen>\n");
             Files.writeString(base.resolve("ui/gt_other.xml"), "<screen>\n  <label text=\"other\"/>\n</screen>\n");
             Files.writeString(base.resolve("ui/gt_auto.xml"), "<screen>\n  <label text=\"saved\"/>\n</screen>\n");
             Files.writeString(base.resolve("autosave/gt_auto.xml"), "<screen>\n  <label text=\"recovered\"/>\n</screen>\n");

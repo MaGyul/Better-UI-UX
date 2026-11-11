@@ -106,6 +106,8 @@ public final class EditorOps {
             case "scroll" -> "<scroll width=\"120\" height=\"80\" gap=\"2\"/>";
             case "tabs" -> "<tabs width=\"140\" height=\"80\">\n  <tab title=\"One\"/>\n  <tab title=\"Two\"/>\n</tabs>";
             case "dialog" -> "<dialog width=\"140\" height=\"70\"/>";
+            case "video" -> "<video src=\"file:video.mp4\" width=\"96\" height=\"54\"/>";
+            case "stack" -> "<stack width=\"80\" height=\"40\"/>";
             default -> throw new IllegalArgumentException("추가할 수 없는 요소: " + tag);
         };
     }
