@@ -312,18 +312,44 @@ final class BoxPainter {
             return;
         }
         if (o.vertical()) {
+            // 모서리가 깎이지 않은 가운데 구간(모든 행의 여백이 0)은 행마다 그리지 않고 fillGradient 로(색 멈춤 지점마다 끊어서) 그린다.
+            // 키 큰 상자에서 그리기 명령 수가 높이에 비례해 늘어나는 것을 막는다.
             int[][] sp = spans(w, h, r);
-            int start = 0, startColor = o.at(0.5f / h);
-            for (int i = 1; i <= h; i++) {
-                int c = i == h ? 0 : o.at((i + 0.5f) / h);
-                if (i == h || sp[0][i] != sp[0][start] || sp[1][i] != sp[1][start] || c != startColor) {
-                    rect(g, x + sp[0][start], y + start, w - sp[0][start] - sp[1][start], i - start, startColor);
-                    start = i;
-                    startColor = c;
+            int a = 0;
+            while (a < h && (sp[0][a] != 0 || sp[1][a] != 0)) a++;
+            int b = h;
+            while (b > a && (sp[0][b - 1] != 0 || sp[1][b - 1] != 0)) b--;
+            if (b - a < 4) {
+                solidRows(g, x, y, w, h, sp, o, 0, h);
+            } else {
+                solidRows(g, x, y, w, h, sp, o, 0, a);
+                float[] pos = o.pos();
+                int y0 = a;
+                for (int k = 0; k <= pos.length; k++) {
+                    int y1 = k < pos.length ? Math.max(a, Math.min(b, Math.round(pos[k] * h))) : b;
+                    if (y1 > y0) {
+                        g.fillGradient(x, y + y0, w, y1 - y0, o.at((float) y0 / h), o.at((float) y1 / h));
+                        y0 = y1;
+                    }
                 }
+                solidRows(g, x, y, w, h, sp, o, b, h);
             }
         } else {
             strips(g, x, y, w, h, o, spans(h, w, r.transposed()));
+        }
+    }
+
+    /** 행 [from, to) 를 행마다(같은 모양·색이 이어지면 묶어서) 단색 사각형으로 그린다. */
+    private static void solidRows(UiGfx g, int x, int y, int w, int h, int[][] sp, Gradient o, int from, int to) {
+        if (from >= to) return;
+        int start = from, startColor = o.at((from + 0.5f) / h);
+        for (int i = from + 1; i <= to; i++) {
+            int c = i == to ? 0 : o.at((i + 0.5f) / h);
+            if (i == to || sp[0][i] != sp[0][start] || sp[1][i] != sp[1][start] || c != startColor) {
+                rect(g, x + sp[0][start], y + start, w - sp[0][start] - sp[1][start], i - start, startColor);
+                start = i;
+                startColor = c;
+            }
         }
     }
 
@@ -404,7 +430,7 @@ final class BoxPainter {
                 fillShape(g, sx, sy, sw, sh, base, color);
                 continue;
             }
-            int n = Math.min(s.blur(), 10);
+            int n = Math.max(1, Math.min((s.blur() + 1) / 2, 6));      // 층 수: 번짐 2px 당 한 층(최대 6) — 명령 수를 줄이려고 번짐 1px 당 한 층이던 것을 줄였다
             double prev = 0;
             for (int layer = 1; layer <= n + 1; layer++) {
                 double t = layer / (double) (n + 1);
@@ -415,7 +441,9 @@ final class BoxPainter {
                 if (a8 <= 0) continue;
                 int e = (int) Math.round(s.blur() * (n + 1 - layer) / (double) n);   // 바깥 → 안쪽으로 줄어드는 확장량
                 if (layer == n + 1) e = 0;
-                fillShape(g, sx - e, sy - e, sw + 2 * e, sh + 2 * e, base.grow(e), (a8 << 24) | (color & 0xFFFFFF));
+                Radii rr = base.grow(e);
+                rr = new Radii(Math.min(rr.tl(), 3), Math.min(rr.tr(), 3), Math.min(rr.br(), 3), Math.min(rr.bl(), 3));   // 번진 층은 모서리를 거칠게(명령 수 절약)
+                fillShape(g, sx - e, sy - e, sw + 2 * e, sh + 2 * e, rr, (a8 << 24) | (color & 0xFFFFFF));
             }
         }
     }

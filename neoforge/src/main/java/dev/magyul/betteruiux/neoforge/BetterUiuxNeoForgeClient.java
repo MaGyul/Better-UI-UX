@@ -49,6 +49,7 @@ public final class BetterUiuxNeoForgeClient {
                 UiOpener.autoOpenIfRequested(baseDir);
             }
         });
+        NeoSmoke.install(baseDir);                                  // -Dbetteruiux.smoke=true 일 때만 동작하는 개발용 스모크
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> ClientSync.tick());
         NeoForge.EVENT_BUS.addListener((RegisterClientCommandsEvent e) ->
                 e.getDispatcher().register(Commands.literal("uiux")

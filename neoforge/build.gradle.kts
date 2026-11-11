@@ -17,6 +17,11 @@ neoForge {
             providers.gradleProperty("quickPlay").orNull?.let { programArguments.addAll("--username", "Dev", "--quickPlayMultiplayer", it) }
             systemProperty("forge.logging.markers", "REGISTRIES")
         }
+        // 스모크 테스트(./gradlew :neoforge:runSmokeClient): 타이틀 화면에서 CSS3 데모를 열어 렌더링을 확인하고 종료한다(NeoSmoke).
+        register("smokeClient") {
+            client()
+            systemProperty("betteruiux.smoke", "true")
+        }
         register("server") {
             server()
             programArgument("--nogui")

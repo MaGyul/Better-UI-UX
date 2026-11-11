@@ -92,9 +92,17 @@
 - 도구: `@media` 조건 평가 표시, 새 문법에 대한 규칙 편집기 안내, 프로퍼티 레지스트리(타입 검증)
 - 검증: 이 작업 전체는 core 단위/골든 테스트로만 확인했다. Fabric/NeoForge 실기(Vulkan·OpenGL)와 에디터 UI 조작은 직접 확인하지 못했다.
 
-## 실기 검증 (GameTest)
+## 실기 검증 (GameTest / 스모크)
 
-`./gradlew :fabric:runClientGameTest` 의 `Css3ClientGameTest` 가 실제 Fabric 클라이언트(26.x, 월드 안, GUI 배율 1)에서 확인한다:
-둥근 모서리·그라디언트·그림자·아웃라인이 실제로 그려짐, `flex-wrap` 줄바꿈, `grid` 의 `1fr 2fr` 트랙, `::before` 글자,
-진짜 마우스 이동으로 `:hover` 규칙 켜짐/꺼짐, `width` 전환(레이아웃 애니메이션)에서 옆 요소가 밀리고 최종값에 멈춤, 스타일 경고 없음. 스크린샷은 `fabric/build/run/clientGameTest/screenshots/css-*.png`.
-아직 GameTest 로 확인하지 못한 것: NeoForge, 에디터 패널의 새 구역/출처 툴팁, 위젯 글자 스타일, `@media`, 다른 해상도/GUI 배율, 성능.
+**Fabric** — `./gradlew :fabric:runClientGameTest` (실제 창·월드·마우스, 스크린샷은 `fabric/build/run/clientGameTest/screenshots`):
+- `Css3ClientGameTest`: 둥근 모서리·그라디언트·그림자·아웃라인이 실제로 그려짐, `flex-wrap`, grid `1fr 2fr`, `::before`, 진짜 마우스로 `:hover` 켜짐/꺼짐, `width` 전환(레이아웃 애니메이션)에서 옆 요소가 밀림, 경고 없음.
+- `Css3AdvancedClientGameTest`: 위젯 글자 스타일(`text-transform`/`letter-spacing`/`font-weight`), `@media (max-width)` 가 GUI 배율을 바꾸면 켜지고 꺼짐, 에디터 패널의 새 구역(크기·배치/글자/효과)과 값 칸 "출처:" 툴팁, 렌더링 비용 측정(`[PERF]` 로그).
+
+**NeoForge** — `./gradlew :neoforge:runSmokeClient`: NeoForge 에는 클라이언트 GameTest 가 없어 `NeoSmoke`(`-Dbetteruiux.smoke=true` 일 때만 동작)가 타이틀 화면에서 CSS3 데모를 열어
+실제 렌더링 경로로 그리고, 그리기 명령(합성된 사각형, `::before`, flex-wrap, 경고 없음)을 확인한 뒤 `[SMOKE] PASS/FAIL` 을 찍고 종료한다.
+
+**성능 측정에서 나온 것** (240칸 격자, 칸마다 장식): 명령 수가 곧 비용이다(명령 1,200개까지는 프레임 영향 없음, 8,400개에서 9fps).
+그래서 둥근 그라디언트는 가운데 구간을 `fillGradient` 한 번으로 그리고(키가 커도 명령 수 불변), 번진 그림자는 층 수를 줄이고 층의 모서리를 거칠게 해서 상자당 명령을 56 → 약 20 으로 줄였다(`DrawCostTest` 가 지킨다).
+남은 큰 비용은 둥근 테두리(상자당 ~17): 모서리 행마다 사각형이 필요해서다. 한 화면에 장식 상자를 수백 개 쓰지 않는 것이 좋다.
+
+아직 확인하지 못한 것: 다른 해상도, `:hover` 상태 미리보기 메뉴(수동 조작), Vulkan/OpenGL 구분 비교, 스크린샷의 시각적 정밀 비교.
