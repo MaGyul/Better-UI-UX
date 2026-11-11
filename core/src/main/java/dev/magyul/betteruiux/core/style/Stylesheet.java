@@ -57,6 +57,9 @@ public final class Stylesheet {
             "use", "block-size", "block-tint", "enabled", "checked", "value", "min", "max", "step", "maxlength",
             "placeholder", "options", "group", "title", "tooltip", "modal", "onclick", "onchange", "onsubmit");
 
+    /** 속성 값의 자동 완성 후보(열거형 속성은 가능한 값 전부, 그 밖에는 흔한 값). 알 수 없는 속성이면 빈 목록. */
+    public static java.util.List<String> valueSuggestions(String prop) { return PropValues.suggest(prop == null ? "" : prop.trim()); }
+
     /**
      * 선언 하나를 검사해 사람이 읽을 경고를 돌려준다(문제가 없으면 null): 모르는 속성(비슷한 이름 제안)이거나 알려진 속성의 값이 명백히 잘못된 경우.
      * 에디터가 규칙을 고칠 때 바로 알려 주는 데 쓴다.

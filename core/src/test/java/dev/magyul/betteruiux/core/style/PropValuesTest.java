@@ -42,4 +42,29 @@ class PropValuesTest {
         assertEquals(2, w.stream().filter(x -> x.contains("'width: abc'") || x.contains("'opacity: red'")).count(), w.toString());
         assertTrue(s.rules().size() >= 3, "값은 그대로 저장된다");
     }
+
+    @Test
+    void shorthandValuesAreChecked() {
+        for (String[] ok : new String[][] {{"margin", "4 8"}, {"margin", "auto"}, {"padding", "0"}, {"border", "1 solid #FFFFFF"}, {"border", "2px dashed red"},
+                {"border", "none"}, {"border-radius", "4 8 4 8"}, {"border-radius", "50%"}, {"box-shadow", "0 2 4 #000000AA"},
+                {"box-shadow", "inset 0 0 6 #000000AA, 0 1 2 red"}, {"box-shadow", "none"}, {"background", "#102030"}, {"background", "linear-gradient(#FF0000, #0000FF)"},
+                {"background", "transparent"}, {"font-weight", "bold"}, {"font-weight", "700"}, {"outline", "1 solid #FFFFFF"}}) {
+            assertNull(PropValues.check(ok[0], ok[1]), ok[0] + ": " + ok[1]);
+        }
+        assertNotNull(PropValues.check("margin", "1 2 3 4 5"));
+        assertNotNull(PropValues.check("margin", "abc"));
+        assertNotNull(PropValues.check("border", "1 sold #FFFFFF"));
+        assertNotNull(PropValues.check("border-radius", "big"));
+        assertNotNull(PropValues.check("box-shadow", "0 #000000"));
+        assertNotNull(PropValues.check("box-shadow", "0 2 4 nocolor"));
+        assertNotNull(PropValues.check("background", "12abc"));
+        assertNotNull(PropValues.check("font-weight", "heavy"));
+    }
+
+    @Test
+    void valueSuggestionsExistForShorthands() {
+        assertTrue(PropValues.suggest("box-shadow").contains("none"));
+        assertTrue(PropValues.suggest("background").stream().anyMatch(x -> x.startsWith("linear-gradient")));
+        assertTrue(PropValues.suggest("border").contains("1 solid #FFFFFF"));
+    }
 }

@@ -145,4 +145,38 @@ class EditorStyleRulesTest {
         assertTrue(StyleText.lint("xcss:a.uicss:0:opacity", "red").contains("opacity"));
         assertEquals(null, StyleText.lint("css+:0", ""));
     }
+
+    @Test
+    void propertyNamesAreCompletedWithTab() throws Exception {
+        EditorController e = selected();
+        DrawCommand.DrawText add = find(paint(e), "+ 추가");
+        click(e, W - EditorController.RIGHT_W + 60 + 5, add.y() + 2);
+        for (char c : "opac".toCharArray()) e.charTyped(c);
+        paint(e);                                                      // 후보 목록이 그려져야 Tab 이 받는다
+        e.keyPressed(EditorKey.TAB, false, false);
+        for (char c : "0.5".toCharArray()) e.charTyped(c);
+        e.keyPressed(EditorKey.ENTER, false, false);
+        assertTrue(e.text().contains("opacity: 0.5"), e.text());
+    }
+
+    @Test
+    void ruleSuggestionsForNamesAndValues() {
+        assertEquals(java.util.List.of(), EditorController.ruleSuggestions(""));
+        assertTrue(EditorController.ruleSuggestions("box-s").contains("box-shadow: "));
+        assertTrue(EditorController.ruleSuggestions("box-s").contains("box-sizing: "));
+        assertEquals("position: ", EditorController.ruleSuggestions("posi").get(0), "접두사로 시작하는 것이 먼저");
+        assertTrue(EditorController.ruleSuggestions("position: ").contains("position: absolute"));
+        assertEquals(java.util.List.of("position: relative"), EditorController.ruleSuggestions("position: rel"));
+        assertEquals(java.util.List.of(), EditorController.ruleSuggestions("position: absolute"), "이미 완성이면 닫는다");
+        assertTrue(EditorController.ruleSuggestions("color: red; displ").contains("color: red; display: "), "앞선 선언은 그대로 둔다");
+        assertEquals(java.util.List.of(), EditorController.ruleSuggestions("made-up: x"));
+    }
+
+    @Test
+    void valueSuggestionsComeFromTheTypeTable() {
+        assertTrue(dev.magyul.betteruiux.core.style.Stylesheet.valueSuggestions("display").contains("flex"));
+        assertTrue(dev.magyul.betteruiux.core.style.Stylesheet.valueSuggestions("width").contains("auto"));
+        assertTrue(dev.magyul.betteruiux.core.style.Stylesheet.valueSuggestions("color").contains("transparent"));
+        assertEquals(java.util.List.of(), dev.magyul.betteruiux.core.style.Stylesheet.valueSuggestions("made-up"));
+    }
 }

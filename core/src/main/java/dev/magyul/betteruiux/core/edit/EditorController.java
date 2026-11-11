@@ -2122,6 +2122,7 @@ public final class EditorController {
     /** 편집 중인 칸의 자동 완성 후보(onClick 등). */
     private List<String> currentSuggestions() {
         if (editKey == null) return List.of();
+        if (StyleText.isRuleAddKey(editKey)) return ruleSuggestions(fieldText.buf.toString());
         List<String> all = host.suggestions(editKey);
         if (all.isEmpty()) return List.of();
         String q = fieldText.buf.toString().trim().toLowerCase();
@@ -2131,6 +2132,37 @@ public final class EditorController {
             if (q.isEmpty() || c.toLowerCase().contains(q)) out.add(c);
         }
         out.sort((a, b) -> Boolean.compare(!a.toLowerCase().startsWith(q), !b.toLowerCase().startsWith(q)));
+        return out.size() > SUGGEST_MAX ? new ArrayList<>(out.subList(0, SUGGEST_MAX)) : out;
+    }
+
+    /**
+     * 규칙에 선언을 더하는 칸의 자동 완성: 마지막 선언의 속성 이름을 쓰는 동안은 알려진 속성(고르면 {@code "속성: "} 까지 채움),
+     * {@code ':'} 뒤에서는 그 속성의 값 후보. 앞선 선언({@code ';' 앞})은 그대로 앞에 붙인다.
+     */
+    static List<String> ruleSuggestions(String buf) {
+        int semi = buf.lastIndexOf(';');
+        String head = semi < 0 ? "" : buf.substring(0, semi + 1) + " ";
+        String cur = (semi < 0 ? buf : buf.substring(semi + 1)).stripLeading();
+        int colon = cur.indexOf(':');
+        List<String> out = new ArrayList<>();
+        if (colon < 0) {
+            String q = cur.trim().toLowerCase();
+            if (q.isEmpty()) return out;                                   // 아무것도 안 썼으면 목록을 띄우지 않는다
+            List<String> props = new ArrayList<>(dev.magyul.betteruiux.core.style.Stylesheet.KNOWN_PROPS);
+            java.util.Collections.sort(props);
+            for (String p : props) if (p.contains(q) && !p.equals(q)) out.add(p);
+            out.sort((a, b) -> Boolean.compare(!a.startsWith(q), !b.startsWith(q)));
+            out.replaceAll(p -> head + p + ": ");
+        } else {
+            String prop = cur.substring(0, colon).trim();
+            String q = cur.substring(colon + 1).trim().toLowerCase();
+            for (String v : dev.magyul.betteruiux.core.style.Stylesheet.valueSuggestions(prop)) {
+                if (v.equalsIgnoreCase(q)) return List.of();                 // 이미 완성
+                if (q.isEmpty() || v.toLowerCase().contains(q)) out.add(v);
+            }
+            out.sort((a, b) -> Boolean.compare(!a.toLowerCase().startsWith(q), !b.toLowerCase().startsWith(q)));
+            out.replaceAll(v -> head + prop + ": " + v);
+        }
         return out.size() > SUGGEST_MAX ? new ArrayList<>(out.subList(0, SUGGEST_MAX)) : out;
     }
 

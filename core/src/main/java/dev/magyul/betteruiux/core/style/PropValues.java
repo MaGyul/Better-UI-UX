@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.core.style;
 
 import dev.magyul.betteruiux.core.layout.Colors;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -13,11 +14,12 @@ import java.util.regex.Pattern;
 final class PropValues {
     private PropValues() {}
 
-    private enum Type { LENGTH, NUMBER, COLOR, ENUM }
+    private enum Type { LENGTH, NUMBER, COLOR, ENUM, BOX, RADIUS, BORDER, SHADOW, BACKGROUND, WEIGHT }
 
     private static final Pattern LENGTH = Pattern.compile("-?([0-9]+[.]?[0-9]*|[.][0-9]+)(px|%|em|rem|vw|vh|vmin|vmax|pt|deg|s|ms)?");
     private static final Set<String> GLOBAL = Set.of("inherit", "initial", "unset", "revert");
     private static final Set<String> LENGTH_WORDS = Set.of("auto", "fill", "none", "normal", "min-content", "max-content", "thin", "medium", "thick");
+    private static final Set<String> BORDER_STYLES = Set.of("solid", "dashed", "dotted", "double", "hidden", "groove", "ridge", "inset", "outset");
     private static final Set<String> COLOR_WORDS = Set.of("none", "transparent", "currentcolor");
 
     private static final Map<String, Type> TYPES = new java.util.HashMap<>();
@@ -37,6 +39,18 @@ final class PropValues {
                 "fill-color", "check-color"}) {
             TYPES.put(p, Type.COLOR);
         }
+        for (String p : new String[] {"margin", "padding"}) TYPES.put(p, Type.BOX);
+        for (String p : new String[] {"margin-top", "margin-right", "margin-bottom", "margin-left", "padding-top", "padding-right", "padding-bottom", "padding-left"}) {
+            TYPES.put(p, Type.LENGTH);
+        }
+        for (String p : new String[] {"border-radius", "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"}) {
+            TYPES.put(p, Type.RADIUS);
+        }
+        for (String p : new String[] {"border", "border-top", "border-right", "border-bottom", "border-left", "outline"}) TYPES.put(p, Type.BORDER);
+        TYPES.put("box-shadow", Type.SHADOW);
+        TYPES.put("text-shadow", Type.SHADOW);
+        TYPES.put("background", Type.BACKGROUND);
+        TYPES.put("font-weight", Type.WEIGHT);
         enumOf("position", "static", "relative", "absolute", "fixed", "sticky");
         enumOf("display", "block", "inline", "inline-block", "flex", "inline-flex", "grid", "inline-grid", "none", "contents");
         enumOf("flex-wrap", "nowrap", "wrap", "wrap-reverse");
@@ -58,6 +72,29 @@ final class PropValues {
     private static void enumOf(String prop, String... values) {
         TYPES.put(prop, Type.ENUM);
         ENUMS.put(prop, Set.of(values));
+    }
+
+    /** 속성의 값 후보(열거형이면 가능한 값, 그 밖에는 흔한 키워드). 알 수 없는 속성이면 빈 목록. 자동 완성용. */
+    static java.util.List<String> suggest(String prop) {
+        Type t = TYPES.get(prop);
+        if (t == null) return java.util.List.of();
+        java.util.List<String> out = new java.util.ArrayList<>();
+        switch (t) {
+            case ENUM -> out.addAll(new java.util.TreeSet<>(ENUMS.get(prop)));
+            case LENGTH -> out.addAll(java.util.List.of("auto", "fill", "0", "50%", "100%"));
+            case COLOR -> out.addAll(java.util.List.of("transparent", "currentColor", "#FFFFFF", "#000000", "red", "green", "blue", "yellow", "white", "black"));
+            case NUMBER -> out.addAll(java.util.List.of("0", "1"));
+            case BOX -> out.addAll(java.util.List.of("0", "4", "8", "4 8", "auto"));
+            case RADIUS -> out.addAll(java.util.List.of("0", "4", "8", "50%"));
+            case BORDER -> out.addAll(java.util.List.of("1 solid #FFFFFF", "2 solid #000000", "1 dashed #888888", "none"));
+            case SHADOW -> out.addAll(java.util.List.of("0 2 4 #000000AA", "0 0 8 #000000FF", "inset 0 0 6 #000000AA", "none"));
+            case BACKGROUND -> out.addAll(java.util.List.of("transparent", "#000000", "#FFFFFF", "linear-gradient(#FF0000, #0000FF)",
+                    "radial-gradient(#FF0000, #0000FF)", "conic-gradient(#FF0000, #00FF00, #0000FF)", "none"));
+            case WEIGHT -> out.addAll(java.util.List.of("normal", "bold", "bolder", "lighter", "400", "700"));
+        }
+        out.add("inherit");
+        out.add("initial");
+        return out;
     }
 
     /** 값이 명백히 잘못됐으면 사람이 읽을 사유, 아니면 null. */
@@ -85,6 +122,49 @@ final class PropValues {
             }
             case ENUM -> {
                 if (!ENUMS.get(prop).contains(low)) return "가능한 값: " + String.join(", ", new java.util.TreeSet<>(ENUMS.get(prop)));
+            }
+            case BOX -> {
+                List<String> toks = CssMath.tokens(low);
+                if (toks.size() > 4) return "값은 1~4개(위 오른쪽 아래 왼쪽)입니다";
+                for (String tok : toks) if (!LENGTH.matcher(tok).matches() && !tok.equals("auto")) return "길이(예: 8, 4px, auto)가 아닙니다: " + tok;
+            }
+            case RADIUS -> {
+                List<String> toks = CssMath.tokens(low);
+                int count = 0;
+                for (String tok : toks) {
+                    if (tok.equals("/")) continue;
+                    count++;
+                    if (!LENGTH.matcher(tok).matches()) return "길이(예: 4, 8px, 50%)가 아닙니다: " + tok;
+                }
+                if (count > 8) return "값이 너무 많습니다";
+            }
+            case BORDER -> {
+                for (String tok : CssMath.tokens(low)) {
+                    boolean ok = LENGTH.matcher(tok).matches() || LENGTH_WORDS.contains(tok) || BORDER_STYLES.contains(tok)
+                            || COLOR_WORDS.contains(tok) || Colors.tryParse(tok) != null;
+                    if (!ok) return "두께(4), 모양(solid dashed dotted), 색 중 하나가 아닙니다: " + tok;
+                }
+            }
+            case SHADOW -> {
+                if (low.equals("none")) return null;
+                for (String one : Selector.splitList(low)) {
+                    int numbers = 0;
+                    for (String tok : CssMath.tokens(one.trim())) {
+                        if (tok.equals("inset")) continue;
+                        if (LENGTH.matcher(tok).matches()) numbers++;
+                        else if (Colors.tryParse(tok) == null) return "그림자의 값이 아닙니다: " + tok + " (예: 0 2 4 #000000AA)";
+                    }
+                    if (numbers < 2 || numbers > 4) return "길이가 2~4개(가로 세로 [번짐 [퍼짐]])여야 합니다";
+                }
+            }
+            case BACKGROUND -> {
+                List<String> toks = CssMath.tokens(low);
+                if (toks.size() == 1 && !COLOR_WORDS.contains(low) && Colors.tryParse(v) == null && !low.matches("(repeating-)?(linear|radial|conic)-gradient[(].*[)]") && !low.startsWith("url(")) {
+                    return "색이나 그라디언트(linear-gradient(...))가 아닙니다";
+                }
+            }
+            case WEIGHT -> {
+                if (!Set.of("normal", "bold", "bolder", "lighter").contains(low) && !LENGTH.matcher(low).matches()) return "normal, bold 또는 숫자(100~900)가 아닙니다";
             }
         }
         return null;

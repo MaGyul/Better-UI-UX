@@ -93,6 +93,7 @@ View 메뉴의 상태 미리보기로 `:hover :active :focus` 를 선택한 요�
 - `textfield`/`select` 의 글자가 `font-size/font-weight/letter-spacing/color`(select 는 `text-transform` 도)를 따른다.
 
 - **값 검사**: 알려진 속성의 값이 명백히 잘못되면(`width: abc`, `opacity: red`, `display: flexx` …) 경고가 나온다(값은 그대로 저장). `var()`/`calc()` 등은 검사하지 않는다.
+- 에디터: 규칙의 `+ 추가`/`+ 새 규칙` 칸에서 속성 이름을 입력하면 알려진 속성 후보가 뜨고 Tab 으로 `속성: ` 까지 채워진다. `:` 뒤에서는 그 속성의 값 후보(열거형은 가능한 값 전부)가 뜬다.
 - 에디터: `@media` 안의 규칙은 패널 머리글에 그 조건이 지금 화면 크기에서 `[적용 중]` 인지 `[꺼짐]` 인지 표시한다.
 
 - `radial-gradient([모양,] 색, ...)`: 가운데 기준 타원(farthest-corner)을 최대 6개 띠로 근사한다. 모양/크기/위치 인자는 읽고 무시한다. 띠마다 행 단위로 그려 명령 수가 많아 큰 상자에 여럿 쓰는 것은 피한다.
@@ -105,4 +106,4 @@ View 메뉴의 상태 미리보기로 `:hover :active :focus` 를 선택한 요�
 ## 아직 없는 것
 
 `filter`/`backdrop-filter`, 3D 변환,
-모든 속성에 대한 값 타입 검증(길이/숫자/색/열거형 속성만 검사한다).
+모든 속성에 대한 값 타입 검증(길이/숫자/색/열거형과 `margin padding border border-radius box-shadow background font-weight` 만 검사한다).

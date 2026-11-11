@@ -459,6 +459,11 @@ final class StyleText {
      * 규칙 편집(키 {@code css:...}/{@code xcss:...} 등)으로 방금 쓴 선언을 검사해 경고 문장을 돌려준다(없으면 null).
      * 추가/새 규칙은 입력한 {@code 속성: 값} 에서, 기존 선언의 값 고치기는 키 끝의 속성 이름에서 속성을 읽는다.
      */
+    /** 규칙에 선언을 더하는 칸의 키(추가 / 새 규칙, 인라인 / 외부 시트)인가. 속성 이름·값 자동 완성이 붙는다. */
+    static boolean isRuleAddKey(String key) {
+        return key != null && (key.startsWith(ADD_KEY) || key.startsWith(NEW_KEY) || key.startsWith(X_ADD_KEY) || key.startsWith(X_NEW_KEY));
+    }
+
     static String lint(String key, String raw) {
         if (raw == null || raw.isBlank() || isKeyframeKey(key)) return null;
         try {
