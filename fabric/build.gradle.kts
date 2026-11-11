@@ -57,3 +57,15 @@ fabricApi {
         enableClientGameTests.set(true)
     }
 }
+
+// 실제 권한 플러그인 확인용: fabric/build/gametest-mods 에 둔 모드 jar(예: LuckPerms)는 GameTest 실행 폴더의 mods 에만 복사한다
+// (개발용 run 폴더와 배포물에는 들어가지 않는다). 폴더가 비어 있으면 아무것도 하지 않는다.
+tasks.matching { it.name == "runClientGameTest" }.configureEach {
+    doFirst {
+        copy {
+            from(layout.buildDirectory.dir("gametest-mods"))
+            include("*.jar")
+            into(layout.buildDirectory.dir("run/clientGameTest/mods"))
+        }
+    }
+}

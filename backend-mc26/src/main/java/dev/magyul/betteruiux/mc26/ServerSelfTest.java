@@ -121,6 +121,62 @@ final class ServerSelfTest {
         waitFor(() -> serverDoc() == null, 10_000);
     }
 
+    /** -Dbetteruiux.selftest.luckperms=true : 권한 노드를 개발용 파일 대신 서버의 실제 권한 플러그인(LuckPerms)의 {@code lp} 명령으로 바꾼다. */
+    private static final String LUCKPERMS_MODE = System.getProperty("betteruiux.selftest.luckperms", "");
+    private static final boolean LUCKPERMS = !LUCKPERMS_MODE.isEmpty();
+
+    /**
+     * LuckPerms 로 이 계정(Dev)의 노드를 켜기/끄기/지우기. LuckPerms 는 관리자(op)에게 명령 권한을 주지 않으므로 클라이언트가 보낼 수 없고,
+     * 서버 콘솔에서 실행해야 한다: 실행 폴더에 {@code lp-cmd.txt} 를 쓰면 바깥(시험을 돌리는 쪽)이 서버 콘솔에 넣고 {@code lp-ack.txt} 로 알린다.
+     */
+    private static void lp(Minecraft mc, String node, Boolean value) throws Exception {
+        String cmd = value == null ? "lp user Dev permission unset " + node : "lp user Dev permission set " + node + " " + value;
+        LOG.info("[selftest] 서버 콘솔 명령 요청: {}", cmd);
+        Path run = ClientSync.baseDir().getParent().getParent();
+        Path ack = run.resolve("lp-ack.txt");
+        Files.deleteIfExists(ack);
+        Files.writeString(run.resolve("lp-cmd.txt"), cmd);
+        if (!waitFor(() -> Files.exists(ack), 30_000)) throw new IllegalStateException("서버 콘솔이 명령을 처리하지 않았습니다: " + cmd);
+        sleep(500);
+    }
+
+    /** 실제 LuckPerms 확인: 노드 허용/거부가 레벨보다 우선하고, 레벨 없는 계정도 노드로 허용된다. */
+    private static void luckPermsPhase(Minecraft mc) throws Exception {
+        Path ui = ClientSync.baseDir().resolve("ui");
+        Files.createDirectories(ui);
+        Files.writeString(ui.resolve("lpcheck.xml"), String.format(SHOPTEST, "LP VERSION"));
+        Path cached = ClientSync.cacheFiles().resolve("lpcheck.xml");
+        Files.deleteIfExists(cached);
+
+        lp(mc, "better_uiux.publish", false);                                          // 거부(레벨 4 여도)
+        main(() -> ClientSync.publishUi("lpcheck"));
+        sleep(2500);
+        check("[LuckPerms] publish=false 이면(레벨 4 여도) 발행 거부", !Files.exists(cached));
+
+        lp(mc, "better_uiux.publish", true);                                           // 허용
+        main(() -> ClientSync.publishUi("lpcheck"));
+        check("[LuckPerms] publish=true 이면 발행 성공", waitFor(() -> Files.exists(cached), 10_000));
+
+        lp(mc, "better_uiux.publish", null);                                           // 지우면 기본 레벨(4)로 돌아가 허용
+        Files.deleteIfExists(cached);
+        main(() -> ClientSync.publishUi("lpcheck"));
+        check("[LuckPerms] 노드를 지우면 기본 레벨(4)로 판단 → 발행 성공", waitFor(() -> Files.exists(cached), 10_000));
+
+        // 관리자 권한을 잃은 계정(deop 뒤에는 lp 명령도 못 쓰므로 두 경우를 실행 방식으로 나눈다)
+        if (LUCKPERMS_MODE.equals("nonop")) lp(mc, "better_uiux.publish", true);      // nonop: 노드를 허용해 두고 deop → 성공해야 한다
+        main(() -> { mc.getConnection().sendCommand("deop Dev"); return null; });
+        sleep(1000);
+        Files.deleteIfExists(cached);
+        main(() -> ClientSync.publishUi("lpcheck"));
+        if (LUCKPERMS_MODE.equals("nonop")) {
+            check("[LuckPerms] 관리자가 아니어도 노드가 허용하면 발행 성공", waitFor(() -> Files.exists(cached), 10_000));
+        } else {
+            sleep(2500);
+            check("[LuckPerms] 관리자가 아니고 노드도 없으면 발행 거부", !Files.exists(cached));
+        }
+        Files.deleteIfExists(ui.resolve("lpcheck.xml"));
+    }
+
     private static void publishAndPolicy(Minecraft mc) throws Exception {
         Path ui = ClientSync.baseDir().resolve("ui");
         Files.createDirectories(ui);
@@ -203,6 +259,9 @@ final class ServerSelfTest {
             main(() -> { mc.getConnection().sendCommand("serverui open Dev shop"); return null; });
             check("서버가 화면을 열었다", waitFor(() -> serverDoc() != null, 15_000));
 
+            // 서버의 clicks 는 서버가 켜져 있는 동안 이어지는 전체 카운터이고, 내 값은 첫 핑 뒤에야 생긴다: 한 번 눌러 기준을 잡은 뒤 +1 을 확인한다.
+            click("핑");
+            sleep(600);
             long c0 = Math.max(0, num("clicks"));
             check("핑 버튼 클릭", click("핑"));
             sleep(600);
@@ -246,8 +305,12 @@ final class ServerSelfTest {
             main(() -> { mc.getConnection().sendCommand("serverui close Dev shop"); return null; });
             check("서버가 닫으라고 하면 닫힘", waitFor(() -> serverDoc() == null, 10_000));
 
-            publishAndPolicy(mc);
-            remoteMedia();
+            if (LUCKPERMS) {
+                luckPermsPhase(mc);               // deop 까지 하므로 이 실행에서는 여기서 끝낸다(나머지는 LuckPerms 없는 실행에서 이미 확인)
+            } else {
+                publishAndPolicy(mc);
+                remoteMedia();
+            }
         } catch (Throwable e) {
             check("자동 시험 중 예외: " + e, false);
         }

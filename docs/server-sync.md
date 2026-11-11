@@ -104,3 +104,20 @@ ServerSync.core().registerAction("shop:buy",
 - 실제: `./gradlew :fabric:runServer` 후 `:fabric:runClient --args="--username Dev --quickPlayMultiplayer localhost:25565"`,
   NeoForge는 `:neoforge:runServer`, `:neoforge:runClient -PquickPlay=localhost:25565`. 게임에서 `/serverui open Dev shop`
   (개발용 서버는 `server.properties` 의 `online-mode=false`, `ops.json` 에 Dev 를 레벨 4 로 등록). 자동 시험은 닫힘 통지, 발행(권한 노드 거부·허용[Fabric: `-Dbetteruiux.perm.file` 개발용 제공자]/레벨 4/deop), 정책(local-first/server-first), https 이미지(핀/핀 없음/내부 주소/설정 on·off)까지 확인한다(Fabric 25/25, NeoForge 24/24 — NeoForge 는 개발용 권한 제공자가 없어 노드 거부 항목만 빠진다).
+
+## 검증 기록 (2026-11-11, Minecraft 26.3 / Fabric)
+
+개발용 서버(`:fabric:runServer`)에 접속한 클라이언트가 스스로 시험하는 `ServerSelfTest` 로 확인했다(24개 모두 통과).
+
+- **실제 LuckPerms 5.5.85**: 서버의 `fabric/run/mods` 에 넣고 콘솔에서 `lp user Dev permission set better_uiux.publish ...` 를 바꿔 가며 확인했다.
+  노드 `false` 이면 관리자(레벨 4)여도 발행 거부, `true` 이면 허용, 노드를 지우면 기본 레벨로 돌아가며, 관리자가 아닌 계정은 노드가 `true` 일 때만 발행된다.
+  참고: LuckPerms 는 관리자(op)에게 `lp` 명령 권한을 주지 않으므로 클라이언트 채팅이 아니라 **서버 콘솔**에서 실행해야 한다
+  (시험은 `-Dbetteruiux.selftest.luckperms=true|nonop` 으로 실행 폴더의 `lp-cmd.txt` 에 명령을 쓰고 바깥에서 콘솔에 넣어 준다). 확인 뒤 jar 는 `run/mods` 에서 지운다.
+- **모드가 없는 클라이언트**: Fabric/이 모드가 전혀 없는 순정 클라이언트(마인크래프트 26.x 는 난독화가 없어 라이브러리만으로 직접 실행된다)가 접속해도 서버는 멀쩡하고
+  (예외 없음, 접속 유지), `/serverui open <플레이어> <id>` 는 "클라이언트에 서버 UI 기능이 없습니다" 로 깔끔히 거절한다.
+  `-Dbetteruiux.noclientsync=true` 로 같은 상황(채널도 인사도 없는 클라이언트)을 개발 클라이언트로 흉내 낼 수도 있다.
+  순정 클라이언트를 새 게임 폴더에서 처음 띄우면 접근성 안내 화면이 자동 접속(quick play)을 막으므로 `options.txt` 에 `onboardAccessibility:false` 를 먼저 적는다.
+- **여러 명**: 서버 동기화가 켜진 클라이언트 둘(Dev, Dev2)과 동기화 채널이 없는 클라이언트 하나(Plain)가 동시에 접속한 상태에서 전체 시험을 돌렸다.
+  Dev 가 서버 UI 를 발행하면 Dev2 의 서버 캐시(`server-cache/…/files`)로 새 번들이 도착하고, 서버 로그에 예외는 없으며 세 명 모두 접속이 유지됐다.
+- 서버 UI 닫힘 통지는 플레이어가 많아지면 로그가 도배되므로 의도적으로 로그를 남기지 않는다.
+- 참고(시험 가정): 데모 액션 `demo:ping` 의 `clicks` 는 서버가 켜져 있는 동안 이어지는 전체 카운터라, 시험은 한 번 눌러 기준을 잡은 뒤 +1 을 확인한다.
