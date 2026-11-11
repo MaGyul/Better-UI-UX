@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import dev.magyul.betteruiux.core.mcv.McvBlock;
+import dev.magyul.betteruiux.core.mcv.McvView;
 import dev.magyul.betteruiux.core.mcv.McvWorld;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -63,13 +64,8 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
         pose.rotate(Axis.ZP.rotationDegrees(180f));
         pose.rotate(Axis.XP.rotationDegrees(-s.pitch()));          // pitch 양수 = 위에서 내려다봄
         pose.rotate(Axis.YP.rotationDegrees(s.yaw()));
-        int[] va = w.viewArea();
-        double cx = w.sizeX() / 2.0, cy = w.sizeY() / 2.0, cz = w.sizeZ() / 2.0;
-        if (va != null) {
-            cx = (va[0] + va[3] + 1) / 2.0;
-            cy = (va[1] + va[4] + 1) / 2.0;
-            cz = (va[2] + va[5] + 1) / 2.0;
-        }
+        double[] c = McvView.center(w);                              // 투영/레이캐스트(McvView)와 같은 중심
+        double cx = c[0], cy = c[1], cz = c[2];
         pose.translate((float) -cx, (float) -cy, (float) -cz);
 
         Map<Long, McvBlock> blocks = w.blockSnapshot();

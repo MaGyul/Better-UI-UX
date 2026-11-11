@@ -93,6 +93,24 @@ class McvScriptTest {
     }
 
     @Test
+    void projectAndRaycastAreAvailableToScripts() throws Exception {
+        rt.load("t.uijs", """
+                var w;
+                function setup() { w = mcv.createWorld(4, 4, 4); w.setBlock(1, 1, 1, 'stone'); }
+                function probe() {
+                  var p = w.project(1.5, 1.5, 1.5);
+                  var h = p ? w.raycast(p.x, p.y) : null;
+                  ui.log('p=' + (p ? 'yes' : 'none') + ' hit=' + (h ? h.x + ',' + h.y + ',' + h.z + ',' + h.block : 'none'));
+                }
+                """);
+        call("setup");
+        assertTrue(call("probe").contains("p=none hit=none"), "아직 그려진 적이 없으면 null");
+        host.world(1).setViewport(new dev.magyul.betteruiux.core.mcv.McvWorld.Viewport(0, 0, 200, 200, 20));
+        String out = call("probe");
+        assertTrue(out.contains("p=yes hit=1,1,1,minecraft:stone"), out);
+    }
+
+    @Test
     void tickMessageCallsOnTick() throws Exception {
         rt.load("t.uijs", "function onTick(n, w) { ui.log('tick ' + n + ' world ' + w); }");
         assertTrue(rt.call("{\"type\":\"tick\",\"tick\":7,\"world\":2}").contains("tick 7 world 2"));

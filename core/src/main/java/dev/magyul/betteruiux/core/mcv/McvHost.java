@@ -136,11 +136,36 @@ public final class McvHost {
                 w.setTickRate((float) num(r, "rate"));
                 return null;
             }
+            case "project" -> {
+                double[] q = McvView.project(w, num(r, "x"), num(r, "y"), num(r, "z"));
+                if (q == null) return null;                            // 아직 한 번도 그려지지 않았다
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("x", q[0]);
+                m.put("y", q[1]);
+                m.put("depth", q[2]);
+                return m;
+            }
+            case "raycast" -> {
+                return hitToMap(McvView.raycast(w, num(r, "x"), num(r, "y")));
+            }
             case "camera" -> {
                 return camera(w.camera(), str(r, "op"), r.get("args"));
             }
             default -> throw new IllegalArgumentException("알 수 없는 명령: " + cmd);
         }
+    }
+
+    /** 맞힌 블록을 스크립트에 줄 모양으로. 맞힌 게 없으면 null. */
+    public static Map<String, Object> hitToMap(McvView.Hit h) {
+        if (h == null) return null;
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("x", h.x());
+        m.put("y", h.y());
+        m.put("z", h.z());
+        m.put("face", h.face());
+        m.put("block", h.block().stateString());
+        m.put("id", h.block().id());
+        return m;
     }
 
     /** 엔티티 메서드: 이 호스트가 직접 처리하는 것은 데이터 모델 메서드뿐이다(백엔드가 렌더 쪽 동작을 저널로 받아 처리). */

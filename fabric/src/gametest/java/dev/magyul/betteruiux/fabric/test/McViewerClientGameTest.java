@@ -67,6 +67,31 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                     }
                     function onTick(n, worldId) { ui.setText('#t', String(n)); }
                     """);
+            Files.writeString(base.resolve("ui/gt_mcv4.uiml"), """
+                    <screen>
+                      <script src="gt_mcv4.uijs"/>
+                      <column anchor="top-left" x="4" y="4" gap="2">
+                        <label id="p" text="p"/>
+                        <label id="h" text="h"/>
+                        <label id="c" text="c"/>
+                      </column>
+                      <mc-viewer id="view" anchor="center" width="240" height="180"/>
+                    </screen>
+                    """);
+            Files.writeString(base.resolve("ui/gt_mcv4.uijs"), """
+                    var w;
+                    function onInit() {
+                      w = mcv.createWorld(5, 3, 5);
+                      w.fill(0, 0, 0, 4, 0, 4, 'white_concrete');
+                      w.setBlock(2, 1, 2, 'red_concrete');
+                    }
+                    function onTick() {
+                      var p = w.project(2.5, 1.5, 2.5);
+                      if (p) ui.setText('#p', Math.round(p.x) + ',' + Math.round(p.y));
+                    }
+                    function onBlockHover(e) { ui.setText('#h', e.block ? 'hover ' + e.x + ',' + e.y + ',' + e.z : 'hover none'); }
+                    function onBlockClick(e) { ui.setText('#c', e.block ? 'click ' + e.x + ',' + e.y + ',' + e.z + ',' + e.face : 'click none'); }
+                    """);
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -131,7 +156,36 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             String shown = ctx.computeOnClient(mc -> ((UiScreen) mc.gui.screen()).document().query("#t").text());
             System.out.println("[mc-viewer test] onTick label=" + shown);
             check(Integer.parseInt(shown.trim()) > 20, "onTick 이 계속 불려야 한다(레이블 " + shown + ")");
+
+            // 상호작용: 스크립트가 project 로 알려 준 화면 좌표(빨간 블록 중심)에 마우스를 올리고 클릭하면 그 블록이 맞아야 한다.
+            ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
+            ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));
+            ctx.waitTicks(40);
+            String proj = text(ctx, "#p");
+            System.out.println("[mc-viewer test] project=" + proj);
+            String[] xy = proj.split(",");
+            check(xy.length == 2, "project 결과가 있어야 한다: " + proj);
+            int px = Integer.parseInt(xy[0].trim()), py = Integer.parseInt(xy[1].trim());
+            double guiScale = ctx.computeOnClient(mc -> (double) mc.getWindow().getGuiScale());
+            var in = ctx.getInput();
+            in.setCursorPos(px * guiScale, py * guiScale);
+            ctx.waitTicks(5);
+            String hover = text(ctx, "#h");
+            System.out.println("[mc-viewer test] " + hover);
+            check(hover.startsWith("hover 2,1,2"), "마우스 아래 블록이 빨간 블록이어야 한다: " + hover);
+            in.pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
+            ctx.waitTicks(10);
+            String click = text(ctx, "#c");
+            System.out.println("[mc-viewer test] " + click);
+            check(click.startsWith("click 2,1,2,"), "클릭한 블록이 빨간 블록이어야 한다: " + click);
+            in.setCursorPos(px * guiScale, (py - 90) * guiScale);                 // 월드 바깥(위쪽)
+            ctx.waitTicks(5);
+            check(text(ctx, "#h").equals("hover none"), "빈 곳에서는 호버가 풀려야 한다: " + text(ctx, "#h"));
         }
+    }
+
+    private static String text(ClientGameTestContext ctx, String selector) {
+        return ctx.computeOnClient(mc -> ((UiScreen) mc.gui.screen()).document().query(selector).text());
     }
 
     private static LayoutBox find(LayoutBox root, String id) {

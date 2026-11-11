@@ -96,6 +96,8 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                   setBlocks: function (list) { return H({cmd: 'setBlocks', world: w, blocks: list}); },
                   spawnEntity: function (x, y, z, type) { return entity(w, H({cmd: 'spawnEntity', world: w, x: x, y: y, z: z, type: String(type)})); },
                   getCamera: function () { return cam; },
+                  project: function (x, y, z) { return H({cmd: 'project', world: w, x: x, y: y, z: z}); },
+                  raycast: function (sx, sy) { return H({cmd: 'raycast', world: w, x: sx, y: sy}); },
                   setViewArea: function (x1, y1, z1, x2, y2, z2) { H({cmd: 'setViewArea', world: w, x1: x1, y1: y1, z1: z1, x2: x2, y2: y2, z2: z2}); },
                   clearViewArea: function () { H({cmd: 'clearViewArea', world: w}); },
                   setTickRate: function (rate) { H({cmd: 'setTickRate', world: w, rate: rate}); }

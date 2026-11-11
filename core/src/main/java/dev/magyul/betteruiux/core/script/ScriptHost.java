@@ -101,6 +101,20 @@ public final class ScriptHost {
     }
 
     /**
+     * 위젯(mc-viewer 등)이 스크립트 함수를 직접 부른다: {@code fn(event)}. 함수가 없으면 아무 일도 없다.
+     * 상태 스냅샷은 보내지 않는다(빈 객체). 문서가 아닌 위젯 이벤트라서 요소 상태가 필요 없다.
+     */
+    public void callFunction(String fn, Map<String, Object> event) {
+        if (broken || fn == null || !fn.matches("[A-Za-z_$][A-Za-z0-9_$]{0,63}")) return;
+        Map<String, Object> msg = new LinkedHashMap<>();
+        msg.put("type", "call");
+        msg.put("fn", fn);
+        msg.put("event", event == null ? Map.of() : event);
+        msg.put("state", Map.of());
+        send(msg);
+    }
+
+    /**
      * 월드 틱 같은 주기적 신호를 스크립트의 {@code onTick(tick)} 으로 보낸다. 스크립트가 아직 이전 틱을 처리 중이면
      * 이번 틱은 버린다(밀린 틱을 쌓지 않는다).
      */

@@ -5,17 +5,29 @@ import dev.magyul.betteruiux.core.doc.UiElement;
 import dev.magyul.betteruiux.core.doc.UiWidget;
 import dev.magyul.betteruiux.core.mcv.McvCamera;
 import dev.magyul.betteruiux.core.mcv.McvHost;
+import dev.magyul.betteruiux.core.mcv.McvView;
 import dev.magyul.betteruiux.core.mcv.McvWorld;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * {@code <mc-viewer world="1"/>}: 스크립트가 만든 가상 마인크래프트 월드를 보여 준다({@code world} 를 생략하면 가장 먼저 만든 월드).
  * 마우스 드래그로 카메라를 돌리고, 휠로 확대/축소한다. 그리기는 {@link McViewerPip}(GUI Picture-in-Picture)가 맡는다.
+ *
+ * <p>스크립트로 가는 신호(전역 함수가 있을 때만 불린다):
+ * <ul>
+ *   <li>{@code onTick(tick, world)} — 월드 틱마다</li>
+ *   <li>{@code onBlockHover(e)} — 마우스 아래의 블록이 바뀔 때. 블록이 없으면 {@code e.block == null}</li>
+ *   <li>{@code onBlockClick(e)} — 드래그 없이 눌렀다 뗐을 때. {@code e = {world, x, y, z, face, block, id, button}}</li>
+ * </ul>
  */
 final class McViewerWidget implements UiWidget {
-    private static final int MAX_TICKS_PER_FRAME = 5;
+    private static final int MAX_TICKS_PER_FRAME = 5, CLICK_SLOP = 4;
     private final UiElement el;
-    private int lastX, lastY;
-    private boolean dragging;
+    private int lastX, lastY, pressX, pressY, pressButton;
+    private boolean dragging, moved;
+    private String hoverKey = "";                    // 직전에 알려 준 마우스 아래 블록(같으면 다시 알리지 않는다)
 
     McViewerWidget(UiElement el) { this.el = el; }
 
@@ -44,8 +56,6 @@ final class McViewerWidget implements UiWidget {
             gfx.fillRect(x, y, w, h, 0x55000000);                       // 아직 월드가 없다(스크립트가 만들기 전)
             return;
         }
-        advanceTicks(world);
-        if (!(gfx instanceof McGfx mc)) return;
         McvCamera cam = world.camera();
         int[] va = world.viewArea();
         double dx = va == null ? world.sizeX() : va[3] - va[0] + 1;
@@ -53,6 +63,10 @@ final class McViewerWidget implements UiWidget {
         double dz = va == null ? world.sizeZ() : va[5] - va[2] + 1;
         double diag = Math.sqrt(dx * dx + dy * dy + dz * dz);          // 월드가 어느 각도에서도 들어오도록 대각선에 맞춘다
         float scale = (float) (Math.min(w, h) / diag) * cam.zoom();
+        world.setViewport(new McvWorld.Viewport(x, y, w, h, scale));   // project/raycast 가 이 사각형을 기준으로 계산한다
+        advanceTicks(world);
+        updateHover(world, frame);
+        if (!(gfx instanceof McGfx mc)) return;
         mc.addPictureInPicture(new McViewerRenderState(world, cam.yaw(), cam.pitch(), x, y, x + w, y + h, scale, null));
     }
 
@@ -63,29 +77,56 @@ final class McViewerWidget implements UiWidget {
     private void advanceTicks(McvWorld world) {
         int n = world.advance(System.nanoTime(), MAX_TICKS_PER_FRAME);
         if (n == 0) return;
-        var sink = McViewerRegistry.tickSink(el.document());
+        McViewerRegistry.ScriptEvents events = McViewerRegistry.events(el.document());
         McvHost host = McViewerRegistry.get(el.document());
-        if (sink == null || host == null) return;
+        if (events == null || host == null) return;
         int handle = host.handleOf(world);
         long last = world.tickCount();
-        for (int i = n - 1; i >= 0; i--) sink.accept(handle, last - i);
+        for (int i = n - 1; i >= 0; i--) events.tick(handle, last - i);
     }
 
-    // ---- 입력: 드래그로 돌리고 휠로 확대 ----
+    // ---- 블록 호버/클릭 ----
+
+    private Map<String, Object> event(McvWorld world, McvView.Hit hit, int button) {
+        McvHost host = McViewerRegistry.get(el.document());
+        Map<String, Object> e = new LinkedHashMap<>();
+        e.put("world", host == null ? -1 : host.handleOf(world));
+        Map<String, Object> m = McvHost.hitToMap(hit);
+        if (m != null) e.putAll(m);
+        else e.put("block", null);
+        e.put("button", button);
+        return e;
+    }
+
+    private void updateHover(McvWorld world, Frame frame) {
+        McViewerRegistry.ScriptEvents events = McViewerRegistry.events(el.document());
+        if (events == null) return;
+        McvView.Hit hit = frame.hovered() && !dragging ? McvView.raycast(world, frame.mouseX(), frame.mouseY()) : null;
+        String key = hit == null ? "" : hit.x() + "," + hit.y() + "," + hit.z() + "," + hit.face();
+        if (Objects.equals(key, hoverKey)) return;
+        hoverKey = key;
+        events.call("onBlockHover", event(world, hit, -1));
+    }
+
+    // ---- 입력: 드래그로 돌리고 휠로 확대, 제자리에서 뗴면 클릭 ----
 
     @Override
     public boolean mousePressed(UiElement element, int x, int y, int button) {
-        if (world() == null || button != 0) return false;
-        dragging = true;
-        lastX = x;
-        lastY = y;
+        if (world() == null) return false;
+        dragging = button == 0;
+        moved = false;
+        pressX = lastX = x;
+        pressY = lastY = y;
+        pressButton = button;
         return true;
     }
 
     @Override
     public void mouseDragged(UiElement element, int x, int y) {
         McvWorld w = world();
-        if (!dragging || w == null) return;
+        if (w == null) return;
+        if (Math.abs(x - pressX) > CLICK_SLOP || Math.abs(y - pressY) > CLICK_SLOP) moved = true;
+        if (!dragging || !moved) return;
         McvCamera c = w.camera();
         c.setYaw(c.yaw() + (x - lastX) * 0.6f);
         c.setPitch(c.pitch() + (y - lastY) * 0.6f);
@@ -94,7 +135,14 @@ final class McViewerWidget implements UiWidget {
     }
 
     @Override
-    public void mouseReleased(UiElement element, int x, int y, int button) { dragging = false; }
+    public void mouseReleased(UiElement element, int x, int y, int button) {
+        dragging = false;
+        McvWorld w = world();
+        McViewerRegistry.ScriptEvents events = McViewerRegistry.events(el.document());
+        if (w == null || events == null || moved || button != pressButton) return;
+        McvView.Hit hit = McvView.raycast(w, x, y);
+        events.call("onBlockClick", event(w, hit, button));
+    }
 
     @Override
     public boolean mouseScrolled(UiElement element, int x, int y, double amount) {

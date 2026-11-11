@@ -104,5 +104,10 @@ world.setTickRate(~);
   - 엔티티: `tickCount`와 틱 사이 보간(`partialTick`)으로 `ageInTicks` 애니메이션이 부드럽게 흐른다.
   - **범위 제한: 바닐라 `tick()`(물리/AI/블록 틱)은 돌리지 않는다.** 가상 월드는 데이터 모델이라 블록 엔티티·레드스톤·유체 시뮬레이션은 없고, 움직임은 스크립트가 `onTick`에서 직접 지시한다.
   - 버그 수정: `McvBlock` 상태 맵이 `Map.copyOf`로 순서를 잃어 문자열이 비결정적이던 문제
-- [ ] 7단계: 상호작용
+- [x] 7단계: 상호작용 (`McvViewTest` + 게임 테스트: 스크립트가 `project`로 알려 준 좌표를 실제로 클릭 → 맞는 블록, 호버 해제까지)
+  - 변환 수식은 core `McvView`(렌더러와 같은 식)에 있고, 위젯이 그릴 때마다 월드에 마지막 뷰포트(사각형·배율)를 기록한다. 아직 그려진 적이 없으면 `project`/`raycast`는 null.
+  - 스크립트: `world.project(x,y,z)` → `{x, y, depth}`(GUI 좌표, uiml 요소의 x/y와 같은 좌표계), `world.raycast(screenX, screenY)` → `{x,y,z,face,block,id}` 또는 null
+  - 이벤트(전역 함수가 있을 때만): `onBlockHover(e)`(마우스 아래 블록이 바뀔 때, 없으면 `e.block == null`), `onBlockClick(e)`(드래그 없이 눌렀다 뗐을 때). `e = {world, x, y, z, face, block, id, button}`
+  - 맞히기는 블록 칸 전체를 기준으로 한다(계단·판자도 한 칸). 엔티티는 아직 맞히지 않는다(후속).
+  - 클릭과 드래그 구분: 4px 이상 움직이면 드래그(카메라 회전)로 보고 클릭 이벤트는 보내지 않는다.
 - [ ] 8단계: 에디터·문서·데모
