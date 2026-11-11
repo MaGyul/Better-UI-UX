@@ -45,7 +45,7 @@ class UiDocumentLoaderTest {
 
     @Test
     void cssWarningsAreCollected() throws Exception {
-        Files.writeString(dir.resolve("t.xml"), "<screen><style>a:bogus { x: y }</style></screen>");
+        Files.writeString(dir.resolve("t.xml"), "<screen><style>a:bogus { color: red }</style></screen>");
         assertEquals(1, UiDocumentLoader.load(dir, "t", new FixedMetrics()).warnings().size());
     }
 

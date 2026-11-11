@@ -92,6 +92,7 @@ public final class Stylesheet {
     private final Map<String, Keyframes> keyframes = new LinkedHashMap<>();
     private final List<Import> imports = new ArrayList<>();
     private final java.util.Set<String> warnedProps = new java.util.HashSet<>();
+    private final java.util.Set<String> warnedValues = new java.util.HashSet<>();
 
     public List<Rule> rules() { return rules; }
 
@@ -163,13 +164,19 @@ public final class Stylesheet {
                 continue;
             }
             if (selectorText.startsWith("@")) {
-                sheet.warnings.add("스타일: '" + selectorText.split("\s+")[0] + "' 은(는) 지원하지 않아 무시합니다");
+                sheet.warnings.add("스타일: '" + selectorText.split("[ \t\r\n]+")[0] + "' 은(는) 지원하지 않아 무시합니다");
                 continue;
             }
             List<Declaration> decls = parseDeclarations(body);
             for (Declaration d : decls) {
                 String hint = unknownHint(d.prop());
-                if (hint != null && hint.isEmpty()) continue;
+                if (hint != null && hint.isEmpty()) {                    // 알려진 속성: 값이 명백히 잘못됐으면 경고(값은 그대로 둔다)
+                    String bad = PropValues.check(d.prop(), d.value());
+                    if (bad != null && sheet.warnedValues.add(d.prop() + "=" + d.value())) {
+                        sheet.warnings.add("스타일: '" + d.prop() + ": " + d.value() + "' - " + bad);
+                    }
+                    continue;
+                }
                 if (sheet.warnedProps.add(d.prop())) {
                     sheet.warnings.add("스타일: 알 수 없는 속성 '" + d.prop() + "'" + (hint == null ? "" : " (혹시 '" + hint + "'?)"));
                 }

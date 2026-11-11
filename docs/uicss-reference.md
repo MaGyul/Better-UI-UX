@@ -92,7 +92,10 @@ View 메뉴의 상태 미리보기로 `:hover :active :focus` 를 선택한 요�
 - 줄바꿈 글자: 너비가 정해진 컨테이너·grid 칸·scroll 안에서 줄 수만큼 높이가 늘어난다.
 - `textfield`/`select` 의 글자가 `font-size/font-weight/letter-spacing/color`(select 는 `text-transform` 도)를 따른다.
 
+- **값 검사**: 알려진 속성의 값이 명백히 잘못되면(`width: abc`, `opacity: red`, `display: flexx` …) 경고가 나온다(값은 그대로 저장). `var()`/`calc()` 등은 검사하지 않는다.
+- 에디터: `@media` 안의 규칙은 패널 머리글에 그 조건이 지금 화면 크기에서 `[적용 중]` 인지 `[꺼짐]` 인지 표시한다.
+
 ## 아직 없는 것
 
 `font-family`/italic, `radial/conic` 그라디언트, 자식을 둥글게 잘라내는 클립, `filter`/`backdrop-filter`, 3D 변환,
-프로퍼티 레지스트리 기반의 값 타입 검증(속성 이름만 검사한다).
+모든 속성에 대한 값 타입 검증(길이/숫자/색/열거형 속성만 검사한다).
