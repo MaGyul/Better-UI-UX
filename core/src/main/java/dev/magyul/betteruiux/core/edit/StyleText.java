@@ -23,6 +23,18 @@ final class StyleText {
     /** 문서의 모든 {@code <style>} 규칙을 문서 순서로(@keyframes 등 @규칙 제외). */
     static List<Rule> rules(XmlSource src) {
         List<Rule> out = new ArrayList<>();
+        scanAll(src, out, null);
+        return out;
+    }
+
+    /** 문서 안 {@code <style>} 의 {@code @keyframes} 블록들(문서 순서). */
+    static List<Kf> keyframes(XmlSource src) {
+        List<Kf> out = new ArrayList<>();
+        scanAll(src, null, out);
+        return out;
+    }
+
+    private static void scanAll(XmlSource src, List<Rule> out, List<Kf> kfOut) {
         for (XmlSource.Element el : src.all()) {
             if (!el.tag.equals("style") || el.selfClosing() || el.endTagStart < 0) continue;
             int from = el.startTagEnd, to = el.endTagStart;
@@ -35,19 +47,28 @@ final class StyleText {
                 from = s;
                 to = e;
             }
-            scan(src.text(), from, to, out);
+            scan(src.text(), from, to, out, kfOut);
         }
-        return out;
     }
 
     /** 외부 스타일시트(.uicss) 글 전체의 규칙들. */
     static List<Rule> cssRules(String css) {
         List<Rule> out = new ArrayList<>();
-        scan(css, 0, css.length(), out);
+        scan(css, 0, css.length(), out, null);
         return out;
     }
 
-    private static void scan(String text, int from, int to, List<Rule> out) {
+    /** 외부 스타일시트 글 전체의 {@code @keyframes} 블록들. */
+    static List<Kf> cssKeyframes(String css) {
+        List<Kf> out = new ArrayList<>();
+        scan(css, 0, css.length(), null, out);
+        return out;
+    }
+
+    /** {@code @keyframes 이름 { ... }}: 본문({@code { }} 안쪽) 범위와 지점들(from / 50% / to 를 선택자로 가진 규칙). */
+    record Kf(String name, int bodyStart, int bodyEnd, List<Rule> stops) {}
+
+    private static void scan(String text, int from, int to, List<Rule> out, List<Kf> kfOut) {
         char[] m = mask(text, from, to);
         int i = from;
         while (i < to) {
@@ -57,7 +78,11 @@ final class StyleText {
             if (close < 0) break;
             String selector = new String(m, i, open - i).trim();
             if (!selector.isEmpty() && !selector.startsWith("@")) {
-                out.add(new Rule(selector, open + 1, close, decls(m, open + 1, close)));
+                if (out != null) out.add(new Rule(selector, open + 1, close, decls(m, open + 1, close)));
+            } else if (kfOut != null && selector.startsWith("@keyframes")) {
+                List<Rule> stops = new ArrayList<>();
+                scan(text, open + 1, close, stops, null);
+                kfOut.add(new Kf(selector.substring("@keyframes".length()).trim(), open + 1, close, stops));
             }
             i = close + 1;
         }
@@ -209,6 +234,10 @@ final class StyleText {
 
     /** 외부 스타일시트용 키({@code xcss:파일:규칙:속성} 등)에서 파일 이름을 꺼낸다(아니면 null). */
     static String externalHref(String key) {
+        if (isKeyframeKey(key)) {
+            String sheet = keyframeSheet(key);
+            return INLINE_SHEET.equals(sheet) ? null : sheet;
+        }
         for (String p : new String[] {X_KEY, X_ADD_KEY, X_NEW_KEY}) {
             if (key.startsWith(p)) {
                 int c = key.indexOf(':', p.length());
@@ -222,6 +251,7 @@ final class StyleText {
     static String applyExternal(String css, String key, String raw) {
         String href = externalHref(key);
         if (href == null) throw new IllegalArgumentException("알 수 없는 키: " + key);
+        if (isKeyframeKey(key)) return applyKeyframe(css, cssKeyframes(css), key, raw);
         String prefix = key.startsWith(X_KEY) ? X_KEY : key.startsWith(X_ADD_KEY) ? X_ADD_KEY : X_NEW_KEY;
         String rest = key.substring(prefix.length() + href.length() + 1);
         List<Rule> rules = cssRules(css);
@@ -238,6 +268,78 @@ final class StyleText {
         }
         int colon = rest.indexOf(':');
         return setDeclIn(css, rules, Integer.parseInt(rest.substring(0, colon)), rest.substring(colon + 1), raw);
+    }
+
+    // ---- @keyframes ----
+
+    static final String KF_KEY = "kf:", KF_ADD_KEY = "kf+:", KF_NEW_KEY = "kf*:", INLINE_SHEET = "~";
+
+    static boolean isKeyframeKey(String key) { return key.startsWith(KF_KEY) || key.startsWith(KF_ADD_KEY) || key.startsWith(KF_NEW_KEY); }
+
+    /** 키가 가리키는 스타일시트: {@link #INLINE_SHEET} 이면 문서 안 {@code <style>}, 아니면 외부 파일 이름. */
+    static String keyframeSheet(String key) {
+        String p = key.startsWith(KF_KEY) ? KF_KEY : key.startsWith(KF_ADD_KEY) ? KF_ADD_KEY : KF_NEW_KEY;
+        int c = key.indexOf(':', p.length());
+        return key.substring(p.length(), c);
+    }
+
+    /** 애니메이션 이름 {@code name} 의 {@code @keyframes} 를 "키프레임" 구역으로(없으면 빈 목록). */
+    static List<PropRow> keyframeRows(String name, String sheet, String text, List<Kf> kfs) {
+        List<PropRow> rows = new ArrayList<>();
+        for (int k = 0; k < kfs.size(); k++) {
+            Kf kf = kfs.get(k);
+            if (!kf.name().equals(name)) continue;
+            rows.add(PropertyModel.header("키프레임: " + name + (INLINE_SHEET.equals(sheet) ? "" : " (" + sheet + ")")));
+            for (int i = 0; i < kf.stops().size(); i++) {
+                String at = sheet + ":" + k + ":" + i;
+                ruleRows(rows, text, kf.stops().get(i), "§kf" + at, KF_KEY + at + ":", KF_ADD_KEY + at);
+            }
+            rows.add(new PropRow("+ 새 지점", KF_NEW_KEY + sheet + ":" + k, "", true));
+        }
+        return rows;
+    }
+
+    /** 키가 가리키는 키프레임 편집을 {@code text} 에 반영한 새 글. 잘못된 입력이면 IllegalArgumentException. */
+    static String applyKeyframe(String text, List<Kf> kfs, String key, String raw) {
+        String sheet = keyframeSheet(key);
+        String p = key.startsWith(KF_KEY) ? KF_KEY : key.startsWith(KF_ADD_KEY) ? KF_ADD_KEY : KF_NEW_KEY;
+        String[] f = key.substring(p.length() + sheet.length() + 1).split(":", 3);
+        int k = Integer.parseInt(f[0]);
+        if (k < 0 || k >= kfs.size()) throw new IllegalArgumentException("키프레임이 없습니다");
+        Kf kf = kfs.get(k);
+        if (p.equals(KF_NEW_KEY)) {
+            String s = raw == null ? "" : raw.trim();
+            if (s.isEmpty()) return text;
+            int sp = s.indexOf(' ');
+            String label = sp < 0 ? s : s.substring(0, sp);
+            if (sp < 0 || !label.matches("from|to|[0-9]+([.][0-9]+)?%")) throw new IllegalArgumentException("지점 속성: 값 형태로 입력하세요 (예: 50% opacity: 0.5)");
+            String[] d = parseDecl(s.substring(sp + 1));
+            for (int i = 0; i < kf.stops().size(); i++) {                       // 이미 있는 지점이면 그 지점에 덧붙인다
+                if (kf.stops().get(i).selector().equalsIgnoreCase(label)) return setDeclIn(text, kf.stops(), i, d[0], d[1]);
+            }
+            return addStop(text, kf, label, d[0], d[1]);
+        }
+        int stop = Integer.parseInt(f[1]);
+        if (p.equals(KF_ADD_KEY)) {
+            if (raw == null || raw.isBlank()) return text;
+            String[] d = parseDecl(raw);
+            return setDeclIn(text, kf.stops(), stop, d[0], d[1]);
+        }
+        return setDeclIn(text, kf.stops(), stop, f[2], raw);
+    }
+
+    /** {@code @keyframes} 본문 끝에 지점 하나를 덧붙인다(들여쓰기는 첫 지점에 맞춘다). */
+    static String addStop(String t, Kf kf, String label, String prop, String value) {
+        String stop = label + " { " + prop + ": " + value + " }";
+        String body = t.substring(kf.bodyStart(), kf.bodyEnd());
+        int last = body.length();
+        while (last > 0 && Character.isWhitespace(body.charAt(last - 1))) last--;
+        int at = kf.bodyStart() + last;
+        if (body.contains("\n")) {
+            String indent = kf.stops().isEmpty() ? "    " : indentOf(t, kf.stops().get(0).bodyStart() - 1);
+            return t.substring(0, at) + "\n" + indent + stop + t.substring(at);
+        }
+        return t.substring(0, at) + " " + stop + t.substring(at);
     }
 
     /** {@code 속성: 값} 글을 {속성, 값} 으로 쪼갠다. 형식이 틀리면 IllegalArgumentException. */
@@ -340,6 +442,7 @@ final class StyleText {
 
     /** 속성 패널 키({@code css:규칙:속성}, {@code css+:규칙})로 값을 반영한다. 잘못된 입력이면 IllegalArgumentException. */
     static String apply(XmlSource src, String key, String raw) {
+        if (isKeyframeKey(key)) return applyKeyframe(src.text(), keyframes(src), key, raw);
         if (key.startsWith(NEW_KEY)) {
             if (raw == null || raw.isBlank()) return src.text();
             return addRule(src, key.substring(NEW_KEY.length()), raw);

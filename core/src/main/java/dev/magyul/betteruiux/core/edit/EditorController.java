@@ -2035,7 +2035,7 @@ public final class EditorController {
             applyExternalEdit(sheetHref, key, raw);
             return;
         }
-        if (key.startsWith(StyleText.KEY) || key.startsWith(StyleText.ADD_KEY) || key.startsWith(StyleText.NEW_KEY)) {       // <style> 규칙의 선언 편집
+        if (key.startsWith(StyleText.KEY) || key.startsWith(StyleText.ADD_KEY) || key.startsWith(StyleText.NEW_KEY) || StyleText.isKeyframeKey(key)) {       // <style> 규칙의 선언 편집
             try {
                 String next = StyleText.apply(session.source(), key, raw);
                 int before = session.source().all().size();
@@ -2205,6 +2205,11 @@ public final class EditorController {
                 if (css != null) sheets.add(new StyleText.Sheet(href, css));
             }
             extra.addAll(StyleText.externalRows(b, sheets));
+            var spec = dev.magyul.betteruiux.core.anim.AnimationSpec.parse(b.style.get("animation"));   // 이 요소가 쓰는 @keyframes
+            if (spec != null) {
+                extra.addAll(StyleText.keyframeRows(spec.name(), StyleText.INLINE_SHEET, srcSource.text(), StyleText.keyframes(srcSource)));
+                for (StyleText.Sheet sh : sheets) extra.addAll(StyleText.keyframeRows(spec.name(), sh.href(), sh.text(), StyleText.cssKeyframes(sh.text())));
+            }
             if (!extra.isEmpty()) {
                 rows = new ArrayList<>(rows);
                 rows.addAll(extra);
