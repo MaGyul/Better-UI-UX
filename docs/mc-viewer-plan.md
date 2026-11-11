@@ -116,10 +116,15 @@ world.setTickRate(~);
   - 문서: `docs/widgets.md`(태그 표), `docs/scripting.md`(mc-viewer 섹션: API·이벤트·제약)
   - 데모 `mc-viewer.uiml/.uijs`: 체커 바닥, 둘레를 도는 돼지(`onTick`), 호버 표시, 좌클릭 블록 놓기/우클릭 부수기. 게임 테스트가 경고 없이 열리고 그려지는지 확인
 
+## 후속 완료: `loadStructure`
+- core `McvNbt`(NBT 읽기 + SNBT 쓰기, 크기/깊이/요소 상한), `McvStructure`(size/palette(s)/blocks 파싱, 월드 밖이면 아무것도 놓지 않고 거부), `McvHost` 명령 `loadStructure`(이름 검증, 파일 조회는 `StructureLoader` 로 분리해 core 는 IO 없음)
+- 백엔드: `ScriptBridge.readStructure` — `config/better-uiux/structures/<이름>.nbt` 먼저, 없으면 `assets/better_uiux/structures/`
+- 테스트: `McvStructureTest`(gzip/비압축, 오프셋, 월드 밖 거부, 깨진 파일/폭탄, 호스트 이름 검증, SNBT), `McvScriptTest`(JS API·오류), 게임 테스트(기본 데모가 `demo_house.nbt` 를 불러와 그려짐)
+- 제약: 회전/반전 없음, 구조물 엔티티 무시
+
 ## 완료 후 남은 과제 (후속, 우선순위 순)
 - 상자 같은 **블록 엔티티** 렌더(현재 빈 칸으로 보임)
 - **엔티티 맞히기**(raycast), 엔티티 조명이 어두운 문제(PiP는 렌더당 라이팅 하나)
 - **원근 투영**(별도 렌더 타깃 경로 필요), **타이틀 화면에서 엔티티**(가상 Level 필요)
 - 바이옴별 틴트, 반투명 블록 정렬, 면 단위 컬링(큰 월드 성능), 월드 스냅샷을 프레임마다 복사하는 비용 줄이기
-- `.nbt` 구조물 불러오기(`loadStructure`, 계획에 있었으나 미구현)
 - NeoForge 실행 확인(컴파일만 확인됨)

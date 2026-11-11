@@ -129,6 +129,7 @@ final class ScriptBridge {
         long mcvMillis = configNumber("scripting.maxCallMillis", DEFAULT_MCV_MILLIS, 100L, 30_000L);
         int mcvCalls = (int) configNumber("scripting.maxHostCalls", DEFAULT_MCV_HOST_CALLS, 100L, 5_000_000L);
         McvHost mcvHost = hasViewer ? new McvHost(mcvCalls) : null;
+        if (mcvHost != null) mcvHost.setStructureLoader(ScriptBridge::readStructure);
         handle.mcv = mcvHost;
         handle.doc = doc;
         if (mcvHost != null) McViewerRegistry.put(doc, mcvHost, new McViewerRegistry.ScriptEvents() {
@@ -167,6 +168,25 @@ final class ScriptBridge {
             });
         });
         return handle;
+    }
+
+    /**
+     * 구조물 파일({@code <이름>.nbt}, 스트럭처 블록이 저장하는 것)을 읽는다: {@code config/better-uiux/structures/} 먼저, 없으면 기본 제공 리소스.
+     * 이름 검사는 호스트가 이미 했지만 폴더 밖으로 나가지 않는지 한 번 더 확인한다. 스크립트 스레드에서 불린다.
+     */
+    static byte[] readStructure(String name) throws IOException {
+        Path base = configBaseDir;
+        if (base != null) {
+            Path dir = base.resolve("structures").normalize();
+            Path f = dir.resolve(name + ".nbt").normalize();
+            if (f.startsWith(dir) && Files.isRegularFile(f)) {
+                if (Files.size(f) > dev.magyul.betteruiux.core.mcv.McvNbt.MAX_COMPRESSED) throw new IOException("too large");
+                return Files.readAllBytes(f);
+            }
+        }
+        try (InputStream in = ScriptBridge.class.getResourceAsStream("/assets/better_uiux/structures/" + name + ".nbt")) {
+            return in == null ? null : in.readNBytes(dev.magyul.betteruiux.core.mcv.McvNbt.MAX_COMPRESSED + 1);
+        }
     }
 
     /** 플레이어 본인 권한으로 명령어를 실행한다(월드 안에 있을 때만). */

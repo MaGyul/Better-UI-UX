@@ -20,6 +20,17 @@ public final class McvHost {
     private int maxCalls = DEFAULT_MAX_CALLS;
     private int calls;
 
+    /** 구조물 파일을 이름으로 찾아 바이트를 돌려주는 쪽(백엔드가 파일/리소스에서 읽는다). 없으면 null. */
+    @FunctionalInterface
+    public interface StructureLoader {
+        byte[] load(String name) throws java.io.IOException;
+    }
+
+    private volatile StructureLoader structureLoader;
+
+    /** 구조물 파일 조회를 연결한다. 연결하지 않으면 {@code loadStructure} 는 오류가 된다. */
+    public void setStructureLoader(StructureLoader loader) { this.structureLoader = loader; }
+
     public McvHost() { }
 
     public McvHost(int maxCallsPerScriptCall) { this.maxCalls = maxCallsPerScriptCall; }
@@ -111,6 +122,10 @@ public final class McvHost {
                 }
                 return list.size();
             }
+            case "loadStructure" -> {
+                return loadStructure(w, str(r, "name"), r.get("x") == null ? 0 : integer(r, "x"),
+                        r.get("y") == null ? 0 : integer(r, "y"), r.get("z") == null ? 0 : integer(r, "z"));
+            }
             case "spawnEntity" -> {
                 return w.spawnEntity(num(r, "x"), num(r, "y"), num(r, "z"), str(r, "type")).id();
             }
@@ -153,6 +168,28 @@ public final class McvHost {
             }
             default -> throw new IllegalArgumentException("알 수 없는 명령: " + cmd);
         }
+    }
+
+    private Object loadStructure(McvWorld w, String name, int x, int y, int z) {
+        StructureLoader loader = structureLoader;
+        if (loader == null) throw new IllegalArgumentException("구조물 파일을 읽을 수 없는 환경입니다");
+        if (name.isBlank() || name.length() > 128 || name.contains("..") || name.startsWith("/") || name.startsWith("\\")
+                || !name.matches("[A-Za-z0-9_./-]+")) {
+            throw new IllegalArgumentException("구조물 이름이 올바르지 않습니다(영문/숫자/_ . / - 만, ..·절대경로 불가): " + name);
+        }
+        byte[] bytes;
+        try {
+            bytes = loader.load(name);
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException("구조물 파일을 읽지 못했습니다: " + name);
+        }
+        if (bytes == null) throw new IllegalArgumentException("구조물 파일을 찾을 수 없습니다: " + name);
+        McvStructure.Result res = McvStructure.place(w, McvStructure.parse(bytes), x, y, z);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("size", List.of(res.sizeX(), res.sizeY(), res.sizeZ()));
+        m.put("blocks", res.blocks());
+        m.put("droppedNbt", res.droppedNbt());
+        return m;
     }
 
     /** 맞힌 블록을 스크립트에 줄 모양으로. 맞힌 게 없으면 null. */

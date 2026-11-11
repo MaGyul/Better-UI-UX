@@ -84,6 +84,7 @@ function onInit() {
   world.fill(0, 0, 0, 8, 0, 8, 'white_concrete');          // 두 모서리(포함)를 채운다
   world.setBlock(3, 1, 3, 'oak_stairs[facing=east,half=bottom]');   // 블록 상태는 문자열, 블록 엔티티 NBT 는 5번째 인자(SNBT 문자열)
   world.setBlocks([[1, 1, 1, 'stone'], [2, 1, 1, 'dirt']]);         // 여러 개를 한 번에: [x, y, z, 블록, nbt?]
+  var r = world.loadStructure('demo_house', 0, 0, 0);      // 구조물 파일(.nbt)을 (x,y,z) 에 놓는다 → {size:[x,y,z], blocks, droppedNbt}
   var b = world.getBlock(3, 1, 3);                         // {id, block, nbt}. 비어 있으면 id 가 minecraft:air
 
   var cow = world.spawnEntity(4.5, 1, 4.5, 'cow');         // 엔티티 소환
@@ -97,6 +98,13 @@ function onInit() {
   world.setTickRate(20);                                   // 초당 틱(0~100, 기본 20, 0 이면 정지)
 }
 ```
+
+**구조물 파일(`loadStructure`)**: 마인크래프트의 스트럭처 블록이 저장하는 `.nbt` 파일을 그대로 쓴다(압축된 것·안 된 것 모두).
+`world.loadStructure('이름', x, y, z)` 는 `config/better-uiux/structures/이름.nbt` 를 먼저, 없으면 기본 제공 리소스(`demo_house`)를 읽어 그 위치(구조물의 가장 작은 모서리)에 놓는다. 하위 폴더는 `'castle/tower'` 처럼 쓴다.
+- 구조물이 월드 밖으로 나가면 **아무것도 놓지 않고** 오류가 난다(`try/catch` 로 잡을 수 있다). 이미 있는 블록은 덮어쓰고, 구조물의 빈 칸은 건드리지 않는다.
+- 공기·구조물 빈칸(`structure_void`)·구조물 블록·직소 블록은 놓지 않는다. 구조물 안의 **엔티티는 무시**한다. 회전/반전은 지원하지 않는다.
+- 블록 엔티티 NBT(상자 내용 등)는 글자(SNBT)로 보관하되 4096자를 넘으면 버리고 `droppedNbt` 에 센다. 파일은 압축 상태 2MB, 푼 뒤 16MB, 각 축 512칸까지.
+- 파일 이름은 영문/숫자/`_ . / -` 만 가능하고 `..` 와 절대경로는 거부된다.
 
 **틱과 이벤트**: 월드는 위젯이 화면에 그려지는 동안만 흐른다(안 보이면 멈춘다). 아래 전역 함수를 정의해 두면 불린다.
 

@@ -111,6 +111,69 @@ class McvScriptTest {
     }
 
     @Test
+    void loadStructureIsAvailableToScriptsAndErrorsAreCatchable() throws Exception {
+        host.setStructureLoader(name -> name.equals("one") ? ONE_STONE : null);
+        rt.load("t.uijs", """
+                function go() {
+                  var w = mcv.createWorld(4, 4, 4);
+                  var r = w.loadStructure('one', 1, 1, 1);
+                  var msg = 'none';
+                  try { w.loadStructure('nope'); } catch (e) { msg = e.message; }
+                  ui.log('blocks=' + r.blocks + ' size=' + r.size.join('x') + ' at=' + w.getBlock(1, 1, 1).id + ' err=' + msg);
+                }
+                """);
+        String out = call("go");
+        assertTrue(out.contains("blocks=1 size=1x1x1 at=minecraft:stone err="), out);
+        assertTrue(out.contains("nope"), "없는 파일은 이름이 담긴 오류: " + out);
+    }
+
+    /** size 1x1x1, palette [stone], blocks [{pos [0,0,0], state 0}] — 압축 안 한 NBT. */
+    private static final byte[] ONE_STONE = oneStone();
+
+    private static byte[] oneStone() {
+        try {
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            java.io.DataOutputStream o = new java.io.DataOutputStream(bos);
+            o.writeByte(10);
+            o.writeUTF("");
+            o.writeByte(9);
+            o.writeUTF("size");
+            o.writeByte(3);
+            o.writeInt(3);
+            o.writeInt(1);
+            o.writeInt(1);
+            o.writeInt(1);
+            o.writeByte(9);
+            o.writeUTF("palette");
+            o.writeByte(10);
+            o.writeInt(1);
+            o.writeByte(8);
+            o.writeUTF("Name");
+            o.writeUTF("minecraft:stone");
+            o.writeByte(0);
+            o.writeByte(9);
+            o.writeUTF("blocks");
+            o.writeByte(10);
+            o.writeInt(1);
+            o.writeByte(9);
+            o.writeUTF("pos");
+            o.writeByte(3);
+            o.writeInt(3);
+            o.writeInt(0);
+            o.writeInt(0);
+            o.writeInt(0);
+            o.writeByte(3);
+            o.writeUTF("state");
+            o.writeInt(0);
+            o.writeByte(0);
+            o.writeByte(0);
+            return bos.toByteArray();
+        } catch (java.io.IOException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    @Test
     void tickMessageCallsOnTick() throws Exception {
         rt.load("t.uijs", "function onTick(n, w) { ui.log('tick ' + n + ' world ' + w); }");
         assertTrue(rt.call("{\"type\":\"tick\",\"tick\":7,\"world\":2}").contains("tick 7 world 2"));
