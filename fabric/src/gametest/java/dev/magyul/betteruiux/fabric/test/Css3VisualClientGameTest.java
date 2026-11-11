@@ -80,6 +80,16 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
         int[] insEdge = px(img, sx, ins2.x + ins2.w / 2, ins2.y + 1, s), insMid = px(img, sx, ins2.x + ins2.w / 2, ins2.y + ins2.h / 2, s);
         check(insEdge[1] < insMid[1] - 60, "블러 안쪽 그림자: 가장자리가 가운데보다 어두워야 한다: " + hex(insEdge) + " vs " + hex(insMid));
         check(isNear(insMid, 0x00, 0xDD, 0x00, 70), "블러 안쪽 그림자: 가운데는 배경색에 가까워야 한다: " + hex(insMid));
+        LayoutBox ang = box(ctx, "ang"), rep = box(ctx, "rep"), rcs = box(ctx, "rcs"), cfr = box(ctx, "cfr");
+        int[] angBL = px(img, sx, ang.x + 3, ang.y + ang.h - 4, s), angTR = px(img, sx, ang.x + ang.w - 4, ang.y + 3, s);
+        check(angBL[0] > angBL[2] + 60 && angTR[2] > angTR[0] + 60, "45도 선형: 왼쪽 아래 빨강 → 오른쪽 위 파랑: " + hex(angBL) + " / " + hex(angTR));
+        int[] r2 = px(img, sx, rep.x + 2, rep.y + 8, s), r23 = px(img, sx, rep.x + 23, rep.y + 8, s), r27 = px(img, sx, rep.x + 27, rep.y + 8, s);
+        check(r2[0] > r2[2] + 60 && r23[2] > r23[0] + 60 && r27[0] > r27[2] + 60, "반복 그라디언트(25% 주기): 빨강 → 파랑 → 다시 빨강: " + hex(r2) + " " + hex(r23) + " " + hex(r27));
+        int[] rcsC = px(img, sx, rcs.x + 20, rcs.y + 20, s), rfar = px(img, sx, rcs.x + 70, rcs.y + 20, s);
+        check(rcsC[0] > rcsC[2] + 60 && rfar[2] > rfar[0] + 60, "방사형(circle closest-side at 25% 50%): 중심 빨강, 반지름 밖 파랑: " + hex(rcsC) + " / " + hex(rfar));
+        int[] cfRight = px(img, sx, cfr.x + cfr.w - 3, cfr.y + cfr.h / 2 + 2, s), cfTop = px(img, sx, cfr.x + cfr.w / 2, cfr.y + 3, s);
+        check(cfRight[0] > cfRight[1] + 60, "원뿔(from 90deg): 오른쪽에서 시작(빨강): " + hex(cfRight));
+        check(cfTop[2] > 60 && cfTop[1] > 60 && cfTop[0] < 80, "원뿔(from 90deg): 위쪽은 초록→파랑 사이: " + hex(cfTop));
         int[] conTop = px(img, sx, con.x + con.w / 2 + 2, con.y + 3, s), conBottom = px(img, sx, con.x + con.w / 2, con.y + con.h - 4, s);
         check(conTop[0] > conTop[1] + 60, "원뿔 그라디언트: 위쪽(0도)은 첫 색(빨강)이어야 한다: " + hex(conTop));
         check(conBottom[1] > conBottom[0] + 60 && conBottom[1] > conBottom[2] + 60, "원뿔 그라디언트: 아래쪽(180도)은 가운데 색(초록)이어야 한다: " + hex(conBottom));
@@ -221,6 +231,12 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
                         <panel id="hg" width="60" height="20" style="background: linear-gradient(to right, #FF0000, #0000FF)"/>
                         <panel id="ins2" width="60" height="30" style="background: #00DD00; border-radius: 8; box-shadow: inset 0 2 10 #000000FF"/>
                         <panel id="con" width="50" height="50" style="background: conic-gradient(#FF0000, #00FF00, #0000FF)"/>
+                      </column>
+                      <column gap="6" anchor="top-left" x="300" y="20">
+                        <panel id="ang" width="60" height="60" style="background: linear-gradient(45deg, #FF0000, #0000FF)"/>
+                        <panel id="rep" width="100" height="16" style="background: repeating-linear-gradient(to right, #FF0000 0%, #0000FF 25%)"/>
+                        <panel id="rcs" width="80" height="40" style="background: radial-gradient(circle closest-side at 25% 50%, #FF0000, #0000FF)"/>
+                        <panel id="cfr" width="50" height="50" style="background: conic-gradient(from 90deg, #FF0000, #00FF00, #0000FF)"/>
                       </column>
                     </screen>
                     """);

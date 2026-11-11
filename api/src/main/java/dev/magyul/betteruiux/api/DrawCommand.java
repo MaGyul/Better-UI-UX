@@ -19,7 +19,7 @@ public sealed interface DrawCommand {
         public int radius() { return tl; }
     }
 
-    record FillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, int mode, int[] colors, float[] stops) implements DrawCommand {}
+    record FillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, GradientSpec spec) implements DrawCommand {}
 
     record DrawRoundTexture(String texture, int x, int y, int w, int h, int tl, int tr, int br, int bl, int argb) implements DrawCommand {}
 

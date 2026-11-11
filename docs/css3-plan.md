@@ -84,12 +84,12 @@
 
 ## 남은 일 (2026-11 기준)
 
-구현됨(최근): 반지름이 서로 다른 모서리·**그라디언트(세로/가로/방사형/원뿔 `conic-gradient`)도 같은 셰이더 파이프라인**으로(그라디언트 색은 256칸 동적 색 띠 텍스처를 샘플링; 정지점마다 하나 만들어 공유, 64개까지), **커스텀 셰이더 파이프라인**(`better_uiux:core/round`, GLSL 하나가 Vulkan·OpenGL 모두에서 컴파일됨): 둥근 사각형 채움·테두리 고리·번지는 그림자를 부드러운 가장자리(안티앨리어싱)로 한 번에 그림(`UiGfx.fillRoundRect/strokeRoundRect/shadowRoundRect`, 지원하지 않는 백엔드는 사각형 근사로 대체), 자식 둥근 클립(`overflow:hidden` + `border-radius`: 모서리 행 묶음마다 사각형 클립을 걸고 자식을 다시 그림, 묶음은 12개 이하로 합침), `font-style: italic`·`font-family`(마인크래프트 글꼴: `uniform`/`alt`/`illageralt` 또는 `ns:path`; `UiGfx.drawStyledText` 추가), 줄바꿈 글자 상자 폭을 컨테이너 폭으로 제한(그릴 때 같은 폭에서 줄바꿈), `row-reverse`/`column-reverse`, `align-content`, absolute 의 기준 조상·`fixed` 는 화면 기준, 이미지 둥근 모서리, `inset` 그림자, 여러 `animation`·`animation-play-state`, `:has()`,
+구현됨(최근): 이미지/영상의 둥근 모서리·`inset` 그림자(번짐·오프셋·spread)·임의 각도 `linear-gradient(Ndeg | to top right …)`·`repeating-linear/radial-gradient`·`radial-gradient` 의 모양/크기/위치(`circle closest-side at 25% 50%`)·`conic-gradient(from 90deg at …)` 도 셰이더로, 반지름이 서로 다른 모서리·**그라디언트(세로/가로/방사형/원뿔 `conic-gradient`)도 같은 셰이더 파이프라인**으로(그라디언트 색은 256칸 동적 색 띠 텍스처를 샘플링; 정지점마다 하나 만들어 공유, 64개까지), **커스텀 셰이더 파이프라인**(`better_uiux:core/round`, GLSL 하나가 Vulkan·OpenGL 모두에서 컴파일됨): 둥근 사각형 채움·테두리 고리·번지는 그림자를 부드러운 가장자리(안티앨리어싱)로 한 번에 그림(`UiGfx.fillRoundRect/strokeRoundRect/shadowRoundRect`, 지원하지 않는 백엔드는 사각형 근사로 대체), 자식 둥근 클립(`overflow:hidden` + `border-radius`: 모서리 행 묶음마다 사각형 클립을 걸고 자식을 다시 그림, 묶음은 12개 이하로 합침), `font-style: italic`·`font-family`(마인크래프트 글꼴: `uniform`/`alt`/`illageralt` 또는 `ns:path`; `UiGfx.drawStyledText` 추가), 줄바꿈 글자 상자 폭을 컨테이너 폭으로 제한(그릴 때 같은 폭에서 줄바꿈), `row-reverse`/`column-reverse`, `align-content`, absolute 의 기준 조상·`fixed` 는 화면 기준, 이미지 둥근 모서리, `inset` 그림자, 여러 `animation`·`animation-play-state`, `:has()`,
 줄바꿈 글자의 높이가 auto 높이 컨테이너·grid 행·scroll 내용에 반영, `textfield`/`select` 입력 글자 스타일(`text-transform` 은 편집 위치가 어긋나지 않게 textfield 에서 제외),
 `radial-gradient`(가운데 기준 타원, 최대 6띠), 속성 값 타입 경고(`PropValues`: 길이/숫자/색/열거형, 명백히 잘못된 값만; 값은 그대로 저장), 에디터 규칙 머리글에 `@media` 조건의 `[적용 중]/[꺼짐]` 표시,
 **레이아웃에 영향을 주는 상태 규칙**(`:hover/:active/:focus` 의 width/margin/padding/gap/font-size 등 → 상태가 바뀌면 다시 배치, `transition` 과도 함께 동작).
 
-- 렌더링: 이미지/영상의 둥근 모서리와 `inset` 그림자의 셰이더화(지금은 사각형 근사), 반복 그라디언트(`repeating-*`)의 정확한 반복, `radial` 의 모양/크기/위치 인자(지금은 가운데 기준 farthest-corner 타원), 가로/세로가 아닌 `linear-gradient` 각도(가장 가까운 축으로 근사)
+- 렌더링: 셰이더가 없는 백엔드에서의 근사 품질(각도/반복/원뿔은 단순 근사), 이미지의 일부 영역(`uv`)을 둥글게 자르기, 점선 테두리·변마다 두께가 다른 테두리의 셰이더화
 - 도구: 새 문법에 대한 규칙 편집기 안내(자동 완성 등), 값 타입 검증의 확대(지금은 길이/숫자/색/열거형 속성만)
 
 ## 실기 검증 (GameTest / 스모크)

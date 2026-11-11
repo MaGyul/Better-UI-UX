@@ -1,5 +1,6 @@
 package dev.magyul.betteruiux.core.render;
 
+import dev.magyul.betteruiux.api.GradientSpec;
 import dev.magyul.betteruiux.api.UiGfx;
 import dev.magyul.betteruiux.core.layout.Colors;
 import dev.magyul.betteruiux.core.layout.Insets;
@@ -165,11 +166,16 @@ final class BoxPainter {
 
     // ---- 그라디언트 ----
 
-    /** @param vertical 세로(위→아래)인지, @param colors/pos 정지점(pos 는 0..1, 오름차순) */
-    record Gradient(boolean vertical, int[] colors, float[] pos, boolean radial, boolean conic) {
-        Gradient(boolean vertical, int[] colors, float[] pos) { this(vertical, colors, pos, false, false); }
+    /**
+     * 파싱한 그라디언트. {@code vertical/colors/pos} 는 사각형 근사 경로(가장 가까운 축, 방향이 반대면 정지점을 뒤집음)용이고,
+     * {@code ext} 는 셰이더 경로가 쓰는 원래 정지점·각도·반복·방사형/원뿔 매개변수(없으면 null).
+     */
+    record Gradient(boolean vertical, int[] colors, float[] pos, boolean radial, boolean conic, Ext ext) {
+        Gradient(boolean vertical, int[] colors, float[] pos) { this(vertical, colors, pos, false, false, null); }
 
-        Gradient(boolean vertical, int[] colors, float[] pos, boolean radial) { this(vertical, colors, pos, radial, false); }
+        Gradient(boolean vertical, int[] colors, float[] pos, boolean radial) { this(vertical, colors, pos, radial, false, null); }
+
+        Gradient(boolean vertical, int[] colors, float[] pos, boolean radial, boolean conic) { this(vertical, colors, pos, radial, conic, null); }
 
         /** 셰이더 모드: 0 위→아래, 1 왼쪽→오른쪽, 2 방사형, 3 원뿔. */
         int mode() { return conic ? 3 : radial ? 2 : vertical ? 0 : 1; }
@@ -185,6 +191,16 @@ final class BoxPainter {
             return colors[colors.length - 1];
         }
     }
+
+    /**
+     * @param rawColors/rawPos 원래 순서의 정지점
+     * @param angle   {@code Ndeg} 방향(도, 위쪽 0 시계방향), 없으면 NaN
+     * @param corner  {@code to top right} 같은 모서리 방향("top right")이면 그 글자, 없으면 null
+     * @param shape   방사형 모양 0 타원 1 원
+     * @param size    방사형 크기 0 farthest-corner 1 closest-corner 2 farthest-side 3 closest-side
+     * @param at      {@code at} 뒤의 위치 글자(없으면 null), @param from 원뿔 시작 각도(도)
+     */
+    record Ext(int[] rawColors, float[] rawPos, double angle, String corner, boolean repeating, int shape, int size, String at, double from) {}
 
     static int lerp(int a, int b, float t) {
         int out = 0;
@@ -212,22 +228,56 @@ final class BoxPainter {
         String low = s.toLowerCase(Locale.ROOT);
         int open = s.indexOf('(');
         if (open < 0 || !s.endsWith(")")) return null;
-        boolean linear = low.startsWith("linear-gradient(") || low.startsWith("repeating-linear-gradient(");
-        boolean radial = low.startsWith("radial-gradient(");
-        boolean conic = low.startsWith("conic-gradient(");
+        boolean repeating = low.startsWith("repeating-");
+        String kind = repeating ? low.substring(10) : low;
+        boolean linear = kind.startsWith("linear-gradient(");
+        boolean radial = kind.startsWith("radial-gradient(");
+        boolean conic = kind.startsWith("conic-gradient(");
         List<String> args = Selector.splitList(s.substring(open + 1, s.length() - 1));
         if (args.isEmpty()) return null;
         boolean vertical = true, reversed = false;
         int first = 0;
-        if (radial || conic) {                              // 모양/크기/위치(circle, ellipse, at center ...)는 읽고 건너뛰며, 가운데 기준 타원(farthest-corner)만 쓴다
+        double angleDeg = Double.NaN, from = 0;
+        String corner = null, at = null;
+        int shape = 0, size = 0;
+        if (radial || conic) {                              // 모양/크기/위치(circle, closest-side, at 30% 40%, from 90deg ...)
             List<String> t0 = CssMath.tokens(args.get(0));
-            if (!t0.isEmpty() && Colors.tryParse(t0.get(0)) == null) first = 1;
+            if (!t0.isEmpty() && Colors.tryParse(t0.get(0)) == null) {
+                first = 1;
+                for (int i = 0; i < t0.size(); i++) {
+                    String t = t0.get(i).toLowerCase(Locale.ROOT);
+                    switch (t) {
+                        case "circle" -> shape = 1;
+                        case "ellipse" -> shape = 0;
+                        case "closest-corner" -> size = 1;
+                        case "farthest-corner" -> size = 0;
+                        case "farthest-side" -> size = 2;
+                        case "closest-side" -> size = 3;
+                        case "from" -> {
+                            if (i + 1 < t0.size()) {
+                                try {
+                                    from = angle(t0.get(i + 1).toLowerCase(Locale.ROOT));
+                                } catch (NumberFormatException ignored) {
+                                    // 알 수 없는 각도: 0
+                                }
+                                i++;
+                            }
+                        }
+                        case "at" -> {
+                            at = String.join(" ", t0.subList(i + 1, t0.size()));
+                            i = t0.size();
+                        }
+                        default -> { }
+                    }
+                }
+            }
         }
         if (linear) {
             String a = args.get(0).trim().toLowerCase(Locale.ROOT);
             if (a.startsWith("to ")) {
                 first = 1;
                 boolean top = a.contains("top"), bottom = a.contains("bottom"), left = a.contains("left"), right = a.contains("right");
+                if ((top || bottom) && (left || right)) corner = (top ? "top" : "bottom") + " " + (left ? "left" : "right");
                 if (top || bottom) { vertical = true; reversed = top && !bottom; }
                 else if (left || right) { vertical = false; reversed = left; }
             } else if (a.endsWith("deg") || a.endsWith("turn") || a.endsWith("rad") || a.endsWith("grad")) {
@@ -235,6 +285,7 @@ final class BoxPainter {
                 try {
                     double deg = angle(a);
                     deg = ((deg % 360) + 360) % 360;
+                    angleDeg = deg;
                     if (deg < 45 || deg >= 315) { vertical = true; reversed = true; }
                     else if (deg < 135) { vertical = false; reversed = false; }
                     else if (deg < 225) { vertical = true; reversed = false; }
@@ -258,6 +309,13 @@ final class BoxPainter {
                 } catch (NumberFormatException ignored) {
                     return null;
                 }
+            } else if (conic && t.size() > 1 && (last.endsWith("deg") || last.endsWith("turn"))) {   // 원뿔은 각도로 위치를 줄 수도 있다
+                try {
+                    p = (float) (angle(last.toLowerCase(Locale.ROOT)) / 360.0);
+                    t = t.subList(0, t.size() - 1);
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
             }
             Integer c = Colors.tryParse(String.join(" ", t));
             if (c == null) return null;
@@ -265,7 +323,11 @@ final class BoxPainter {
             pos.add(p);
         }
         if (cols.isEmpty()) return null;
-        if (cols.size() == 1) return new Gradient(vertical, new int[] {cols.get(0), cols.get(0)}, new float[] {0, 1}, radial, conic);
+        if (cols.size() == 1) {
+            int[] one = {cols.get(0), cols.get(0)};
+            float[] ps = {0, 1};
+            return new Gradient(vertical, one, ps, radial, conic, new Ext(one, ps, angleDeg, corner, repeating, shape, size, at, from));
+        }
         int n = cols.size();
         float[] p = new float[n];
         for (int i = 0; i < n; i++) p[i] = pos.get(i) == null ? Float.NaN : pos.get(i);
@@ -281,7 +343,8 @@ final class BoxPainter {
         for (int i = 1; i < n; i++) p[i] = Math.max(p[i], p[i - 1]);
         int[] c = new int[n];
         for (int i = 0; i < n; i++) c[i] = cols.get(i);
-        if (reversed) {                                     // 방향이 반대(top/left)면 정지점을 뒤집는다
+        Ext ext = new Ext(c.clone(), p.clone(), angleDeg, corner, repeating, shape, size, at, from);
+        if (reversed) {                                     // 방향이 반대(top/left)면 정지점을 뒤집는다(사각형 근사 경로용)
             int[] rc = new int[n];
             float[] rp = new float[n];
             for (int i = 0; i < n; i++) {
@@ -291,7 +354,7 @@ final class BoxPainter {
             c = rc;
             p = rp;
         }
-        return new Gradient(vertical, c, p, radial, conic);
+        return new Gradient(vertical, c, p, radial, conic, ext);
     }
 
     private static double angle(String a) {
@@ -311,10 +374,12 @@ final class BoxPainter {
         if (w <= 0 || h <= 0) return;
         int[] cs = new int[gr.colors().length];
         for (int i = 0; i < cs.length; i++) cs[i] = scaleAlpha(gr.colors()[i], opacity);
-        Gradient o = new Gradient(gr.vertical(), cs, gr.pos(), gr.radial(), gr.conic());
-        if (!(r.none() && o.mode() == 0)) {                 // 모서리가 없는 세로 그라디언트는 fillGradient 가 가장 싸다. 그 밖에는 지원하면 셰이더로 한 번에
+        Gradient o = new Gradient(gr.vertical(), cs, gr.pos(), gr.radial(), gr.conic(), gr.ext());
+        boolean angled = gr.ext() != null && !gr.radial() && !gr.conic() && (!Double.isNaN(gr.ext().angle()) || gr.ext().corner() != null);
+        boolean plainVertical = r.none() && o.mode() == 0 && !angled && (gr.ext() == null || !gr.ext().repeating());
+        if (!plainVertical) {                               // 모서리 없는 세로 그라디언트는 fillGradient 가 가장 싸다. 그 밖에는 지원하면 셰이더로 한 번에
             Radii f = r.fit(w, h);
-            if (g.fillRoundGradient(x, y, w, h, f.tl(), f.tr(), f.br(), f.bl(), o.mode(), o.colors(), o.pos())) return;
+            if (g.fillRoundGradient(x, y, w, h, f.tl(), f.tr(), f.br(), f.bl(), spec(gr, cs, w, h, opacity))) return;
         }
         if (o.conic()) {                                    // 셰이더가 없으면 원뿔은 첫 색 단색으로 근사
             fillShape(g, x, y, w, h, r, o.colors()[0]);
@@ -362,6 +427,69 @@ final class BoxPainter {
             }
         } else {
             strips(g, x, y, w, h, o, spans(h, w, r.transposed()));
+        }
+    }
+
+    /** 셰이더에 넘길 그라디언트 매개변수(상자 크기에 따라 정해지는 모서리 방향·{@code at} 위치를 이 시점에 푼다). */
+    static GradientSpec spec(Gradient gr, int[] scaledColors, int w, int h, float opacity) {
+        Ext e = gr.ext();
+        boolean angled = e != null && !gr.radial() && !gr.conic() && (!Double.isNaN(e.angle()) || e.corner() != null);
+        int[] colors = scaledColors;
+        float[] stops = gr.pos();
+        if (angled || e != null && e.repeating() || gr.radial() || gr.conic()) {         // 방향이 각도에 들어 있으니 원래 순서의 정지점을 쓴다
+            colors = new int[e.rawColors().length];
+            for (int i = 0; i < colors.length; i++) colors[i] = scaleAlpha(e.rawColors()[i], opacity);
+            stops = e.rawPos();
+        }
+        float repStart = 0f, repLen = 1f;
+        if (e != null && e.repeating() && stops.length > 1) {
+            repStart = stops[0];
+            repLen = Math.max(0.0001f, stops[stops.length - 1] - stops[0]);
+            float[] norm = new float[stops.length];
+            for (int i = 0; i < norm.length; i++) norm[i] = (stops[i] - repStart) / repLen;
+            stops = norm;
+        }
+        if (gr.conic()) return new GradientSpec(3, colors, stops, 0, e.repeating(), repStart, repLen, 0, 0,
+                position(e.at(), w, h, true), position(e.at(), w, h, false), (float) e.from());
+        if (gr.radial()) return new GradientSpec(2, colors, stops, 0, e.repeating(), repStart, repLen, e.shape(), e.size(),
+                position(e.at(), w, h, true), position(e.at(), w, h, false), 0f);
+        if (angled) {
+            double deg = e.angle();
+            if (e.corner() != null) {                       // to top right: 반대쪽 두 모서리를 잇는 선에 수직으로
+                double dx = e.corner().contains("right") ? 1 : -1, dy = e.corner().contains("bottom") ? 1 : -1;
+                deg = Math.toDegrees(Math.atan2(dx * h, -dy * w));
+            }
+            return new GradientSpec(4, colors, stops, (int) Math.round(((deg % 360) + 360) % 360), e.repeating(), repStart, repLen, 0, 0, 0.5f, 0.5f, 0f);
+        }
+        return new GradientSpec(gr.mode(), colors, stops, 0, e != null && e.repeating(), repStart, repLen, 0, 0, 0.5f, 0.5f, 0f);
+    }
+
+    /** {@code at 30% 40%} / {@code at left top} / {@code at 10px 20px} 같은 위치 → 0..1 (가로 또는 세로). 없거나 읽을 수 없으면 0.5. */
+    static float position(String at, int w, int h, boolean horizontal) {
+        if (at == null || at.isBlank()) return 0.5f;
+        List<String> t = CssMath.tokens(at);
+        String hx = null, vy = null;
+        for (String tok : t) {                              // 키워드는 축이 정해져 있고, 값은 먼저 가로 다음 세로
+            String l = tok.toLowerCase(Locale.ROOT);
+            if (l.equals("left") || l.equals("right")) hx = l;
+            else if (l.equals("top") || l.equals("bottom")) vy = l;
+            else if (l.equals("center")) { if (hx == null && vy == null) hx = l; else if (hx == null) hx = l; else vy = l; }
+            else if (hx == null) hx = l;
+            else vy = l;
+        }
+        String v = horizontal ? hx : vy;
+        if (v == null) return 0.5f;
+        int size = horizontal ? w : h;
+        try {
+            return switch (v) {
+                case "left", "top" -> 0f;
+                case "right", "bottom" -> 1f;
+                case "center" -> 0.5f;
+                default -> v.endsWith("%") ? Float.parseFloat(v.substring(0, v.length() - 1)) / 100f
+                        : Float.parseFloat(v.endsWith("px") ? v.substring(0, v.length() - 2) : v) / Math.max(1, size);
+            };
+        } catch (NumberFormatException e) {
+            return 0.5f;
         }
     }
 

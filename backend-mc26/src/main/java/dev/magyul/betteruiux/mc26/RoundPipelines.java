@@ -33,20 +33,32 @@ final class RoundPipelines {
 
     /** @param grad 0 이 아니면 그라디언트 채움: 1 세로, 2 가로, 3 방사형, 4 원뿔(색은 Sampler0 의 가로 1줄 색 띠에서 읽는다) */
     static RenderPipeline get(int tl, int tr, int br, int bl, int thick, int blur, int grad) {
-        return get(tl, tr, br, bl, thick, blur, grad, 0, 0, 0, false);
+        return get(tl, tr, br, bl, thick, blur, grad, 0, 0, 0, false, null);
+    }
+
+    /** 그라디언트 파이프라인: 방식/각도/반복/방사형 모양·크기·중심/원뿔 시작 각도가 셰이더 정의라서 조합마다 하나. */
+    static RenderPipeline getGradient(int tl, int tr, int br, int bl, dev.magyul.betteruiux.api.GradientSpec g) {
+        return get(tl, tr, br, bl, 0, 0, g.mode() + 1, 0, 0, 0, false, g);
     }
 
     /** 안쪽 그림자 파이프라인: 번짐 {@code blur}, 오프셋 (ox, oy), 줄이기 spread. */
     static RenderPipeline getInset(int tl, int tr, int br, int bl, int blur, int ox, int oy, int spread) {
-        return get(tl, tr, br, bl, 0, blur, 0, ox, oy, spread, true);
+        return get(tl, tr, br, bl, 0, blur, 0, ox, oy, spread, true, null);
     }
 
-    private static RenderPipeline get(int tl, int tr, int br, int bl, int thick, int blur, int grad, int ox, int oy, int spread, boolean inset) {
+    private static RenderPipeline get(int tl, int tr, int br, int bl, int thick, int blur, int grad, int ox, int oy, int spread, boolean inset,
+                                      dev.magyul.betteruiux.api.GradientSpec gs) {
         if (broken || thick < 0 || thick > 32 || blur < 0 || blur > 48) return null;
         for (int r : new int[] {tl, tr, br, bl}) if (r < 0 || r > 64) return null;
         if (!inset && tl + tr + br + bl == 0 && thick == 0 && blur == 0 && grad == 0) return null;   // 둥글지도 번지지도 않는 단색 채움은 사각형 하나면 된다
         if (inset && (Math.abs(ox) > 64 || Math.abs(oy) > 64 || spread < -32 || spread > 64)) return null;
-        String key = tl + "," + tr + "," + br + "," + bl + "," + thick + "," + blur + "," + grad + (inset ? ",i" + ox + "," + oy + "," + spread : "");
+        int angle = gs == null ? 0 : ((gs.angleDeg() % 360) + 360) % 360, rep = gs != null && gs.repeating() ? 1 : 0;
+        int rs = gs == null ? 0 : Math.round(gs.repStart() * 1000), rl = gs == null ? 1000 : Math.max(1, Math.round(gs.repLen() * 1000));
+        int shape = gs == null ? 0 : gs.shape(), size = gs == null ? 0 : gs.size();
+        int cxm = gs == null ? 500 : Math.round(gs.cx() * 1000), cym = gs == null ? 500 : Math.round(gs.cy() * 1000);
+        int from = gs == null ? 0 : Math.round(gs.fromDeg());
+        String key = tl + "," + br + "," + tr + "," + bl + "," + thick + "," + blur + "," + grad + (inset ? ",i" + ox + "," + oy + "," + spread : "")
+                + (gs == null ? "" : ",g" + angle + "," + rep + "," + rs + "," + rl + "," + shape + "," + size + "," + cxm + "," + cym + "," + from);
         RenderPipeline p = CACHE.get(key);
         if (p != null) return p;
         if (CACHE.size() >= MAX) return null;
@@ -66,6 +78,15 @@ final class RoundPipelines {
                     .withShaderDefine("BLUR", inset ? 0 : blur)
                     .withShaderDefine("IBLUR", inset ? blur : 0)
                     .withShaderDefine("GRAD", grad)
+                    .withShaderDefine("ANGLE", angle)
+                    .withShaderDefine("REPEAT", rep)
+                    .withShaderDefine("RSTART", rs)
+                    .withShaderDefine("RLEN", rl)
+                    .withShaderDefine("RSHAPE", shape)
+                    .withShaderDefine("RSIZE", size)
+                    .withShaderDefine("RCX", cxm)
+                    .withShaderDefine("RCY", cym)
+                    .withShaderDefine("CFROM", from)
                     .withShaderDefine("INSET", inset ? 1 : 0)
                     .withShaderDefine("OX", ox)
                     .withShaderDefine("OY", oy)

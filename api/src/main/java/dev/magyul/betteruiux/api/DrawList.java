@@ -27,7 +27,7 @@ public final class DrawList implements UiGfx {
                 case DrawCommand.StrokeRoundRect f -> target.strokeRoundRect(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(), f.thickness(), f.argb());
                 case DrawCommand.ShadowRoundRect f -> target.shadowRoundRect(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(), f.blur(), f.argb());
                 case DrawCommand.FillRoundGradient f ->
-                        target.fillRoundGradient(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(), f.mode(), f.colors(), f.stops());
+                        target.fillRoundGradient(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(), f.spec());
                 case DrawCommand.DrawRoundTexture t ->
                         target.drawRoundTexture(t.texture(), t.x(), t.y(), t.w(), t.h(), t.tl(), t.tr(), t.br(), t.bl(), t.argb());
                 case DrawCommand.InsetShadowRoundRect f -> target.insetShadowRoundRect(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(),
@@ -53,9 +53,9 @@ public final class DrawList implements UiGfx {
         return this;
     }
 
-    @Override public boolean fillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, int mode, int[] colors, float[] stops) {
+    @Override public boolean fillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, GradientSpec spec) {
         if (!roundRects) return false;
-        commands.add(new DrawCommand.FillRoundGradient(x, y, w, h, tl, tr, br, bl, mode, colors, stops));
+        commands.add(new DrawCommand.FillRoundGradient(x, y, w, h, tl, tr, br, bl, spec));
         return true;
     }
 

@@ -41,10 +41,9 @@ public interface UiGfx {
     default boolean shadowRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int blur, int argb) { return false; }
 
     /**
-     * 둥근 사각형을 그라디언트로 채운다(부드러운 가장자리). {@code mode}: 0 위→아래, 1 왼쪽→오른쪽, 2 방사형(가운데 기준 타원), 3 원뿔(위에서 시계방향).
-     * {@code colors}/{@code stops} 는 같은 길이의 정지점(argb, 0..1 위치, 오름차순). 지원하지 않으면 false.
+     * 둥근 사각형을 그라디언트({@link GradientSpec}: 선형/각도/방사형/원뿔, 반복)로 채운다(부드러운 가장자리). 지원하지 않으면 false.
      */
-    default boolean fillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, int mode, int[] colors, float[] stops) { return false; }
+    default boolean fillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, GradientSpec spec) { return false; }
 
     /**
      * 텍스처(이미지/영상) 전체를 둥근 사각형 모양으로 잘라 그린다(부드러운 가장자리). 텍스처의 일부 영역(uv)은 지원하지 않는다.

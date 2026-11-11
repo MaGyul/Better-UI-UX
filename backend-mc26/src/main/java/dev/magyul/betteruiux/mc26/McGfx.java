@@ -91,10 +91,10 @@ public final class McGfx implements UiGfx {
     }
 
     @Override
-    public boolean fillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, int mode, int[] colors, float[] stops) {
-        if (w <= 0 || h <= 0 || mode < 0 || mode > 3) return false;
-        com.mojang.renderpearl.api.pipeline.RenderPipeline p = RoundPipelines.get(tl, tr, br, bl, 0, 0, mode + 1);
-        Identifier lut = p == null ? null : GradientTextures.get(colors, stops);
+    public boolean fillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, dev.magyul.betteruiux.api.GradientSpec spec) {
+        if (w <= 0 || h <= 0 || spec == null || spec.mode() < 0 || spec.mode() > 4) return false;
+        com.mojang.renderpearl.api.pipeline.RenderPipeline p = RoundPipelines.getGradient(tl, tr, br, bl, spec);
+        Identifier lut = p == null ? null : GradientTextures.get(spec.colors(), spec.stops());
         if (lut == null) return false;
         g.blit(p, lut, x, y, 0f, 0f, w, h, 1, 1, 1, 1, 0xFFFFFFFF);
         return true;

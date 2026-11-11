@@ -59,17 +59,52 @@ void main() {
 #if GRAD == 0
     vec4 color = texture(Sampler0, texCoord0) * vertexColor;
 #else
-    vec2 e = (texCoord0 - 0.5) * 2.0;
+    vec2 c = vec2(float(RCX), float(RCY)) * 0.001;
+    vec2 pc = (texCoord0 - c) * size;               // 중심에서 떨어진 거리(GUI 픽셀)
+    float t;
 #if GRAD == 1
-    float t = texCoord0.y;
+    t = texCoord0.y;
 #elif GRAD == 2
-    float t = texCoord0.x;
+    t = texCoord0.x;
+#elif GRAD == 5
+    float a = radians(float(ANGLE));                // 0 = 위쪽, 시계방향
+    vec2 d = vec2(sin(a), -cos(a));
+    float len = max(abs(size.x * d.x) + abs(size.y * d.y), 0.0001);
+    t = 0.5 + dot((texCoord0 - 0.5) * size, d) / len;
 #elif GRAD == 3
-    float t = length(e) * 0.70710678;
-#else
-    float t = fract(atan(e.x, -e.y) * 0.15915494 + 1.0);
+    float nx = min(c.x, 1.0 - c.x) * size.x, fx = max(c.x, 1.0 - c.x) * size.x;
+    float ny = min(c.y, 1.0 - c.y) * size.y, fy = max(c.y, 1.0 - c.y) * size.y;
+#if RSIZE == 3
+    vec2 rad = vec2(nx, ny);
+#if RSHAPE == 1
+    rad = vec2(min(nx, ny));
 #endif
-    vec4 color = texture(Sampler0, vec2(clamp(t, 0.0, 1.0), 0.5)) * vertexColor;
+#elif RSIZE == 2
+    vec2 rad = vec2(fx, fy);
+#if RSHAPE == 1
+    rad = vec2(max(fx, fy));
+#endif
+#elif RSIZE == 1
+    vec2 rad = vec2(nx, ny) * 1.41421356;
+#if RSHAPE == 1
+    rad = vec2(length(vec2(nx, ny)));
+#endif
+#else
+    vec2 rad = vec2(fx, fy) * 1.41421356;
+#if RSHAPE == 1
+    rad = vec2(length(vec2(fx, fy)));
+#endif
+#endif
+    t = length(pc / max(rad, vec2(0.0001)));
+#else
+    t = fract((atan(pc.x, -pc.y) - radians(float(CFROM))) * 0.15915494);
+#endif
+#if REPEAT == 1
+    t = fract((t - float(RSTART) * 0.001) / max(float(RLEN) * 0.001, 0.0001));
+#else
+    t = clamp(t, 0.002, 0.998);                      // 가장자리 칸 안쪽(샘플러가 반복이라 정확히 1.0 이면 첫 칸으로 돈다)
+#endif
+    vec4 color = texture(Sampler0, vec2(t, 0.5)) * vertexColor;
 #endif
     color.a *= coverage;
     if (color.a <= 0.0) {
