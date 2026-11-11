@@ -20,7 +20,7 @@ class EditorBoundsTest {
     private static final int W = 400, H = 240, A = 1;
     private static final String XML = """
         <screen>
-          <panel id="a" x="140" y="40" width="50" height="30" background="#FF336699"/>
+          <panel id="a" x="140" y="40" width="50" height="30" background="#336699FF"/>
         </screen>""";
 
     private static void clickText(EditorController e, String text) {
@@ -212,7 +212,7 @@ class EditorBoundsTest {
 
     @Test
     void anAlreadyCenteredElementStaysCenteredWhenNudgedByDragging() throws Exception {
-        EditorController e = editor("<screen><panel id=\"c\" anchor=\"center\" width=\"100\" height=\"60\" background=\"#FF222222\"/></screen>");
+        EditorController e = editor("<screen><panel id=\"c\" anchor=\"center\" width=\"100\" height=\"60\" background=\"#222222FF\"/></screen>");
         drag(e, 200, 120, 206, 130);                                     // 가로 6px, 세로 10px(세로는 가운데 선에서 4px 넘게 떨어짐)
         assertEquals("center", attr(e, A, "anchor"), "조금 움직였다고 기준점이 바뀌지 않는다");
         assertEquals("6", attr(e, A, "x"));

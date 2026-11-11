@@ -353,7 +353,7 @@ class BuiltinWidgetsTest {
     @Test
     void widgetBackgroundColorsFollowTheBackgroundStyle() throws Exception {
         for (String tag : new String[] {"slider", "progress", "textfield", "select", "checkbox"}) {
-            UiDocument d = doc("<" + tag + " id=\"w\" x=\"20\" y=\"20\" width=\"80\" height=\"14\" text=\"t\" background=\"#FF123456\"/>");
+            UiDocument d = doc("<" + tag + " id=\"w\" x=\"20\" y=\"20\" width=\"80\" height=\"14\" text=\"t\" background=\"#123456FF\"/>");
             DrawList l = paint(d, -1, -1);
             assertTrue(l.commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect f && f.argb() == 0xFF123456), tag);
         }
@@ -361,13 +361,13 @@ class BuiltinWidgetsTest {
 
     @Test
     void cssVariablesCanBeChangedFromJava() throws Exception {
-        UiDocument d = UiDocument.parse("<screen><style>panel { background: var(--accent, #FF000000) }</style>"
+        UiDocument d = UiDocument.parse("<screen><style>panel { background: var(--accent, #000000FF) }</style>"
                 + "<panel id=\"p\" width=\"10\" height=\"10\"/></screen>", new FixedMetrics());
         d.layout(100, 100);
         assertTrue(paint(d, -1, -1).commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect f && f.argb() == 0xFF000000 && f.w() == 10));
-        d.setVariable("accent", "#FF00FF00");
+        d.setVariable("accent", "#00FF00FF");
         assertTrue(paint(d, -1, -1).commands().stream().anyMatch(c -> c instanceof DrawCommand.FillRect f && f.argb() == 0xFF00FF00 && f.w() == 10));
-        assertEquals("#FF00FF00", d.variable("--accent"));
+        assertEquals("#00FF00FF", d.variable("--accent"));
         d.setVariable("--accent", null);
         paint(d, -1, -1);
         assertNull(d.variable("accent"));

@@ -103,7 +103,7 @@ class GraalScriptRuntimeTest {
                 + "var clicks = 0;"
                 + "function onInit(state) { ui.setText('#count', 'clicks: 0'); }"
                 + "function clicked(ev, state) { clicks++; ui.setText('#count', 'clicks: ' + clicks + ' by ' + ev.id + ' name=' + state.name.value);"
-                + "  ui.setVar('accent', clicks > 1 ? '#FFFF0000' : '#FF00FF00'); ui.toggleClass('#count', 'hot', clicks > 1); ui.command('say clicked ' + clicks); ui.log('x'); }"
+                + "  ui.setVar('accent', clicks > 1 ? '#FF0000FF' : '#00FF00FF'); ui.toggleClass('#count', 'hot', clicks > 1); ui.command('say clicked ' + clicks); ui.log('x'); }"
                 + "</script>"
                 + "<label id=\"count\" text=\"-\"/><textfield id=\"name\" value=\"Steve\" x=\"10\" y=\"60\" width=\"80\"/>"
                 + "<button id=\"go\" x=\"10\" y=\"100\" text=\"Go\" onClick=\"script:clicked\"/></screen>", METRICS);
@@ -123,7 +123,7 @@ class GraalScriptRuntimeTest {
         assertEquals("clicks: 2 by go name=Steve", d.query("#count").text());
         assertTrue(d.query("#count").hasClass("hot"));
         d.layout(400, 300);
-        assertEquals("#FFFF0000", d.variable("accent"));
+        assertEquals("#FF0000FF", d.variable("accent"));
         assertEquals(List.of("say clicked 1", "say clicked 2"), commands);
         assertEquals(List.of("x", "x"), logs);
         assertEquals(List.of(), d.warnings());

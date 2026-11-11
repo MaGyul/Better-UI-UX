@@ -70,13 +70,18 @@ public final class StyleResolver {
                 target.add(new Applied(d, e.selector().specificity(), e.ordinal()));
             }
         }
-        apply(base, staticRules);
+        Set<String> sheetImportant = apply(base, staticRules);
 
+        // inline 은 시트 규칙을 이기지만, 시트의 !important 는 inline(일반)을 이긴다. inline !important 가 최종 승자.
         String inline = box.node.attr("style");
         if (inline != null) {
-            for (Stylesheet.Declaration d : Stylesheet.parseDeclarations(inline)) put(base, d.prop(), d.value());
+            for (Stylesheet.Declaration d : Stylesheet.parseDeclarations(inline)) {
+                String key = ALIASES.getOrDefault(d.prop(), d.prop());
+                if (d.important() || !sheetImportant.contains(key)) put(base, d.prop(), d.value());
+            }
         }
         substituteVars(base);
+        finish(base, parent, null);
         box.style = base;
 
         Map<String, StyleMap> overlays = new HashMap<>();
@@ -84,9 +89,60 @@ public final class StyleResolver {
             StyleMap overlay = new StyleMap();
             apply(overlay, e.getValue());
             substituteVars(overlay, base);
+            finish(overlay, parent, base);
             overlays.put(e.getKey(), overlay);
         }
         box.overlays = overlays;
+    }
+
+    // ---- 값 후처리: 숏핸드 마무리, inherit/initial/unset, currentColor, 단위/calc ----
+
+    private static final Set<String> LENGTH_PROPS = Set.of("width", "height", "min-width", "max-width", "min-height",
+            "max-height", "margin", "padding", "gap", "x", "y", "border", "translate-x", "translate-y");
+    private static final Set<String> COLOR_PROPS = Set.of("background", "border-color", "tint", "bar-color",
+            "fill-color", "check-color", "block-tint", "hover-background", "pressed-background", "disabled-background");
+
+    private int viewW, viewH;
+
+    /** vw/vh/vmin/vmax 와 {@code @media} 에 쓰는 뷰포트 크기(레이아웃을 시작할 때마다 갱신). */
+    public void setViewport(int w, int h) {
+        this.viewW = w;
+        this.viewH = h;
+    }
+
+    /**
+     * @param base 오버레이일 때 기준 스타일(currentColor 의 폴백), 기준 스타일 자신이면 null
+     */
+    private void finish(StyleMap m, LayoutBox parent, StyleMap base) {
+        Shorthands.finish(m);
+        for (Map.Entry<String, String> e : new ArrayList<>(m.entries().entrySet())) {
+            String key = e.getKey(), v = e.getValue().trim();
+            String kw = v.toLowerCase();
+            if (kw.equals("inherit") || kw.equals("initial") || kw.equals("unset") || kw.equals("revert")) {
+                boolean inherit = kw.equals("inherit") || (kw.equals("unset") && (INHERITED.contains(key) || key.startsWith("--")));
+                String pv = inherit && parent != null ? parent.style.get(key) : null;
+                if (pv != null) m.put(key, pv);
+                else m.entries().remove(key);
+            }
+        }
+        String fallbackColor = base != null ? base.get("color") : null;
+        for (String key : COLOR_PROPS) {
+            String v = m.get(key);
+            if (v != null && v.trim().equalsIgnoreCase("currentcolor")) {
+                String c = m.get("color", fallbackColor);
+                m.put(key, c != null ? c : "#FFFFFF");
+            }
+        }
+        if ("currentcolor".equalsIgnoreCase(m.get("color", ""))) {
+            String pc = parent != null ? parent.style.get("color") : null;
+            if (pc != null) m.put("color", pc);
+            else m.entries().remove("color");
+        }
+        CssMath.Env env = new CssMath.Env(viewW, viewH);
+        for (String key : LENGTH_PROPS) {
+            String v = m.get(key);
+            if (v != null) m.put(key, CssMath.resolve(v, env));
+        }
     }
 
     /** 내장 태그의 기본 모양(속성/스타일시트가 있으면 그것이 이긴다). */
@@ -96,7 +152,7 @@ public final class StyleResolver {
                 boolean vertical = box.parent != null && box.parent.tag().equals("row");
                 base.put("width", vertical ? "1" : "fill");
                 base.put("height", vertical ? "fill" : "1");
-                base.put("background", "#66FFFFFF");
+                base.put("background", "#FFFFFF66");
             }
             case "tab" -> {                                  // 탭 내용은 탭 영역 전체를 쓴다
                 base.put("width", "fill");
@@ -104,25 +160,32 @@ public final class StyleResolver {
             }
             case "dialog" -> {
                 base.put("anchor", "center");
-                base.put("background", "#F0161820");
+                base.put("background", "#161820F0");
                 base.put("border", "1");
-                base.put("border-color", "#FF8A8FA8");
+                base.put("border-color", "#8A8FA8FF");
                 base.put("padding", "8");
             }
             default -> { }
         }
     }
 
-    private static void apply(StyleMap target, List<Applied> list) {
+    /** 규칙을 우선순위 순으로 적용하고, {@code !important} 로 설정된 (별칭 해석 후) 속성 이름을 돌려준다. */
+    private static Set<String> apply(StyleMap target, List<Applied> list) {
         list.sort(Comparator
                 .comparing((Applied a) -> a.decl().important())
                 .thenComparingInt(Applied::specificity)
                 .thenComparingInt(Applied::ordinal));
-        for (Applied a : list) put(target, a.decl().prop(), a.decl().value());
+        Set<String> important = new java.util.HashSet<>();
+        for (Applied a : list) {
+            put(target, a.decl().prop(), a.decl().value());
+            if (a.decl().important()) important.add(ALIASES.getOrDefault(a.decl().prop(), a.decl().prop()));
+        }
+        return important;
     }
 
     private static void put(StyleMap m, String key, String value) {
-        m.put(ALIASES.getOrDefault(key, key), value);
+        key = ALIASES.getOrDefault(key, key);
+        if (!Shorthands.put(m, key, value)) m.put(key, value);
     }
 
     // ---- var() 치환 ----

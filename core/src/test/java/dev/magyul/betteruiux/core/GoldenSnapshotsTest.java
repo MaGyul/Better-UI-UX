@@ -56,7 +56,7 @@ class GoldenSnapshotsTest {
 
     private static final String EDIT_XML = """
         <screen>
-          <panel id="card" anchor="center" width="120" height="80" background="#FF223344">
+          <panel id="card" anchor="center" width="120" height="80" background="#223344FF">
             <column gap="2" width="fill" height="fill">
               <label text="Title"/>
               <button id="ok" text="OK" onClick="close"/>

@@ -162,7 +162,7 @@ final class StyleText {
     static List<Integer> matchingIn(List<Rule> rules, LayoutBox box) {
         List<Integer> hits = new ArrayList<>();
         for (int n = 0; n < rules.size(); n++) {
-            for (String one : rules.get(n).selector().split(",")) {
+            for (String one : Selector.splitList(rules.get(n).selector())) {
                 try {
                     if (Selector.parse(one.trim()).matches(box)) {
                         hits.add(n);

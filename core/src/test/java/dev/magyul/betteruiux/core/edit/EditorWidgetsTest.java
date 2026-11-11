@@ -252,7 +252,7 @@ class EditorWidgetsTest {
 
     @Test
     void clickingAChildOfTheSelectedElementSelectsTheChild() throws Exception {
-        EditorController e = editor("<screen><panel id=\"p\" x=\"150\" y=\"40\" width=\"120\" height=\"80\" background=\"#FF222222\">"
+        EditorController e = editor("<screen><panel id=\"p\" x=\"150\" y=\"40\" width=\"120\" height=\"80\" background=\"#222222FF\">"
                 + "<column id=\"c\" width=\"100\" height=\"60\"><label id=\"l\" text=\"hello\"/></column></panel></screen>");
         e.select(1);                                                      // panel
         paint(e);

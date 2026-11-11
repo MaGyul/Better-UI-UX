@@ -26,7 +26,7 @@ class EditorPanFixTest {
 
     private static final String XML = """
         <screen>
-          <panel id="p" x="240" y="100" width="50" height="30" background="#FF336699"/>
+          <panel id="p" x="240" y="100" width="50" height="30" background="#336699FF"/>
           <label id="far" anchor="bottom-right" margin="4" text="demo.xml"/>
         </screen>""";
 

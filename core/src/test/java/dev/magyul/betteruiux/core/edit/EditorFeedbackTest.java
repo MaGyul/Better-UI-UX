@@ -109,7 +109,7 @@ class EditorFeedbackTest {
             if (cursor(paint(probe)) != Cursor.POINTER) bx = x;
         }
         assertTrue(bx > 0, "빈 곳이 있어야 한다");
-        EditorController e = editor("<screen><panel id=\"a\" x=\"" + (bx - 15) + "\" y=\"0\" width=\"40\" height=\"30\" background=\"#FF336699\"/></screen>");
+        EditorController e = editor("<screen><panel id=\"a\" x=\"" + (bx - 15) + "\" y=\"0\" width=\"40\" height=\"30\" background=\"#336699FF\"/></screen>");
         click(e, bx, 5);                                           // 상단 바의 빈 곳 = 아래 캔버스를 누른 것
         assertEquals(1, e.selectedIndex());
         drag(e, bx, 5, bx, 80);
@@ -118,7 +118,7 @@ class EditorFeedbackTest {
 
     @Test
     void selectingFromTheTreeRevealsAnElementHiddenUnderTheToolbar() throws Exception {
-        EditorController e = editor("<screen><panel id=\"a\" x=\"150\" y=\"0\" width=\"60\" height=\"30\" background=\"#FF336699\"/></screen>");
+        EditorController e = editor("<screen><panel id=\"a\" x=\"150\" y=\"0\" width=\"60\" height=\"30\" background=\"#336699FF\"/></screen>");
         e.select(1);
         for (int i = 0; i < 40; i++) paint(e);
         Rect r = rect(e, "a");
@@ -137,7 +137,7 @@ class EditorFeedbackTest {
         EditorController e = editor("""
             <screen>
               <column id="c" x="150" y="40" width="200" height="120">
-                <panel width="80" height="20" background="#FF336699"/>
+                <panel width="80" height="20" background="#336699FF"/>
               </column>
             </screen>""");
         e.select(1);
@@ -152,7 +152,7 @@ class EditorFeedbackTest {
         EditorController e = editor("""
             <screen>
               <column id="c" x="20" y="40" width="200" height="120">
-                <panel width="80" height="20" background="#FF336699"/>
+                <panel width="80" height="20" background="#336699FF"/>
               </column>
             </screen>""");
         e.select(1);
@@ -227,7 +227,7 @@ class EditorFeedbackTest {
 
     // ---- (d) 컬러피커 ----
 
-    private static final String COLORED = "<screen><panel id=\"a\" x=\"170\" y=\"40\" width=\"60\" height=\"30\" background=\"#FF336699\"/></screen>";
+    private static final String COLORED = "<screen><panel id=\"a\" x=\"170\" y=\"40\" width=\"60\" height=\"30\" background=\"#336699FF\"/></screen>";
     private static final int BG_ROW = 13;
 
     @Test

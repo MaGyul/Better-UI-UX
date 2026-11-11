@@ -89,7 +89,7 @@ public final class EditorOps {
         return switch (tag) {
             case "label" -> "<label text=\"Label\"/>";
             case "button" -> "<button text=\"Button\"/>";
-            case "panel" -> "<panel width=\"80\" height=\"40\" background=\"#80000000\"/>";
+            case "panel" -> "<panel width=\"80\" height=\"40\" background=\"#00000080\"/>";
             case "column" -> "<column gap=\"4\"/>";
             case "row" -> "<row gap=\"4\"/>";
             case "image" -> "<image src=\"minecraft:textures/item/diamond.png\" tex=\"16 16\" width=\"16\" height=\"16\"/>";

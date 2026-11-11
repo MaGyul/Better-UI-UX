@@ -24,7 +24,7 @@ class EditorControllerTest {
 
     private static final String XML = """
         <screen>
-          <panel id="a" x="140" y="40" width="50" height="30" background="#FF336699"/>
+          <panel id="a" x="140" y="40" width="50" height="30" background="#336699FF"/>
           <column id="col" x="140" y="100" gap="2">
             <label id="l1" text="One"/>
             <label id="l2" text="Two"/>

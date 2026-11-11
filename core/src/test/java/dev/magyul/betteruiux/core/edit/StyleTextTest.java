@@ -15,8 +15,8 @@ class StyleTextTest {
             <screen>
               <style>
                 /* 카드 */
-                .card { background: #E0181A24; padding: 8; }
-                button:hover { background: #FF445566 }   /* 끝 세미콜론 없음 */
+                .card { background: #181A24E0; padding: 8; }
+                button:hover { background: #445566FF }   /* 끝 세미콜론 없음 */
                 @keyframes pulse { from { opacity: 0 } to { opacity: 1 } }
                 #a, .big {
                   width: 100;
@@ -39,8 +39,8 @@ class StyleTextTest {
         assertEquals(2, rules.get(0).decls().size());
         StyleText.Decl d = rules.get(0).decls().get(0);
         assertEquals("background", d.prop());
-        assertEquals("#E0181A24", XML.substring(d.valueStart(), d.valueEnd()));
-        assertEquals("#FF445566", XML.substring(rules.get(1).decls().get(0).valueStart(), rules.get(1).decls().get(0).valueEnd()));
+        assertEquals("#181A24E0", XML.substring(d.valueStart(), d.valueEnd()));
+        assertEquals("#445566FF", XML.substring(rules.get(1).decls().get(0).valueStart(), rules.get(1).decls().get(0).valueEnd()));
     }
 
     @Test
@@ -54,7 +54,7 @@ class StyleTextTest {
     @Test
     void addsADeclarationWithMatchingStyle() {
         String single = StyleText.setDecl(src(XML), 1, "color", "#FFFFFF");   // 한 줄 규칙(끝 세미콜론 없음)
-        assertTrue(single.contains("button:hover { background: #FF445566; color: #FFFFFF; }") || single.contains("background: #FF445566; color: #FFFFFF;"), single);
+        assertTrue(single.contains("button:hover { background: #445566FF; color: #FFFFFF; }") || single.contains("background: #445566FF; color: #FFFFFF;"), single);
 
         String multi = StyleText.setDecl(src(XML), 2, "opacity", "0.5");      // 여러 줄 규칙은 같은 들여쓰기로 한 줄 추가
         assertTrue(multi.contains("  color: #FFFFFF;\n      opacity: 0.5;") || multi.contains("color: #FFFFFF;\n      opacity: 0.5;"), multi);
@@ -71,8 +71,8 @@ class StyleTextTest {
 
     @Test
     void panelKeysApplyAndValidate() {
-        String out = StyleText.apply(src(XML), "css:0:background", "#FF000000");
-        assertTrue(out.contains("background: #FF000000;"));
+        String out = StyleText.apply(src(XML), "css:0:background", "#000000FF");
+        assertTrue(out.contains("background: #000000FF;"));
         String added = StyleText.apply(src(XML), "css+:0", "border: 1");
         assertTrue(StyleText.rules(src(added)).get(0).decls().stream().anyMatch(d -> d.prop().equals("border")));
         assertThrows(IllegalArgumentException.class, () -> StyleText.apply(src(XML), "css+:0", "엉터리"));

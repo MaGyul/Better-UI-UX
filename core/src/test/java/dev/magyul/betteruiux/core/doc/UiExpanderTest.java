@@ -111,7 +111,7 @@ class UiExpanderTest {
               <link rel="style" href="card.uicss"/>
               <panel class="card"><label text="${title:untitled}"/><slot/></panel>
             </fragment>""");
-        write("card.uicss", ".card { background: #FF112233 }");
+        write("card.uicss", ".card { background: #112233FF }");
         write("main.xml", """
             <screen>
               <include src="card" title="Hello"><label id="extra" text="x"/></include>
@@ -123,7 +123,7 @@ class UiExpanderTest {
         assertEquals("Hello", cards.get(0).query("label").attr("text"));
         assertNotNull(d.query("#extra"), "include 의 자식은 slot 으로 들어간다");
         assertEquals("untitled", cards.get(1).query("label").attr("text"), "기본값");
-        assertEquals("#FF112233", cards.get(0).style("background"), "include 된 파일의 link 스타일도 적용");
+        assertEquals("#112233FF", cards.get(0).style("background"), "include 된 파일의 link 스타일도 적용");
         assertTrue(d.warnings().isEmpty(), d.warnings().toString());
     }
 

@@ -214,10 +214,10 @@ public class EditorClientGameTest implements FabricClientGameTest {
             Files.writeString(base.resolve("ui/gt_ext.xml"),
                     "<screen>\n  <link rel=\"style\" href=\"gt_ext.uicss\"/>\n  <panel id=\"box\" class=\"card\" anchor=\"center\" width=\"160\" height=\"70\">\n"
                             + "    <label text=\"external style\"/>\n  </panel>\n</screen>\n");
-            Files.writeString(base.resolve("ui/gt_ext.uicss"), ".card { padding: 8; background: #E0181A24; }\n");
+            Files.writeString(base.resolve("ui/gt_ext.uicss"), ".card { padding: 8; background: #181A24E0; }\n");
             Files.writeString(base.resolve("ui/gt_kf.xml"),
                     "<screen>\n  <style>\n    .p { animation: pulse 1s infinite; }\n    @keyframes pulse {\n      from { opacity: 0; }\n      to { opacity: 1; }\n    }\n  </style>\n"
-                            + "  <panel id=\"box\" class=\"p\" anchor=\"center\" width=\"120\" height=\"50\" background=\"#E0181A24\"/>\n</screen>\n");
+                            + "  <panel id=\"box\" class=\"p\" anchor=\"center\" width=\"120\" height=\"50\" background=\"#181A24E0\"/>\n</screen>\n");
             Files.writeString(base.resolve("ui/gt_other.xml"), "<screen>\n  <label text=\"other\"/>\n</screen>\n");
             Files.writeString(base.resolve("ui/gt_auto.xml"), "<screen>\n  <label text=\"saved\"/>\n</screen>\n");
             Files.writeString(base.resolve("autosave/gt_auto.xml"), "<screen>\n  <label text=\"recovered\"/>\n</screen>\n");

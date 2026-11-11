@@ -15,7 +15,7 @@
 
 ## 먼저 하는 일(이미 반영됨)
 
-- Java API 에 **CSS 변수 조작**: `UiDocument.setVariable("accent", "#FF55FF55")`, `variable("accent")`.
+- Java API 에 **CSS 변수 조작**: `UiDocument.setVariable("accent", "#55FF55FF")`, `variable("accent")`.
   스크립트 계층이 같은 기능을 그대로 노출하면 된다.
 - 입력 위젯의 `onChange` 액션/`CHANGE` 이벤트 — 스크립트가 받을 이벤트 원천.
 
@@ -39,7 +39,7 @@
   - 스크립트 → 호스트: 요청 배열
     ```json
     [{"op":"setAttr","target":"#title","name":"text","value":"Hello"},
-     {"op":"setVar","name":"accent","value":"#FF55FF55"},
+     {"op":"setVar","name":"accent","value":"#55FF55FF"},
      {"op":"addClass","target":"#btn","name":"active"},
      {"op":"command","line":"say hi"}]
     ```
@@ -62,7 +62,7 @@
 // shop.js — 전역 `ui` 객체만 제공된다(데이터 타입만 주고받는 얇은 래퍼)
 function onVolume(ev) {
   ui.setText('#label', '볼륨 ' + ev.value);
-  ui.setVar('bar-color', ev.value > 80 ? '#FFFF5555' : '#FF55FF55');
+  ui.setVar('bar-color', ev.value > 80 ? '#FF5555FF' : '#55FF55FF');
 }
 function buy(ev) {
   ui.command('give @s minecraft:apple 1');

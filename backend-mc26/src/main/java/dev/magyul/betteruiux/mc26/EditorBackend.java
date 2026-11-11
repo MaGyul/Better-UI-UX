@@ -123,7 +123,7 @@ final class EditorBackend {
             @Override public String createScreen(int kind) throws IOException {
                 String body = kind == 1 ? """
                         <screen use="blur,dim">
-                          <panel anchor="center" width="200" height="100" padding="8" background="#E0181A24">
+                          <panel anchor="center" width="200" height="100" padding="8" background="#181A24E0">
                             <column gap="6" width="fill" height="fill">
                               <label text="제목" />
                               <button text="닫기" onClick="close" />

@@ -13,9 +13,9 @@ class UiDocumentActiveTest {
         UiDocument d = UiDocument.parse("""
             <screen>
               <style>
-                button { background: #FF505070 }
-                button:hover { background: #FF7070A0 }
-                button:active { background: #FF303050 }
+                button { background: #505070FF }
+                button:hover { background: #7070A0FF }
+                button:active { background: #303050FF }
               </style>
               <button id='b' text='x' width='40' height='20'/>
             </screen>""", new FixedMetrics());

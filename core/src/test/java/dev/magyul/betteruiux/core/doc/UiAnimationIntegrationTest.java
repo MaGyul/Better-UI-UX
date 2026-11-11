@@ -48,7 +48,7 @@ class UiAnimationIntegrationTest {
         UiDocument d = doc("""
             <screen>
               <style>
-                button { background: #FF000000; transition: background 200ms linear }
+                button { background: #000000FF; transition: background 200ms linear }
                 button:hover { background: #FFFFFFFF }
               </style>
               <button id='b' text='x' width='40' height='20'/>

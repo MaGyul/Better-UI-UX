@@ -11,7 +11,7 @@ import java.util.List;
  *
  * <ul>
  *   <li>채도/명도 사각형 + 색조 막대 + 투명도 막대 + 미리보기 + 마인크래프트 기본 16색/투명 프리셋</li>
- *   <li>값은 {@code #RRGGBB}(불투명) 또는 {@code #AARRGGBB}(반투명) 문자열로 오가며, 칸의 텍스트와 항상 같이 움직인다
+ *   <li>값은 {@code #RRGGBB}(불투명) 또는 {@code #RRGGBBAA}(반투명) 문자열로 오가며, 칸의 텍스트와 항상 같이 움직인다
  *       (직접 입력하면 피커가 따라오고, 피커를 만지면 칸의 텍스트가 바뀐다).</li>
  * </ul>
  */
@@ -119,7 +119,7 @@ final class ColorPicker {
 
     private void setArgb(int argb) {
         syncedText = null;
-        syncFrom(String.format("#%08X", argb));
+        syncFrom(Colors.toCssFull(argb));
         if ((argb & 0xFFFFFF) == 0 && (argb >>> 24) == 0) a = 0f;
     }
 
@@ -136,10 +136,10 @@ final class ColorPicker {
         return (Math.round(a * 255) << 24) | (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
     }
 
-    /** 불투명이면 {@code #RRGGBB}, 아니면 {@code #AARRGGBB}. */
+    /** 불투명이면 {@code #RRGGBB}, 아니면 {@code #RRGGBBAA}. */
     String hex() {
         int c = argb();
-        return (c >>> 24) == 0xFF ? String.format("#%06X", c & 0xFFFFFF) : String.format("#%08X", c);
+        return Colors.toCss(c);
     }
 
     static int[] hsvToRgb(float h, float s, float v) {

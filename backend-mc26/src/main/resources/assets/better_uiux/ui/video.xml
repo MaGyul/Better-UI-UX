@@ -1,7 +1,7 @@
 <screen use="blur,dim">
   <style>
-    .card { background: #E0181A24; border: 1; border-color: #FF3A3F55; padding: 8; }
-    .dim  { color: #FFB0B0C0; }
+    .card { background: #181A24E0; border: 1; border-color: #3A3F55FF; padding: 8; }
+    .dim  { color: #B0B0C0FF; }
   </style>
 
   <panel class="card" anchor="center" width="250" height="190">

@@ -32,7 +32,7 @@ public final class Interpolator {
             int ca = (a >>> shift) & 0xFF, cb = (b >>> shift) & 0xFF;
             out |= (int) Math.round(ca + (cb - ca) * t) << shift;
         }
-        return String.format("#%08X", out);
+        return Colors.toCssFull(out);
     }
 
     private static Double number(String s) {

@@ -122,14 +122,14 @@ class ScriptHostTest {
                 + "{\"op\":\"addClass\",\"target\":\"#p\",\"name\":\"hot\"},"
                 + "{\"op\":\"setStyle\",\"target\":\"#p\",\"name\":\"opacity\",\"value\":\"0.5\"},"
                 + "{\"op\":\"append\",\"target\":\"#p\",\"xml\":\"<label id=\\\"kid\\\" text=\\\"new\\\"/>\"},"
-                + "{\"op\":\"setVar\",\"name\":\"accent\",\"value\":\"#FF00FF00\"},"
+                + "{\"op\":\"setVar\",\"name\":\"accent\",\"value\":\"#00FF00FF\"},"
                 + "{\"op\":\"remove\",\"target\":\"#l\"}]");
         assertEquals("hi", d.query("#p").attr("tooltip"));
         assertTrue(d.query("#p").hasClass("hot"));
         assertEquals("0.5", d.query("#p").style("opacity") == null ? "0.5" : d.query("#p").attr("style").contains("0.5") ? "0.5" : "?");
         assertEquals("new", d.query("#kid").text());
         d.layout(400, 300);
-        assertEquals("#FF00FF00", d.variable("accent"));
+        assertEquals("#00FF00FF", d.variable("accent"));
         assertNull(d.query("#l"));
         assertEquals(List.of(), d.warnings());
     }

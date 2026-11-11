@@ -11,7 +11,7 @@ public record Insets(int top, int right, int bottom, int left) {
     /** "8" / "4 8" / "4 8 4" / "4 8 4 8" (px 접미사 허용). 해석 불가면 {@code fallback}. */
     public static Insets parse(String s, Insets fallback) {
         if (s == null || s.isBlank()) return fallback;
-        String[] p = s.trim().split("\s+");
+        String[] p = s.trim().split("\\s+");
         int[] v = new int[p.length];
         try {
             for (int i = 0; i < p.length; i++) {

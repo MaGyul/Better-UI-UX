@@ -40,7 +40,7 @@ Better UI/UX 와 같이 `mods` 폴더에 넣으면 된다. 스크립트가 필�
 function onInit(state) { }                 // 문서가 열린 직후 한 번(선택)
 function buy(event, state) {               // event: 누른 요소, state: id 가 있는 모든 요소의 현재 값
   ui.setText('#status', state.name.value + ' 구매');   // event.id, event.tag, event.text, event.value, event.checked
-  ui.setVar('accent', '#FF55FF55');
+  ui.setVar('accent', '#55FF55FF');
   ui.command('say hi');
 }
 ```

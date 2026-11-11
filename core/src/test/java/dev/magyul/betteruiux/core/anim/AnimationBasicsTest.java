@@ -34,8 +34,8 @@ class AnimationBasicsTest {
     void interpolatesNumbersColorsAndDiscreteValues() {
         assertEquals("0.5", Interpolator.lerp("0", "1", 0.5));
         assertEquals("10", Interpolator.lerp("0px", "20px", 0.5));
-        assertEquals("#FF808080", Interpolator.lerp("#FF000000", "#FFFFFFFF", 0.5).toUpperCase());
-        assertEquals("#80FF0000", Interpolator.lerp("#00FF0000", "#FFFF0000", 0.5).toUpperCase());
+        assertEquals("#808080FF", Interpolator.lerp("#000000FF", "#FFFFFFFF", 0.5).toUpperCase());
+        assertEquals("#FF000080", Interpolator.lerp("#FF000000", "#FF0000FF", 0.5).toUpperCase());
         assertEquals("a", Interpolator.lerp("a", "b", 0.4));
         assertEquals("b", Interpolator.lerp("a", "b", 0.6));
         assertEquals("1", Interpolator.lerp("1", "1", 0.3));

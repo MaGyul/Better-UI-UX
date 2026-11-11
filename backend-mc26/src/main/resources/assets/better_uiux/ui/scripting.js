@@ -10,7 +10,7 @@ function greet(ev, state) {
   clicks++;
   var name = state.name.value || '이름 없음';
   ui.setText('#status', name + ' 님, ' + clicks + '번 눌렀어요');
-  ui.setVar('accent', clicks % 2 ? '#FF55FF55' : '#FFFFAA00');   // CSS 변수 var(--accent)
+  ui.setVar('accent', clicks % 2 ? '#55FF55FF' : '#FFAA00FF');   // CSS 변수 var(--accent)
   ui.toggleClass('#status', 'hot', clicks % 2 === 0);
   ui.command('say ' + name + ' clicked ' + clicks);               // config 의 scripting.commands 에 say 가 있어야 실행된다
 }

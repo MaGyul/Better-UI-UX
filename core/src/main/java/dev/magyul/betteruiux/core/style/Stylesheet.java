@@ -53,7 +53,7 @@ public final class Stylesheet {
                 continue;
             }
             List<Declaration> decls = parseDeclarations(body);
-            for (String single : selectorText.split(",")) {
+            for (String single : Selector.splitList(selectorText)) {
                 try {
                     sheet.rules.add(new Rule(Selector.parse(single.trim()), decls));
                 } catch (IllegalArgumentException e) {

@@ -59,8 +59,13 @@ class StylesheetTest {
     @Test
     void selectorSpecificityAndDynamicPseudos() {
         assertEquals(1, Selector.parse("button").specificity());
-        assertEquals(11, Selector.parse("button.primary").specificity());
-        assertEquals(101, Selector.parse("#ok button").specificity());
+        assertEquals(1_001, Selector.parse("button.primary").specificity());
+        assertEquals(1_000_001, Selector.parse("#ok button").specificity());
+        // 클래스 11개가 id 하나를 넘지 못한다 (옛 십진 합산의 오버플로 수정)
+        assertTrue(Selector.parse("#a").specificity()
+                > Selector.parse(".a.b.c.d.e.f.g.h.i.j.k.l").specificity());
+        assertEquals(Selector.parse(".a").specificity(), Selector.parse(":not(.a)").specificity());
+        assertEquals(0, Selector.parse(":where(.a, #b)").specificity());
         assertEquals(Set.of("hover"), Selector.parse("button:hover").dynamicPseudos());
         assertEquals(List.of("active", "hover"), List.copyOf(Selector.parse("button:hover:active").dynamicPseudos()));
         assertTrue(Selector.parse("button:first-child").dynamicPseudos().isEmpty());

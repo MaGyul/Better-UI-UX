@@ -23,7 +23,7 @@ class EditorViewTest {
     private static final int C_SEL = 0xFFFFFF55;
     private static final String XML = """
         <screen>
-          <panel id="a" x="140" y="40" width="50" height="30" background="#FF336699"/>
+          <panel id="a" x="140" y="40" width="50" height="30" background="#336699FF"/>
           <column id="col" x="140" y="100" gap="2">
             <label id="l1" text="One"/>
             <button id="b" text="Go" onClick="close"/>
@@ -137,7 +137,7 @@ class EditorViewTest {
 
     @Test
     void selectingAnElementHiddenBehindASidePanelBringsItIntoTheWorkAreaWithMinimalMove() throws Exception {
-        String xml = "<screen><panel id=\"p\" x=\"330\" y=\"100\" width=\"40\" height=\"30\" background=\"#FF336699\"/></screen>";
+        String xml = "<screen><panel id=\"p\" x=\"330\" y=\"100\" width=\"40\" height=\"30\" background=\"#336699FF\"/></screen>";
         EditorController e = new EditorController(host, new FixedMetrics(), xml, W, H);
         e.select(1);
         DrawList l = new DrawList();
@@ -271,7 +271,7 @@ class EditorViewTest {
 
     @Test
     void collapsedPanelsWidenTheWorkAreaForAutoPan() throws Exception {
-        String xml = "<screen><panel id=\"p\" x=\"330\" y=\"100\" width=\"40\" height=\"30\" background=\"#FF336699\"/></screen>";
+        String xml = "<screen><panel id=\"p\" x=\"330\" y=\"100\" width=\"40\" height=\"30\" background=\"#336699FF\"/></screen>";
         EditorController e = new EditorController(host, new FixedMetrics(), xml, W, H);
         e.mousePressed(W - 142 - 10 + 3, EditorController.tabY(H) + 5, 0);                   // 오른쪽 패널 접기
         e.mouseReleased(W - 142 - 10 + 3, EditorController.tabY(H) + 5, 0);

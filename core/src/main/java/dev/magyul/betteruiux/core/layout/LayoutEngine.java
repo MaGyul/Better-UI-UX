@@ -53,6 +53,7 @@ public final class LayoutEngine {
     }
 
     public LayoutBox layout(UiNode root, int viewW, int viewH) {
+        resolver.setViewport(viewW, viewH);
         LayoutBox box = build(root, null);
         place(box, 0, 0, viewW, viewH);
         return box;

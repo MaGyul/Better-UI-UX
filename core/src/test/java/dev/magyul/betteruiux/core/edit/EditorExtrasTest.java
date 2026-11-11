@@ -105,8 +105,8 @@ class EditorExtrasTest {
 
     @Test
     void forcedHoverStateShowsTheHoverStyleOfTheSelectedElement() throws Exception {
-        EditorController e = editor("<screen><style>panel:hover { background: #FFFF0000 }</style>"
-                + "<panel id=\"a\" x=\"150\" y=\"40\" width=\"50\" height=\"30\" background=\"#FF0000FF\"/></screen>");
+        EditorController e = editor("<screen><style>panel:hover { background: #FF0000FF }</style>"
+                + "<panel id=\"a\" x=\"150\" y=\"40\" width=\"50\" height=\"30\" background=\"#0000FFFF\"/></screen>");
         e.select(2);
         DrawList normal = new DrawList();
         e.paintDocument(normal);

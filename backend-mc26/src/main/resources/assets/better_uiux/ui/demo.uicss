@@ -1,8 +1,8 @@
 /* demo.xml 의 스타일. config/better-uiux/ui/demo.uicss 를 만들면 이 파일을 덮어쓰고, 저장 즉시 화면에 반영된다. */
 :root {
   --accent: #FFFF55;
-  --panel: #E0202030;
-  --border: #FF8888FF;
+  --panel: #202030E0;
+  --border: #8888FFFF;
 }
 
 @keyframes enter {
@@ -28,9 +28,9 @@ panel.card {
 
 /* 호버/눌림은 색과 크기가 부드럽게 전환된다 */
 button {
-  background: #FF505070;
+  background: #505070FF;
   transition: background 120ms ease-out, scale 100ms ease-out;
 }
-button:hover { background: #FF7070A0; scale: 1.06; }
-button:active { background: #FF303050; scale: 0.94; }
-button.danger:hover { background: #FFA04040; }
+button:hover { background: #7070A0FF; scale: 1.06; }
+button:active { background: #303050FF; scale: 0.94; }
+button.danger:hover { background: #A04040FF; }
