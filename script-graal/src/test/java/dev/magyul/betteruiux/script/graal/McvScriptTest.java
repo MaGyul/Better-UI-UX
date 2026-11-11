@@ -137,6 +137,7 @@ class McvScriptTest {
         rt.load("t.uijs", """
                 var w;
                 function setup() { w = mcv.createWorld(4, 4, 4); w.setBlock(1, 1, 1, 'stone'); }
+                function attachIt() { w.attach('#v'); }
                 function probe() {
                   var p = w.project(1.5, 1.5, 1.5);
                   var h = p ? w.raycast(p.x, p.y) : null;
@@ -145,7 +146,8 @@ class McvScriptTest {
                 """);
         call("setup");
         assertTrue(call("probe").contains("p=none hit=none"), "아직 그려진 적이 없으면 null");
-        host.world(1).setViewport(new dev.magyul.betteruiux.core.mcv.McvWorld.Viewport(0, 0, 200, 200, 20));
+        host.viewer("v").setViewport(new dev.magyul.betteruiux.core.mcv.McvViewer.Viewport(0, 0, 200, 200, 20));
+        call("attachIt");
         String out = call("probe");
         assertTrue(out.contains("p=yes hit=1,1,1,minecraft:stone"), out);
     }

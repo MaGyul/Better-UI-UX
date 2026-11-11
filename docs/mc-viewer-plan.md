@@ -23,6 +23,7 @@ let entity = world.spawnEntity(x, y, z, "minecraft:cow");
 entity.setPosition(~) / entity.customName = ~      // 엔티티에서 바로(메서드·필드 모두), 화이트리스트만. 소환 때 NBT: spawnEntity(x,y,z,type,nbt)
 let camera = world.getCamera();
 camera.setYaw(~); camera.setPitch(~); camera.setPosition(~);   // (원안의 setPotition 은 setPosition)
+world.attach('#view');                             // id 가 view 인 <mc-viewer> 에 연결(뷰어마다 카메라가 따로: getCamera('#view'))
 world.setViewArea(~);                              // 영역 안의 블록·엔티티만 렌더
 world.setTickRate(~);
 ```
@@ -140,6 +141,13 @@ world.setTickRate(~);
 - 이름표: 바닐라는 `EntityRenderDispatcher.camera`(실제 플레이어 카메라)와의 거리로 표시 여부를 정해서 가상 좌표의 엔티티는 숨겨졌다. 렌더 상태의 `nameTag`/`nameTagAttachment` 를 직접 채우고, 카메라 방향은 `Ry(-yaw)·Rx(pitch)·Ry(π)` 로 줘야 글자가 똑바로 선다(뷰어 변환 = Z 180° 뒤집기 + 카메라 회전, 바깥에 z 를 뒤집는 배율이 있음 → 곱이 X 180° 가 되어야 함).
 - 조명: 측정(밝기, 돼지/소/바닥/빨간 블록): ITEMS_3D 141/70/159/36, ENTITY_IN_UI 126/76/162/25, ITEMS_FLAT 154/87/163/45. 소가 어두운 건 대부분 소 텍스처 자체. 한 렌더에 조명 하나만 가능하므로 기본(3d)은 유지하고 `light="3d|flat|entity"` 속성으로 고르게 했다(에디터 속성 패널에도 있음).
 - 테스트: 게임 테스트가 이름 유무 장면의 픽셀 차이(작은 글자 상자만큼), `light="flat"` 장면의 픽셀 차이를 확인.
+
+## 후속 변경: 뷰어 id 연결 + 뷰어별 카메라(완전안)
+- 월드와 뷰어의 연결을 숫자 번호(`world="1"` 속성) 대신 **요소 id**로 한다: `world.attach('#id')`, `mcv.createWorld(x,y,z,'#id')`, `world.detach('#id')`. 속성 `world` 는 제거했다.
+- **카메라·뷰포트·보이는 월드는 뷰어(`McvViewer`)가 가진다**(월드의 `camera()` 는 뷰어가 붙기 전 설정을 담는 기본값, 뷰어가 월드를 처음 보여 줄 때 이어받음). `McvView.project/raycast` 는 `(world, viewer, …)` 를 받는다.
+- 호스트(`McvHost`): 뷰어 맵·연결 맵(만든/연결한 순서), `resolveWorld(id)`(연결 > 연결이 하나도 없으면 첫 월드 > 없음), `primaryViewer(world)`, 선택자를 생략하면 대표 뷰어. 스크립트의 `getCamera/project/raycast` 는 선택자 인자를 받는다.
+- 위젯: id 로 뷰어를 찾고(id 없으면 위젯마다 따로), 이벤트에 `viewer` id 를 싣고, 연결 안 된 뷰어는 문서 경고(attach 가 있는 문서에서만, 같은 경고는 한 번).
+- 테스트: `McvViewTest`(뷰어 두 개의 투영/맞히기 독립, 카메라 이어받기), `McvHostTest`(연결 규칙, 카메라 명령 대상, project 조건), 게임 테스트(한 월드를 뷰어 a·b 가 다른 카메라로 그림: 픽셀 차이 7012, 각 뷰어 좌표 클릭 → 이벤트에 그 id, 연결 안 된 뷰어 경고)
 
 ## 완료 후 남은 과제 (후속, 우선순위 순)
 - 블록 엔티티 **동작**(상자 뚜껑 열림 등; 렌더 자체는 완료)

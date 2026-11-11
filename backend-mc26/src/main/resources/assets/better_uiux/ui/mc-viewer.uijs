@@ -3,7 +3,7 @@
 var world, pig;
 
 function onInit() {
-  world = mcv.createWorld(11, 6, 11);
+  world = mcv.createWorld(11, 6, 11, '#view');      // 만들면서 id 가 view 인 <mc-viewer> 에 연결한다(world.attach('#view') 와 같다)
 
   // 체커 무늬 바닥
   for (var x = 0; x < 11; x++) {

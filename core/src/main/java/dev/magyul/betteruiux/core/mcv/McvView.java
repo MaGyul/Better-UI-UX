@@ -17,11 +17,11 @@ public final class McvView {
     }
 
     /** 월드 좌표 → {화면 x, 화면 y, 깊이(작을수록 가깝다)}. 아직 그려진 적이 없으면 null. */
-    public static double[] project(McvWorld w, double x, double y, double z) {
-        McvWorld.Viewport vp = w.viewport();
+    public static double[] project(McvWorld w, McvViewer v, double x, double y, double z) {
+        McvViewer.Viewport vp = v.viewport();
         if (vp == null) return null;
         double[] c = center(w);
-        double[] q = rotate(w.camera(), x - c[0], y - c[1], z - c[2]);
+        double[] q = rotate(v.camera(), x - c[0], y - c[1], z - c[2]);
         return new double[] {vp.x() + vp.w() / 2 - vp.scale() * q[0], vp.y() + vp.h() / 2 - vp.scale() * q[1], q[2]};
     }
 
@@ -45,14 +45,14 @@ public final class McvView {
     }
 
     /** 화면의 한 점을 지나는 광선: {원점 x,y,z, 방향 x,y,z}. 방향은 길이 1, 원점은 월드 밖 먼 곳(보는 사람 쪽)이다. */
-    public static double[] ray(McvWorld w, double sx, double sy) {
-        McvWorld.Viewport vp = w.viewport();
+    public static double[] ray(McvWorld w, McvViewer v, double sx, double sy) {
+        McvViewer.Viewport vp = v.viewport();
         if (vp == null || vp.scale() <= 0) return null;
         double[] c = center(w);
         double qx = -(sx - (vp.x() + vp.w() / 2)) / vp.scale();
         double qy = -(sy - (vp.y() + vp.h() / 2)) / vp.scale();
-        double[] p0 = unrotate(w.camera(), qx, qy, 0);
-        double[] d = unrotate(w.camera(), 0, 0, 1);                    // 보는 방향(+z″)
+        double[] p0 = unrotate(v.camera(), qx, qy, 0);
+        double[] d = unrotate(v.camera(), 0, 0, 1);                    // 보는 방향(+z″)
         double far = 2.0 * Math.sqrt((double) w.sizeX() * w.sizeX() + (double) w.sizeY() * w.sizeY() + (double) w.sizeZ() * w.sizeZ()) + 2;
         return new double[] {c[0] + p0[0] - d[0] * far, c[1] + p0[1] - d[1] * far, c[2] + p0[2] - d[2] * far, d[0], d[1], d[2]};
     }
@@ -70,8 +70,8 @@ public final class McvView {
      * 화면의 (sx, sy)에 보이는 것(블록 또는 엔티티) 중 가장 가까운 것을 찾는다. 엔티티는 충돌 상자로 맞힌다
      * (백엔드가 크기를 알려 준, 곧 실제로 그려진 엔티티만).
      */
-    public static Hit raycast(McvWorld w, double sx, double sy) {
-        double[] r = ray(w, sx, sy);
+    public static Hit raycast(McvWorld w, McvViewer v, double sx, double sy) {
+        double[] r = ray(w, v, sx, sy);
         if (r == null) return null;
         Hit block = raycastBlock(w, r);
         Hit entity = raycastEntity(w, r);

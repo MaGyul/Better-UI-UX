@@ -46,6 +46,97 @@ public final class McvHost {
 
     public java.util.Collection<McvWorld> worlds() { return List.copyOf(worlds.values()); }
 
+    // ---- 뷰어(<mc-viewer>) 연결 ----
+
+    private static final int MAX_VIEWERS = 32;
+    private static final java.util.regex.Pattern VIEWER_ID = java.util.regex.Pattern.compile("[A-Za-z0-9_.:-]{1,64}");
+    private final Object viewerLock = new Object();
+    /** 뷰어 id → 뷰어(만든 순서). 스크립트가 먼저 부르든 위젯이 먼저 그리든 같은 객체를 쓴다. */
+    private final Map<String, McvViewer> viewers = new LinkedHashMap<>();
+    /** 뷰어 id → 월드 핸들(world.attach 로 연결한 것, 연결한 순서). */
+    private final Map<String, Integer> bindings = new LinkedHashMap<>();
+
+    /** 선택자({@code '#view'} 또는 {@code 'view'})에서 뷰어 id 를 꺼낸다. 올바르지 않으면 {@link IllegalArgumentException}. */
+    public static String viewerId(String selector) {
+        if (selector == null) throw new IllegalArgumentException("뷰어 id 가 필요합니다");
+        String id = selector.trim();
+        if (id.startsWith("#")) id = id.substring(1);
+        if (!VIEWER_ID.matcher(id).matches()) throw new IllegalArgumentException("뷰어 id 가 올바르지 않습니다(영문/숫자/_ . : - 64자 이하): " + selector);
+        return id;
+    }
+
+    /** id 의 뷰어(없으면 만든다). */
+    public McvViewer viewer(String id) {
+        synchronized (viewerLock) {
+            McvViewer v = viewers.get(id);
+            if (v == null) {
+                if (viewers.size() >= MAX_VIEWERS) throw new IllegalArgumentException("뷰어가 너무 많습니다(" + MAX_VIEWERS + ")");
+                v = new McvViewer(id);
+                viewers.put(id, v);
+            }
+            return v;
+        }
+    }
+
+    /** {@code world.attach('#id')}: id 가 같은 {@code <mc-viewer>} 가 이 월드를 보여 주게 한다(이미 다른 월드에 붙어 있었다면 옮긴다). */
+    public void attach(McvWorld w, String selector) {
+        String id = viewerId(selector);
+        int handle = handleOf(w);
+        if (handle < 0) throw new IllegalArgumentException("이 호스트의 월드가 아닙니다");
+        synchronized (viewerLock) {
+            viewer(id);
+            bindings.remove(id);                                       // 순서를 "마지막으로 붙인 것" 으로
+            bindings.put(id, handle);
+        }
+    }
+
+    public void detach(String selector) {
+        synchronized (viewerLock) {
+            bindings.remove(viewerId(selector));
+        }
+    }
+
+    /**
+     * 위젯(뷰어 id)이 보여 줄 월드. 연결(attach)이 있으면 그 월드(월드가 없어졌으면 null), 문서에 연결이 하나도 없으면 가장 먼저 만든 월드
+     * (간단한 문서는 attach 없이 동작), 다른 뷰어만 연결되어 있으면 null.
+     */
+    public McvWorld resolveWorld(String viewerId) {
+        synchronized (viewerLock) {
+            Integer h = bindings.get(viewerId);
+            if (h != null) return worlds.get(h);
+            return bindings.isEmpty() ? primaryWorld() : null;
+        }
+    }
+
+    /** 이 문서에 attach 로 연결된 것이 하나라도 있는지. */
+    public boolean hasBindings() {
+        synchronized (viewerLock) {
+            return !bindings.isEmpty();
+        }
+    }
+
+    /** 월드의 "대표 뷰어": 가장 먼저 연결된 뷰어, 없으면 지금 이 월드를 보여 주는 첫 뷰어. 없으면 null. */
+    public McvViewer primaryViewer(McvWorld w) {
+        synchronized (viewerLock) {
+            for (Map.Entry<String, Integer> e : bindings.entrySet()) {
+                if (worlds.get(e.getValue()) == w) return viewers.get(e.getKey());
+            }
+            for (McvViewer v : viewers.values()) if (v.shown() == w) return v;
+            return null;
+        }
+    }
+
+    /** 선택자를 주면 그 뷰어, 안 주면 월드의 대표 뷰어. */
+    private McvViewer viewerFor(McvWorld w, String selector) {
+        return selector != null ? viewer(viewerId(selector)) : primaryViewer(w);
+    }
+
+    /** 월드의 대표 뷰어 카메라, 뷰어가 아직 없으면 월드의 기본 카메라(나중에 붙는 뷰어가 이어받는다). */
+    private McvCamera cameraFor(McvWorld w, String selector) {
+        McvViewer v = viewerFor(w, selector);
+        return v != null ? v.camera() : w.camera();
+    }
+
     /** 월드의 핸들(스크립트가 쓰는 번호). 이 호스트의 월드가 아니면 -1. */
     public int handleOf(McvWorld w) {
         for (Map.Entry<Integer, McvWorld> e : worlds.entrySet()) if (e.getValue() == w) return e.getKey();
@@ -58,7 +149,13 @@ public final class McvHost {
     }
 
     /** 월드를 버린다(문서가 닫힐 때). */
-    public void clear() { worlds.clear(); }
+    public void clear() {
+        worlds.clear();
+        synchronized (viewerLock) {
+            bindings.clear();
+            viewers.clear();
+        }
+    }
 
     public String invoke(String requestJson) {
         Map<String, Object> out = new LinkedHashMap<>();
@@ -151,9 +248,18 @@ public final class McvHost {
                 w.setTickRate((float) num(r, "rate"));
                 return null;
             }
+            case "attach" -> {
+                attach(w, str(r, "viewer"));
+                return null;
+            }
+            case "detach" -> {
+                detach(str(r, "viewer"));
+                return null;
+            }
             case "project" -> {
-                double[] q = McvView.project(w, num(r, "x"), num(r, "y"), num(r, "z"));
-                if (q == null) return null;                            // 아직 한 번도 그려지지 않았다
+                McvViewer v = viewerFor(w, r.get("viewer") instanceof String s ? s : null);
+                double[] q = v == null ? null : McvView.project(w, v, num(r, "x"), num(r, "y"), num(r, "z"));
+                if (q == null) return null;                            // 뷰어가 없거나 아직 한 번도 그려지지 않았다
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("x", q[0]);
                 m.put("y", q[1]);
@@ -161,10 +267,11 @@ public final class McvHost {
                 return m;
             }
             case "raycast" -> {
-                return hitToMap(McvView.raycast(w, num(r, "x"), num(r, "y")));
+                McvViewer v = viewerFor(w, r.get("viewer") instanceof String s ? s : null);
+                return v == null ? null : hitToMap(McvView.raycast(w, v, num(r, "x"), num(r, "y")));
             }
             case "camera" -> {
-                return camera(w.camera(), str(r, "op"), r.get("args"));
+                return camera(cameraFor(w, r.get("viewer") instanceof String s ? s : null), str(r, "op"), r.get("args"));
             }
             default -> throw new IllegalArgumentException("알 수 없는 명령: " + cmd);
         }

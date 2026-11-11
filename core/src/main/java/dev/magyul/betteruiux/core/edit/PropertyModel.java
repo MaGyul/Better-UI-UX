@@ -35,11 +35,11 @@ final class PropertyModel {
             Map.entry("text-transform", "대소문자"), Map.entry("text-overflow", "넘침 표시"), Map.entry("text-decoration", "글자 장식"),
             Map.entry("border-style", "테두리 모양"), Map.entry("border-radius", "둥근 모서리"), Map.entry("box-shadow", "그림자"),
             Map.entry("outline-width", "윤곽선 두께"), Map.entry("outline-color", "윤곽선 색"), Map.entry("outline-offset", "윤곽선 간격"),
-            Map.entry("bar-color", "채움색"), Map.entry("fill-color", "채움색"), Map.entry("check-color", "체크색"), Map.entry("tooltip", "툴팁"), Map.entry("modal", "모달"), Map.entry("world", "월드 번호"), Map.entry("light", "조명"));
+            Map.entry("bar-color", "채움색"), Map.entry("fill-color", "채움색"), Map.entry("check-color", "체크색"), Map.entry("tooltip", "툴팁"), Map.entry("modal", "모달"), Map.entry("light", "조명"));
     static final Set<String> COLOR_KEYS = java.util.Set.of("background", "color", "border-color", "bar-color", "fill-color", "check-color", "outline-color");
 
     static final Set<String> ATTR_KEYS = Set.of("id", "class", "onClick", "src", "text", "onChange", "onSubmit", "value", "checked",
-            "min", "max", "step", "maxlength", "placeholder", "options", "group", "columns", "title", "item", "count", "size", "tooltip", "enabled", "modal", "world", "light");
+            "min", "max", "step", "maxlength", "placeholder", "options", "group", "columns", "title", "item", "count", "size", "tooltip", "enabled", "modal", "light");
 
     enum Kind { TEXT, ENUM, BOOL, NUMBER, COLOR, HEADER }
 
@@ -232,10 +232,7 @@ final class PropertyModel {
             case "grid" -> rows.add(numRow(b, "columns"));
             case "tab" -> rows.add(attr(b, "title"));
             case "dialog" -> rows.add(attr(b, "modal"));
-            case "mc-viewer" -> {
-                rows.add(attr(b, "world"));
-                rows.add(attr(b, "light"));
-            }
+            case "mc-viewer" -> rows.add(attr(b, "light"));
             default -> { }
         }
     }

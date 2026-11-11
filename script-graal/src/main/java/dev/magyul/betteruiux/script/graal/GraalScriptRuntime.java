@@ -61,8 +61,9 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                 if (!r.ok) throw new Error(r.error);
                 return r.value;
               }
-              function camera(w) {
-                function c(op) { return function () { return H({cmd: 'camera', world: w, op: op, args: Array.prototype.slice.call(arguments)}); }; }
+              function viewerArg(sel) { return sel == null ? null : String(sel); }
+              function camera(w, sel) {
+                function c(op) { return function () { return H({cmd: 'camera', world: w, viewer: viewerArg(sel), op: op, args: Array.prototype.slice.call(arguments)}); }; }
                 return Object.freeze({
                   setYaw: c('setYaw'), setPitch: c('setPitch'), setPosition: c('setPosition'), setZoom: c('setZoom'),
                   setFov: c('setFov'), setProjection: c('setProjection'), get: c('get')
@@ -106,7 +107,6 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                 });
               }
               function world(w) {
-                var cam = camera(w);
                 return Object.freeze({
                   id: w,
                   size: function () { return H({cmd: 'size', world: w}); },
@@ -120,16 +120,22 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                   setBlocks: function (list) { return H({cmd: 'setBlocks', world: w, blocks: list}); },
                   loadStructure: function (name, x, y, z) { return H({cmd: 'loadStructure', world: w, name: String(name), x: x || 0, y: y || 0, z: z || 0}); },
                   spawnEntity: function (x, y, z, type, nbt) { return entity(w, H({cmd: 'spawnEntity', world: w, x: x, y: y, z: z, type: String(type), nbt: nbt == null ? null : String(nbt)})); },
-                  getCamera: function () { return cam; },
-                  project: function (x, y, z) { return H({cmd: 'project', world: w, x: x, y: y, z: z}); },
-                  raycast: function (sx, sy) { return H({cmd: 'raycast', world: w, x: sx, y: sy}); },
+                  attach: function (sel) { H({cmd: 'attach', world: w, viewer: String(sel)}); },
+                  detach: function (sel) { H({cmd: 'detach', world: w, viewer: String(sel)}); },
+                  getCamera: function (sel) { return camera(w, sel); },
+                  project: function (x, y, z, sel) { return H({cmd: 'project', world: w, viewer: viewerArg(sel), x: x, y: y, z: z}); },
+                  raycast: function (sx, sy, sel) { return H({cmd: 'raycast', world: w, viewer: viewerArg(sel), x: sx, y: sy}); },
                   setViewArea: function (x1, y1, z1, x2, y2, z2) { H({cmd: 'setViewArea', world: w, x1: x1, y1: y1, z1: z1, x2: x2, y2: y2, z2: z2}); },
                   clearViewArea: function () { H({cmd: 'clearViewArea', world: w}); },
                   setTickRate: function (rate) { H({cmd: 'setTickRate', world: w, rate: rate}); }
                 });
               }
               globalThis.mcv = Object.freeze({
-                createWorld: function (x, y, z) { return world(H({cmd: 'createWorld', x: x, y: y, z: z})); }
+                createWorld: function (x, y, z, sel) {
+                  var created = world(H({cmd: 'createWorld', x: x, y: y, z: z}));
+                  if (sel != null) created.attach(sel);                    // createWorld(x, y, z, '#view') = 만들고 바로 연결
+                  return created;
+                }
               });
               globalThis.console = Object.freeze({log: ui.log, warn: ui.log, error: ui.log, info: ui.log});
               globalThis.__dispatch = function (json) {

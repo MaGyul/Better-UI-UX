@@ -76,11 +76,31 @@ function buy(event, state) {               // event: 누른 요소, state: id �
 </screen>
 ```
 
+**뷰어 연결**: 스크립트가 월드를 요소 id 로 뷰어에 붙인다.
+
+```xml
+<mc-viewer id="front" width="150" height="130"/>
+<mc-viewer id="top"   width="150" height="130"/>
+```
+```js
+var world = mcv.createWorld(9, 6, 9);
+world.attach('#front');                       // '#' 는 있어도 없어도 된다. mcv.createWorld(9, 6, 9, '#front') 로 한 번에도 가능
+world.attach('top');
+world.getCamera('#top').setPitch(80);         // 뷰어를 지정하면 그 뷰어의 카메라 — 같은 월드를 다른 각도로 동시에 볼 수 있다
+world.detach('#top');                         // 연결 해제(그 뷰어는 빈 상자가 된다)
+```
+- **뷰어마다 카메라와 화면 위치(뷰포트)가 따로**다. 드래그/휠도 눌린 뷰어의 카메라만 바꾼다. 월드 하나를 여러 뷰어가, 뷰어 하나는 한 번에 월드 하나를 보여 준다(`attach` 를 다시 부르면 옮겨 붙는다).
+- 선택자를 생략하면(`getCamera()`, `project(x,y,z)`, `raycast(sx,sy)`) **월드에 가장 먼저 연결한 뷰어**를 가리킨다.
+  뷰어가 붙기 전에 `getCamera()` 로 설정한 값은 월드의 기본 카메라에 담겼다가 뷰어가 이 월드를 처음 보여 줄 때 이어받는다(그래서 `createWorld` 직후의 설정이 그대로 먹는다).
+- 문서에 `attach` 가 **하나도 없으면** 가장 먼저 만든 월드를 모든 뷰어가 보여 준다(월드 하나짜리 간단한 문서는 연결 없이 동작).
+  `attach` 를 한 번이라도 썼는데 연결 안 된 뷰어가 있으면 그 뷰어는 빈 상자로 보이고 문서 경고가 뜬다(id 를 잘못 썼을 때 알 수 있다).
+- id 는 영문/숫자/`_ . : -` 64자 이하, 문서당 뷰어는 최대 32개, 월드는 최대 8개다. id 가 없는 뷰어는 스크립트가 가리킬 수 없다.
+
 월드는 **Java 가 소유**하고 스크립트는 `mcv` 로 조작만 한다(`getBlock` 같은 읽기도 즉시 정확한 값). 월드는 저장되지 않고 서버로 동기화되지 않는다.
 
 ```js
 function onInit() {
-  var world = mcv.createWorld(9, 6, 9);                    // 크기 만큼의 빈(void) 월드. 각 축 최대 512, 블록 최대 1,000,000개
+  var world = mcv.createWorld(9, 6, 9, '#view');           // 크기 만큼의 빈(void) 월드(각 축 최대 512, 블록 최대 1,000,000개). '#view' = id 가 view 인 <mc-viewer> 에 연결
   world.fill(0, 0, 0, 8, 0, 8, 'white_concrete');          // 두 모서리(포함)를 채운다
   world.setBlock(3, 1, 3, 'oak_stairs[facing=east,half=bottom]');   // 블록 상태는 문자열, 블록 엔티티 NBT 는 5번째 인자(SNBT 문자열)
   world.setBlocks([[1, 1, 1, 'stone'], [2, 1, 1, 'dirt']]);         // 여러 개를 한 번에: [x, y, z, 블록, nbt?]
@@ -95,7 +115,7 @@ function onInit() {
   cow.mergeNbt('{Age:-24000}');                            // 엔티티 NBT 병합(/data merge 와 같다): 새끼 소로. 아래 "엔티티 NBT" 참고
   var nbt = cow.getNbt();                                  // 마지막으로 본 엔티티 NBT(SNBT 글자). 아직 그려지기 전이면 null
 
-  var cam = world.getCamera();
+  var cam = world.getCamera();                             // 이 월드를 보여 주는 (대표) 뷰어의 카메라
   cam.setYaw(225); cam.setPitch(30);                       // 기본은 등각(225°, 30°)
   cam.setZoom(1.2);
   world.setViewArea(0, 0, 0, 8, 5, 8);                     // 이 영역(블록 좌표, 포함) 안의 블록·엔티티만 그리고 맞힌다
@@ -120,7 +140,7 @@ function onInit() {
 | `onEntityHover(e)` | 마우스 아래 엔티티가 바뀔 때. 엔티티가 없으면 `e.entity == null` |
 | `onEntityClick(e)` | 드래그 없이 엔티티를 눌렀다 뗐을 때 |
 
-블록 이벤트 `e = {world, kind:'block', x, y, z, face, block, id, button}`, 엔티티 이벤트 `e = {world, kind:'entity', entity(번호), type, x, y, z, face, button}`(`x y z` 는 맞은 지점이 있는 칸). 엔티티가 블록보다 가까우면 엔티티 이벤트가 오고 그 자리의 블록 이벤트는 "블록 없음"이다. `face` 는 `up down north south east west`, `button` 은 0=좌 1=가운데 2=우(호버는 -1). 빈 곳을 눌러도 `onBlockClick` 은 불리며 `e.block == null` 이다.
+블록 이벤트 `e = {world, viewer, kind:'block', x, y, z, face, block, id, button}`, 엔티티 이벤트 `e = {world, viewer, kind:'entity', entity(번호), type, x, y, z, face, button}`(`viewer` 는 이벤트가 난 뷰어의 id, id 없는 뷰어면 `null`)(`x y z` 는 맞은 지점이 있는 칸). 엔티티가 블록보다 가까우면 엔티티 이벤트가 오고 그 자리의 블록 이벤트는 "블록 없음"이다. `face` 는 `up down north south east west`, `button` 은 0=좌 1=가운데 2=우(호버는 -1). 빈 곳을 눌러도 `onBlockClick` 은 불리며 `e.block == null` 이다.
 
 **엔티티 NBT**: `world.spawnEntity(x, y, z, type, nbt)` 의 `nbt` 와 `entity.mergeNbt('{...}')` 는 요청한 NBT 를 진짜 엔티티에 **병합**한다(`/data merge entity` 와 같다: 현재 NBT 에 덮어쓰고 다시 불러온다). 새끼로(`Age`), 이름(`CustomName`), 색(`Color`, `variant`) 같은 **엔티티 종류별 NBT** 를 바꿀 수 있다.
 - 소환할 때 준 NBT 는 첫 프레임에 적용된다(올바르지 않으면 엔티티를 만들지 않고 오류를 던진다). 적용은 렌더 스레드에서 이뤄지고, 월드에 접속하지 않았거나 엔티티를 만들 수 없으면 적용되지 않는다. NBT 가 올바르지 않으면 로그에 경고하고 건너뛴다.
@@ -128,8 +148,8 @@ function onInit() {
 - 위치와 회전은 `setPosition`/`setRotation` 이 매 프레임 이긴다(NBT 의 `Pos`/`Rotation` 은 덮어써진다). 요청은 한 번에 16개까지 밀릴 수 있고 글자는 4096자 이하의 `{...}` 여야 한다.
 - 이름(`customName`)이 있고 보이게 설정된(`customNameVisible`, 이름을 주면 기본 true) 엔티티는 머리 위에 이름표가 뜬다. 이름표는 항상 화면을 향한다.
 
-**화면 좌표 변환**(말풍선·하이라이트를 uiml 요소로 얹을 때): `world.project(x, y, z)` → `{x, y, depth}`(uiml 요소의 `x`/`y` 와 같은 GUI 좌표),
-`world.raycast(screenX, screenY)` → 가장 가까운 블록 `{kind:'block', x, y, z, face, block, id}` 또는 엔티티 `{kind:'entity', entity, type, x, y, z, face}`, 없으면 `null`. 위젯이 한 번도 그려지지 않았다면 둘 다 `null` 이다.
+**화면 좌표 변환**(말풍선·하이라이트를 uiml 요소로 얹을 때): `world.project(x, y, z[, '#뷰어'])` → `{x, y, depth}`(uiml 요소의 `x`/`y` 와 같은 GUI 좌표, 뷰어를 생략하면 대표 뷰어 기준),
+`world.raycast(screenX, screenY[, '#뷰어'])` → 가장 가까운 블록 `{kind:'block', x, y, z, face, block, id}` 또는 엔티티 `{kind:'entity', entity, type, x, y, z, face}`, 없으면 `null`. 그 뷰어가 한 번도 그려지지 않았거나 뷰어가 없다면 둘 다 `null` 이다.
 
 **조명**: `<mc-viewer light="3d|flat|entity"/>`. 한 번의 렌더에는 조명 하나만 쓸 수 있어 블록과 엔티티가 같은 조명을 나눠 쓴다.
 `3d`(기본)는 블록 면마다 밝기 차이가 뚜렷해 입체감이 좋고, `flat` 은 전체가 더 밝고 평평해서(엔티티가 약 10% 밝아진다) 엔티티가 많은 장면에 맞고, `entity` 는 바닐라가 인벤토리에서 엔티티를 그릴 때의 조명이다.

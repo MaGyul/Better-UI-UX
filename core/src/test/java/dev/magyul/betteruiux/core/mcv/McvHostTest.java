@@ -127,4 +127,56 @@ class McvHostTest {
         assertEquals(1, h.world(w).entities().size(), "잘못된 NBT 로는 엔티티가 만들어지지 않는다");
         assertTrue((Boolean) call(h, spawn + "null}").get("ok"), "nbt 를 안 줘도 된다");
     }
+
+    @Test
+    void viewersBindToWorldsById() {
+        McvHost h = new McvHost();
+        int w1 = world(h, 4, 4, 4), w2 = world(h, 4, 4, 4);
+        assertEquals(h.world(w1), h.resolveWorld("any"), "연결이 하나도 없으면 첫 월드(간단한 문서)");
+        assertTrue((Boolean) call(h, "{\"cmd\":\"attach\",\"world\":" + w2 + ",\"viewer\":\"#right\"}").get("ok"));
+        assertEquals(h.world(w2), h.resolveWorld("right"), "# 는 있어도 없어도 된다");
+        assertEquals(null, h.resolveWorld("left"), "다른 뷰어만 연결되어 있으면 연결 안 된 뷰어는 아무것도 안 보인다");
+        call(h, "{\"cmd\":\"attach\",\"world\":" + w1 + ",\"viewer\":\"left\"}");
+        call(h, "{\"cmd\":\"attach\",\"world\":" + w1 + ",\"viewer\":\"right\"}");   // 다시 붙이면 옮긴다
+        assertEquals(h.world(w1), h.resolveWorld("right"));
+        call(h, "{\"cmd\":\"detach\",\"world\":" + w1 + ",\"viewer\":\"left\"}");
+        assertEquals(null, h.resolveWorld("left"));
+        for (String bad : new String[] {"", "a b", "#", "x".repeat(70), "<script>"}) {
+            assertFalse((Boolean) call(h, "{\"cmd\":\"attach\",\"world\":" + w1 + ",\"viewer\":\"" + bad + "\"}").get("ok"), bad);
+        }
+    }
+
+    @Test
+    void cameraCommandsGoToTheViewerOrTheWorldDefaultUntilOneExists() {
+        McvHost h = new McvHost();
+        int w = world(h, 4, 4, 4);
+        String cam = "{\"cmd\":\"camera\",\"world\":" + w + ",\"op\":\"setYaw\",\"args\":[100]";
+        call(h, cam + "}");
+        assertEquals(100f, h.world(w).camera().yaw(), "뷰어가 없으면 월드의 기본 카메라");
+        call(h, "{\"cmd\":\"attach\",\"world\":" + w + ",\"viewer\":\"a\"}");
+        call(h, "{\"cmd\":\"attach\",\"world\":" + w + ",\"viewer\":\"b\"}");
+        call(h, cam.replace("100", "200") + "}");
+        assertEquals(200f, h.viewer("a").camera().yaw(), "선택자가 없으면 월드에 가장 먼저 연결된 뷰어");
+        assertEquals(225f, h.viewer("b").camera().yaw());
+        call(h, cam.replace("100", "300") + ",\"viewer\":\"#b\"}");
+        assertEquals(300f, h.viewer("b").camera().yaw(), "선택자를 주면 그 뷰어");
+        assertEquals(200f, h.viewer("a").camera().yaw());
+        assertEquals(100f, h.world(w).camera().yaw(), "월드의 기본 카메라는 그대로");
+    }
+
+    @Test
+    void projectAndRaycastNeedAViewerThatWasDrawn() {
+        McvHost h = new McvHost();
+        int w = world(h, 4, 4, 4);
+        h.world(w).setBlock(1, 1, 1, McvBlock.parse("stone", null));
+        String proj = "{\"cmd\":\"project\",\"world\":" + w + ",\"x\":1.5,\"y\":1.5,\"z\":1.5";
+        assertEquals(null, call(h, proj + "}").get("value"), "뷰어가 없다");
+        call(h, "{\"cmd\":\"attach\",\"world\":" + w + ",\"viewer\":\"v\"}");
+        assertEquals(null, call(h, proj + "}").get("value"), "아직 그려지지 않았다");
+        h.viewer("v").setViewport(new McvViewer.Viewport(0, 0, 100, 100, 10));
+        assertTrue(call(h, proj + "}").get("value") instanceof Map<?, ?>);
+        assertTrue(call(h, proj + ",\"viewer\":\"v\"}").get("value") instanceof Map<?, ?>);
+        Map<String, Object> p = call(h, proj + ",\"viewer\":\"nope\"}");
+        assertEquals(null, p.get("value"), "만들어졌지만 그려진 적 없는 뷰어");
+    }
 }

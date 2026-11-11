@@ -162,6 +162,40 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                         + "  var w = mcv.createWorld(5, 3, 5);\n  w.fill(0, 0, 0, 4, 0, 4, 'white_concrete');\n  w.setBlock(1, 1, 1, 'red_concrete');\n"
                         + "  var cow = w.spawnEntity(3.5, 1, 3.5, 'cow');\n  " + v[1] + "\n}\n");
             }
+            Files.writeString(base.resolve("ui/gt_mcv9.uiml"), """
+                    <screen>
+                      <script src="gt_mcv9.uijs"/>
+                      <column anchor="top-left" x="4" y="4" gap="2">
+                        <label id="pa" text="pa"/>
+                        <label id="pb" text="pb"/>
+                        <label id="c" text="c"/>
+                      </column>
+                      <row anchor="center" gap="8">
+                        <mc-viewer id="a" width="150" height="130"/>
+                        <mc-viewer id="b" width="150" height="130"/>
+                        <mc-viewer id="stray" width="60" height="60"/>
+                      </row>
+                    </screen>
+                    """);
+            Files.writeString(base.resolve("ui/gt_mcv9.uijs"), """
+                    var w;
+                    function onInit() {
+                      w = mcv.createWorld(5, 3, 5);
+                      w.fill(0, 0, 0, 4, 0, 4, 'white_concrete');
+                      w.setBlock(2, 1, 2, 'red_concrete');
+                      w.attach('#a');
+                      w.attach('b');                                          // # 는 없어도 된다
+                      var cam = w.getCamera('#b');                            // 뷰어를 지정하면 그 뷰어의 카메라
+                      cam.setYaw(45);
+                      cam.setPitch(80);                                       // b 는 거의 위에서 내려다본다
+                    }
+                    function onTick() {
+                      var pa = w.project(2.5, 1.5, 2.5, '#a'), pb = w.project(2.5, 1.5, 2.5, '#b');
+                      if (pa) ui.setText('#pa', Math.round(pa.x) + ',' + Math.round(pa.y));
+                      if (pb) ui.setText('#pb', Math.round(pb.x) + ',' + Math.round(pb.y));
+                    }
+                    function onBlockClick(e) { ui.setText('#c', e.block ? 'click ' + e.viewer + ' ' + e.x + ',' + e.y + ',' + e.z + ',' + e.face : 'click ' + e.viewer + ' none'); }
+                    """);
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -292,6 +326,44 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             System.out.println("[mc-viewer test] light flat diff=" + lightDiff);
             check(lightDiff > 500, "light=\"flat\" 이면 조명이 달라져 화면이 달라져야 한다(달라진 픽셀 " + lightDiff + ")");
 
+            // 뷰어 id 로 연결: 한 월드를 뷰어 a, b 가 서로 다른 카메라로 보고, 연결 안 된 뷰어(stray)는 경고가 난다.
+            BufferedImage two = openAndShoot(ctx, "gt_mcv9", "mc-viewer-two-viewers");
+            LayoutBox va = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "a"));
+            LayoutBox vb = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "b"));
+            int redA = redCount(two, va, s, sx), redB = redCount(two, vb, s, sx);
+            System.out.println("[mc-viewer test] viewers red a=" + redA + " b=" + redB);
+            check(redA > 50 && redB > 50, "두 뷰어 모두 같은 월드(빨간 블록)를 그려야 한다: a=" + redA + " b=" + redB);
+            int viewDiff = 0;
+            for (int gy = 0; gy < va.h; gy++) {
+                for (int gx = 0; gx < va.w; gx++) {
+                    int x1 = (int) Math.round((va.x + gx) * s * sx), y1 = (int) Math.round((va.y + gy) * s * sx);
+                    int x2 = (int) Math.round((vb.x + gx) * s * sx), y2 = (int) Math.round((vb.y + gy) * s * sx);
+                    int p = two.getRGB(Math.min(two.getWidth() - 1, x1), Math.min(two.getHeight() - 1, y1)), q = two.getRGB(Math.min(two.getWidth() - 1, x2), Math.min(two.getHeight() - 1, y2));
+                    int d = Math.abs((p >> 16 & 0xFF) - (q >> 16 & 0xFF)) + Math.abs((p >> 8 & 0xFF) - (q >> 8 & 0xFF)) + Math.abs((p & 0xFF) - (q & 0xFF));
+                    if (d > 60) viewDiff++;
+                }
+            }
+            System.out.println("[mc-viewer test] viewer a vs b diff=" + viewDiff);
+            check(viewDiff > 1500, "뷰어마다 카메라가 달라 같은 월드가 다르게 보여야 한다(달라진 픽셀 " + viewDiff + ")");
+            java.util.List<String> viewerWarnings = ctx.computeOnClient(mc -> ((UiScreen) mc.gui.screen()).document().warnings());
+            System.out.println("[mc-viewer test] warnings=" + viewerWarnings);
+            check(viewerWarnings.stream().anyMatch(m -> m.contains("id=\"stray\"")), "연결 안 된 뷰어(stray)에 경고가 나야 한다: " + viewerWarnings);
+            // 각 뷰어의 project 좌표를 클릭하면 이벤트에 그 뷰어 id 가 실려 온다.
+            double scale9 = ctx.computeOnClient(mc -> (double) mc.getWindow().getGuiScale());
+            var in9 = ctx.getInput();
+            for (String id : new String[] {"a", "b"}) {
+                String[] xy9 = text(ctx, id.equals("a") ? "#pa" : "#pb").split(",");
+                in9.setCursorPos(Integer.parseInt(xy9[0].trim()) * scale9, Integer.parseInt(xy9[1].trim()) * scale9);
+                ctx.waitTicks(5);
+                in9.pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
+                ctx.waitTicks(10);
+                String clicked = text(ctx, "#c");
+                System.out.println("[mc-viewer test] " + clicked);
+                check(clicked.startsWith("click " + id + " 2,1,2,"), "뷰어 " + id + " 의 좌표를 누르면 그 뷰어 id 와 빨간 블록이 와야 한다: " + clicked);
+                if (id.equals("b")) check(clicked.endsWith(",up"), "위에서 보는 뷰어 b 는 윗면을 맞힌다: " + clicked);
+            }
+            in9.setCursorPos(2, 2);
+
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));
             ctx.waitTicks(40);
@@ -336,6 +408,19 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             check(demoRed > 50, "데모의 빨간 블록이 그려져야 한다(" + demoRed + ")");
 
         }
+    }
+
+    /** 스크린샷의 뷰어 영역에서 빨간 픽셀 수(빨간 콘크리트). */
+    private static int redCount(BufferedImage img, LayoutBox v, int guiScale, double sx) {
+        int n = 0;
+        for (int gy = v.y; gy < v.y + v.h; gy++) {
+            for (int gx = v.x; gx < v.x + v.w; gx++) {
+                int x = (int) Math.min(img.getWidth() - 1, Math.round(gx * guiScale * sx)), y = (int) Math.min(img.getHeight() - 1, Math.round(gy * guiScale * sx));
+                int p = img.getRGB(x, y), r = p >> 16 & 0xFF, g = p >> 8 & 0xFF, b = p & 0xFF;
+                if (r > 55 && r > g * 2.2 && r > b * 2.2) n++;
+            }
+        }
+        return n;
     }
 
     /** 두 스크린샷의 뷰어 영역에서 눈에 띄게 다른 픽셀 수. */

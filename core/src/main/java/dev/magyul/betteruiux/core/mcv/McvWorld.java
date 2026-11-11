@@ -48,7 +48,6 @@ public final class McvWorld {
     private final McvCamera camera = new McvCamera();
     private volatile int[] viewArea;               // null 이면 월드 전체
     private volatile float tickRate = 20f;
-    private volatile Viewport viewport;
     private volatile long tickCount;                  // 쓰기는 advance()(synchronized)만 한다
 
     public McvWorld(int sizeX, int sizeY, int sizeZ) {
@@ -66,17 +65,11 @@ public final class McvWorld {
 
     public int sizeZ() { return sizeZ; }
 
-    public McvCamera camera() { return camera; }
-
     /**
-     * 이 월드가 마지막으로 그려진 사각형(GUI 좌표)과 배율(월드 한 칸 = scale 픽셀). 위젯이 그릴 때마다 렌더 스레드가 갱신하고,
-     * 화면 좌표 ↔ 월드 좌표 변환(project/raycast)이 읽는다. 아직 그려진 적이 없으면 null.
+     * 월드의 <b>기본 카메라</b>. 뷰어가 붙기 전에 {@code world.getCamera()} 로 설정한 값을 담아 두었다가, 뷰어가 이 월드를 처음 보여 줄 때
+     * 그 뷰어의 카메라가 이어받는다. 뷰어가 붙은 뒤의 카메라 조작은 뷰어의 카메라({@link McvViewer#camera})로 간다.
      */
-    public record Viewport(double x, double y, double w, double h, double scale) { }
-
-    public Viewport viewport() { return viewport; }
-
-    public void setViewport(Viewport v) { this.viewport = v; }
+    public McvCamera camera() { return camera; }
 
     public float tickRate() { return tickRate; }
 
