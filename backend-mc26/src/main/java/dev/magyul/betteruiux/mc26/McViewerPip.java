@@ -54,7 +54,7 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
     @Override
     protected void renderToTexture(McViewerRenderState s, PoseStack pose, SubmitNodeCollector collector) {
         Minecraft mc = Minecraft.getInstance();
-        mc.gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_3D);
+        mc.gameRenderer.lighting().setupFor(lighting(s.light()));
         BlockStateModelSet models = mc.getModelManager().getBlockStateModelSet();
         if (models != cachedFor) {
             cache.clear();
@@ -87,6 +87,20 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
         }
         if (beReady) blockEntities.end();
         entities.render(w, s.yaw(), s.pitch(), pose, collector);
+    }
+
+    /**
+     * 조명 방식. 한 번의 렌더에는 조명 하나만 쓸 수 있어서 블록과 엔티티가 같은 조명을 나눠 쓴다.
+     * "3d"(기본): 블록의 면마다 밝기 차이가 뚜렷하다. "flat": 전체가 더 밝고 평평하다(엔티티가 많은 장면에 적합, 블록 입체감은 줄어든다).
+     * "entity": 바닐라가 인벤토리의 엔티티를 그릴 때 쓰는 방식.
+     */
+    static Lighting.Entry lighting(String name) {
+        if (name == null) return Lighting.Entry.ITEMS_3D;
+        return switch (name.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "flat" -> Lighting.Entry.ITEMS_FLAT;
+            case "entity" -> Lighting.Entry.ENTITY_IN_UI;
+            default -> Lighting.Entry.ITEMS_3D;
+        };
     }
 
     private boolean enclosed(McvWorld w, Map<Long, McvBlock> blocks, int x, int y, int z, BlockStateModelSet models) {

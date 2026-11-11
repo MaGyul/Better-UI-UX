@@ -47,6 +47,7 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                       w.setBlock(0, 1, 0, 'grass_block');
                       var cow = w.spawnEntity(4.5, 1, 4.5, 'cow');
                       cow.setRotation(135, 0);
+                      cow.customName = 'Bessie';
                       w.spawnEntity(0.5, 1, 4.5, 'pig');
                       var sheep = w.spawnEntity(4.5, 1, 0.5, 'sheep');
                       sheep.customName = 'Dolly';
@@ -154,6 +155,13 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                     function onEntityHover(e) { ui.setText('#h', e.entity ? 'hover ' + e.type : 'hover none'); }
                     function onEntityClick(e) { ui.setText('#c', 'click ' + e.entity + ' ' + e.type); cow.mergeNbt('{Age:-24000,CustomName:\"Moo\",CustomNameVisible:1b}'); }
                     """);
+            for (String[] v : new String[][] {{"gt_mcv8a", "", ""}, {"gt_mcv8b", "cow.customName = 'Bessie';", ""}, {"gt_mcv8c", "", " light=\"flat\""}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"240\" height=\"180\"" + v[2] + "/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(5, 3, 5);\n  w.fill(0, 0, 0, 4, 0, 4, 'white_concrete');\n  w.setBlock(1, 1, 1, 'red_concrete');\n"
+                        + "  var cow = w.spawnEntity(3.5, 1, 3.5, 'cow');\n  " + v[1] + "\n}\n");
+            }
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -271,6 +279,19 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             System.out.println("[mc-viewer test] cow nbt diff=" + cowDiff);
             check(cowDiff > 300, "NBT 로 새끼 소로 바꾸면 화면이 달라져야 한다(달라진 픽셀 " + cowDiff + ")");
 
+            // 이름표: 같은 장면에 이름만 다르면 소 머리 위에 글자(이름표)가 생겨 화면이 조금 달라진다(바닐라의 거리 판정 때문에 한동안 안 보이던 부분).
+            BufferedImage unnamed = openAndShoot(ctx, "gt_mcv8a", "mc-viewer-tag-none");
+            BufferedImage named = openAndShoot(ctx, "gt_mcv8b", "mc-viewer-tag-named");
+            LayoutBox tv = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            int tagDiff = diff(unnamed, named, tv, s, sx);
+            System.out.println("[mc-viewer test] name tag diff=" + tagDiff);
+            check(tagDiff > 60 && tagDiff < 6000, "이름표(작은 글자 상자)만큼만 달라져야 한다(달라진 픽셀 " + tagDiff + ")");
+            // 조명 속성: light="flat" 은 기본(3d)과 면 밝기가 달라진다.
+            BufferedImage flat = openAndShoot(ctx, "gt_mcv8c", "mc-viewer-light-flat");
+            int lightDiff = diff(unnamed, flat, tv, s, sx);
+            System.out.println("[mc-viewer test] light flat diff=" + lightDiff);
+            check(lightDiff > 500, "light=\"flat\" 이면 조명이 달라져 화면이 달라져야 한다(달라진 픽셀 " + lightDiff + ")");
+
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));
             ctx.waitTicks(40);
@@ -315,6 +336,20 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             check(demoRed > 50, "데모의 빨간 블록이 그려져야 한다(" + demoRed + ")");
 
         }
+    }
+
+    /** 두 스크린샷의 뷰어 영역에서 눈에 띄게 다른 픽셀 수. */
+    private static int diff(BufferedImage a, BufferedImage b, LayoutBox v, int guiScale, double sx) {
+        int n = 0;
+        for (int gy = v.y; gy < v.y + v.h; gy++) {
+            for (int gx = v.x; gx < v.x + v.w; gx++) {
+                int x = (int) Math.min(a.getWidth() - 1, Math.round(gx * guiScale * sx)), y = (int) Math.min(a.getHeight() - 1, Math.round(gy * guiScale * sx));
+                int p = a.getRGB(x, y), q = b.getRGB(x, y);
+                int d = Math.abs((p >> 16 & 0xFF) - (q >> 16 & 0xFF)) + Math.abs((p >> 8 & 0xFF) - (q >> 8 & 0xFF)) + Math.abs((p & 0xFF) - (q & 0xFF));
+                if (d > 60) n++;
+            }
+        }
+        return n;
     }
 
     private BufferedImage openAndShoot(ClientGameTestContext ctx, String id, String shotName) {

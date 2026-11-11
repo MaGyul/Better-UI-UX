@@ -13,7 +13,7 @@ import java.util.Objects;
 
 /**
  * {@code <mc-viewer world="1"/>}: 스크립트가 만든 가상 마인크래프트 월드를 보여 준다({@code world} 를 생략하면 가장 먼저 만든 월드).
- * 마우스 드래그로 카메라를 돌리고, 휠로 확대/축소한다. 그리기는 {@link McViewerPip}(GUI Picture-in-Picture)가 맡는다.
+ * 마우스 드래그로 카메라를 돌리고, 휠로 확대/축소한다. {@code light="3d|flat|entity"} 로 조명 방식을 고른다(기본 3d). 그리기는 {@link McViewerPip}(GUI Picture-in-Picture)가 맡는다.
  *
  * <p>스크립트로 가는 신호(전역 함수가 있을 때만 불린다):
  * <ul>
@@ -69,7 +69,7 @@ final class McViewerWidget implements UiWidget {
         advanceTicks(world);
         updateHover(world, frame);
         if (!(gfx instanceof McGfx mc)) return;
-        mc.addPictureInPicture(new McViewerRenderState(world, cam.yaw(), cam.pitch(), x, y, x + w, y + h, scale, null));
+        mc.addPictureInPicture(new McViewerRenderState(world, cam.yaw(), cam.pitch(), el.attr("light"), x, y, x + w, y + h, scale, null));
     }
 
     /**
