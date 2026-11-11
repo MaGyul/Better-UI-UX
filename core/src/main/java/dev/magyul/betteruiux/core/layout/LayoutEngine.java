@@ -349,6 +349,7 @@ public final class LayoutEngine {
 
     /** 폭이 정해진 뒤의 높이: 줄바꿈하는 label/button 은 그 폭에서 몇 줄이 되는지 반영한다. 아니면 {@link #prefH}. */
     private int prefHFor(LayoutBox c, int width) {
+        if (c.widget == null && isFlowContainer(c) && width >= 0) return containerHeightAt(c, width);
         if (c.widget != null || !(c.tag().equals("label") || c.tag().equals("button"))) return prefH(c);
         if (c.style.size("height", Size.AUTO).kind() != Size.Kind.AUTO || ratio(c) > 0) return prefH(c);
         TextStyle ts = TextStyle.of(c.style, text);
@@ -397,16 +398,44 @@ public final class LayoutEngine {
             case "grid": return gridPlan(b, -1, -1).totalH();
             default: break;
         }
+        Size ws = b.style.size("width", Size.AUTO);               // 너비가 정해진 컨테이너는 그 너비로 줄바꿈한 높이를 쓴다
+        int hint = ws.kind() == Size.Kind.PX ? Math.max(0, Math.round(ws.value()) + adj(b, true) - padding(b).horizontal()) : -1;
+        return contentHFor(b, hint);
+    }
+
+    private boolean isFlowContainer(LayoutBox b) {
+        return !isLeaf(b) && !b.tag().equals("grid") && !b.tag().equals("tabs");
+    }
+
+    /** 높이가 auto 인 컨테이너를 (테두리 상자) 너비 {@code w} 로 놓았을 때의 높이: 줄바꿈하는 글자 때문에 늘어나는 것을 반영한다. */
+    private int containerHeightAt(LayoutBox c, int w) {
+        if (c.style.size("height", Size.AUTO).kind() != Size.Kind.AUTO || ratio(c) > 0) return prefH(c);
+        Insets pad = padding(c);
+        return clamp(c, false, contentHFor(c, Math.max(0, w - pad.horizontal())) + pad.vertical(), 0);
+    }
+
+    /** 자식 내용의 높이(자식 영역 너비가 {@code innerW}; 음수면 모른다고 보고 줄바꿈 없이 센다). */
+    private int contentHFor(LayoutBox b, int innerW) {
         List<LayoutBox> kids = visibleChildren(b);
         int gap = b.style.integer("gap", 0);
         int v = 0;
+        String align = norm(b.style.get("align", "start"));
         if (axisOf(b) == 2 || b.tag().equals("scroll")) {
-            for (LayoutBox c : kids) v += outerH(c);
+            for (LayoutBox c : kids) v += childOuterH(c, innerW, align);
             if (!kids.isEmpty()) v += b.style.integer("row-gap", gap) * (kids.size() - 1);
+        } else if (axisOf(b) == 1) {
+            for (LayoutBox c : kids) v = Math.max(v, childOuterH(c, innerW < 0 ? -1 : Math.min(prefW(c), innerW), align));
         } else {
-            for (LayoutBox c : kids) v = Math.max(v, outerH(c));
+            for (LayoutBox c : kids) v = Math.max(v, childOuterH(c, innerW, align));
         }
         return v;
+    }
+
+    /** 자식 하나의 바깥 높이. {@code avail} 은 세로 쌓기에서 자식이 쓸 수 있는 너비(row 에서는 자식의 너비 자체). */
+    private int childOuterH(LayoutBox c, int avail, String align) {
+        if (avail < 0) return outerH(c);
+        int w = axisOf(c.parent) == 1 ? avail : guessWidth(c, avail, align);
+        return prefHFor(c, w) + margin(c).vertical();
     }
 
     // ---- 배치 ----
@@ -433,7 +462,7 @@ public final class LayoutEngine {
         switch (b.tag()) {
             case "grid" -> grid(b, cx, cy, cw, ch);
             case "scroll" -> {
-                int content = contentH(b), bar = 0, offset = 0;
+                int content = contentHFor(b, cw), bar = 0, offset = 0;
                 if (b.widget instanceof BuiltinWidgets.Scroll sw) {
                     sw.setContent(content, ch);
                     offset = sw.scrollY();
@@ -609,8 +638,17 @@ public final class LayoutEngine {
         List<Track> rowsT = new ArrayList<>(rowTracks);
         while (rowsT.size() < nr) rowsT.add(new Track('a', 0));
 
-        int[] colW = sizeTracks(cols, colGap, availW, items, col, cs, true);
-        int[] rowH = sizeTracks(rowsT, rowGap, availH, items, row, rs, false);
+        int[] colW = sizeTracks(cols, colGap, availW, items, col, cs, true, null);
+        int[] itemW = new int[n];                                    // 칸 너비(줄바꿈하는 글자의 높이를 정하는 데 쓴다)
+        for (int i = 0; i < n; i++) {
+            LayoutBox c = items.get(i);
+            int cell = colGap * (cs[i] - 1);
+            for (int k = col[i]; k < Math.min(nc, col[i] + cs[i]); k++) cell += colW[k];
+            Insets m = margin(c);
+            Size ws = c.style.size("width", Size.AUTO);
+            itemW[i] = ws.kind() == Size.Kind.FILL ? Math.max(0, cell - m.horizontal()) : Math.min(prefW(c), Math.max(0, cell - m.horizontal()));
+        }
+        int[] rowH = sizeTracks(rowsT, rowGap, availH, items, row, rs, false, itemW);
         int totalW = 0, totalH = 0;
         for (int w : colW) totalW += w;
         for (int h : rowH) totalH += h;
@@ -624,14 +662,14 @@ public final class LayoutEngine {
         return new GridPlan(colW, rowH, col, row, cs, rs, totalW, totalH);
     }
 
-    private int[] sizeTracks(List<Track> tracks, int gap, int avail, List<LayoutBox> items, int[] start, int[] span, boolean horiz) {
+    private int[] sizeTracks(List<Track> tracks, int gap, int avail, List<LayoutBox> items, int[] start, int[] span, boolean horiz, int[] itemW) {
         int nt = tracks.size();
         int[] content = new int[nt];
         for (int pass = 0; pass < 2; pass++) {               // 0: 한 칸짜리, 1: 여러 칸에 걸친 것
             for (int i = 0; i < items.size(); i++) {
                 if ((pass == 0) != (span[i] == 1)) continue;
                 LayoutBox c = items.get(i);
-                int need = horiz ? outerW(c) : outerH(c);
+                int need = horiz ? outerW(c) : itemW != null ? prefHFor(c, itemW[i]) + margin(c).vertical() : outerH(c);
                 int s = start[i], e = Math.min(nt, s + span[i]);
                 if (pass == 0) {
                     content[s] = Math.max(content[s], need);
