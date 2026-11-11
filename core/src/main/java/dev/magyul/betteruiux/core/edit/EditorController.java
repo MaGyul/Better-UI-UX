@@ -2463,6 +2463,14 @@ public final class EditorController {
             Map.entry("Hide", "툴바 숨기기 (맨 위에 마우스를 올리면 나타남)"), Map.entry("Pin", "툴바를 항상 보이게"),
             Map.entry("Exit", "에디터 닫기 (F8)"), Map.entry("?", "도움말 (F1)"), Map.entry("...", "창이 좁아 숨겨진 버튼 더 보기"));
 
+    /** 속성 칸 위에서 보여 줄 "이 값이 어디서 왔나" 문장(스타일/속성 행만). */
+    private String originTip(PropRow row) {
+        String key = row.key();
+        LayoutBox box = selectedBox();
+        if (box == null || key.isEmpty() || row.kind() == Kind.HEADER || key.indexOf(':') >= 0 || key.startsWith("§")) return null;
+        return "출처: " + doc.explainStyle(box, key);
+    }
+
     private String tipNow, tipPrev;
     private long tipSince;
 
@@ -2810,6 +2818,7 @@ public final class EditorController {
         Rect field = new Rect(fieldX, y - 1, fieldW, ROW_H);
         boolean editing = row.key().equals(editKey) && !row.key().isEmpty();
         boolean fieldHover = !editing && row.editable() && field.contains(mouseX, mouseY) && panel.contains(mouseX, mouseY);
+        if (fieldHover) tipNow = originTip(row);
         g.fillRect(field.x(), field.y(), field.w(), field.h(), fieldHover ? (mouseDown ? shade(C_FIELD, -6) : shade(C_FIELD, 22)) : C_FIELD);
         if (fieldHover) outline(g, field, mouseDown ? C_SEL : 0x80FFFFFF);
         int reserve = 4;

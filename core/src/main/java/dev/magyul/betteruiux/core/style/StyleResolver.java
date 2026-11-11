@@ -223,6 +223,87 @@ public final class StyleResolver {
         return m;
     }
 
+    // ---- 값 출처 설명 (에디터 툴팁) ----
+
+    /** 선언 {@code declProp} 이 계산된 속성 {@code key} 의 값에 영향을 주는지(숏핸드/롱핸드 포함). */
+    static boolean affects(String declProp, String key) {
+        if (declProp.equals(key)) return true;
+        return switch (declProp) {
+            case "border" -> key.equals("border-color") || key.equals("border-style");
+            case "border-width" -> key.equals("border") || key.startsWith("border-") && key.endsWith("-width");
+            case "border-color" -> key.startsWith("border-") && key.endsWith("-color");
+            case "border-top", "border-right", "border-bottom", "border-left" ->
+                    key.equals(declProp + "-width") || key.equals(declProp + "-color");
+            case "flex" -> key.equals("grow") || key.equals("flex-shrink") || key.equals("flex-basis");
+            case "outline" -> key.startsWith("outline-");
+            case "margin-top", "margin-right", "margin-bottom", "margin-left" -> key.equals("margin");
+            case "padding-top", "padding-right", "padding-bottom", "padding-left" -> key.equals("padding");
+            default -> false;
+        };
+    }
+
+    /**
+     * 이 요소의 {@code prop} 값이 어디서 왔는지 사람이 읽을 문장으로 설명한다(우선순위: inline → 스타일 규칙 → XML 속성 → 태그 기본값 → 상속).
+     * 값이 없으면 "지정 없음". 애니메이션이 덧입힌 값은 반영하지 않는다.
+     */
+    public String explain(LayoutBox box, String prop) {
+        String key = ALIASES.getOrDefault(prop, prop);
+        String value = box.style.get(key);
+        String inlineHit = null;
+        boolean inlineImportant = false;
+        String inline = box.node.attr("style");
+        if (inline != null) {
+            for (Stylesheet.Declaration d : Stylesheet.parseDeclarations(inline)) {
+                if (affects(ALIASES.getOrDefault(d.prop(), d.prop()), key)) {
+                    inlineHit = d.prop() + ": " + d.value();
+                    inlineImportant = d.important();
+                }
+            }
+        }
+        record Hit(Entry entry, Stylesheet.Declaration decl) {}
+        List<Hit> hits = new ArrayList<>();
+        if (!box.synthetic) {
+            for (Entry e : entries) {
+                if (!mediaOk(e.media()) || e.selector().pseudoElement() != null || e.selector().hasDynamic()) continue;
+                if (!e.selector().matches(box)) continue;
+                for (Stylesheet.Declaration d : e.declarations()) {
+                    if (affects(ALIASES.getOrDefault(d.prop(), d.prop()), key)) hits.add(new Hit(e, d));
+                }
+            }
+        }
+        hits.sort(Comparator.comparing((Hit h) -> h.decl().important())
+                .thenComparingInt(h -> h.entry().selector().specificity())
+                .thenComparingInt(h -> h.entry().ordinal()));
+        Hit best = hits.isEmpty() ? null : hits.get(hits.size() - 1);
+        String origin;
+        if (inlineHit != null && (inlineImportant || best == null || !best.decl().important())) {
+            origin = "인라인 style=\"" + inlineHit + "\"";
+        } else if (best != null) {
+            origin = "스타일 규칙 " + best.entry().selector() + " { " + best.decl().prop() + ": " + best.decl().value()
+                    + (best.decl().important() ? " !important" : "") + " }";
+        } else if (box.node.attributes().containsKey(key)) {
+            origin = "XML 속성 " + key + "=\"" + box.node.attr(key) + "\"";
+        } else {
+            StyleMap defaults = new StyleMap();
+            applyTagDefaults(box, defaults);
+            if (defaults.has(key)) {
+                origin = "<" + box.tag() + "> 기본값";
+            } else if (value != null && (INHERITED.contains(key) || key.startsWith("--")) && box.parent != null
+                    && box.parent.style.has(key)) {
+                origin = "부모에서 상속 (<" + box.parent.tag() + ">)";
+            } else {
+                origin = value == null ? "지정 없음 (기본 동작)" : "계산된 값";
+            }
+        }
+        for (LayoutBox.DynRule r : box.dynRules) {
+            if (r.normal().has(key) || r.important().has(key)) {
+                origin += "  · " + r.selector() + " 상태일 때 달라짐";
+                break;
+            }
+        }
+        return origin;
+    }
+
     /** 내장 태그의 기본 모양(속성/스타일시트가 있으면 그것이 이긴다). */
     private static void applyTagDefaults(LayoutBox box, StyleMap base) {
         switch (box.tag()) {

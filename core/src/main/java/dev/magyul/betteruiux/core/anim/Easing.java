@@ -1,6 +1,6 @@
 package dev.magyul.betteruiux.core.anim;
 
-/** 이징 함수: 진행도 0..1 → 보간 비율. {@code linear ease ease-in ease-out ease-in-out cubic-bezier(a,b,c,d) spring}. */
+/** 이징 함수: 진행도 0..1 → 보간 비율. {@code linear ease ease-in ease-out ease-in-out cubic-bezier(a,b,c,d) steps(n[, jump]) step-start step-end spring}. */
 @FunctionalInterface
 public interface Easing {
     double apply(double t);
@@ -21,7 +21,10 @@ public interface Easing {
             case "ease-out" -> bezier(0, 0, 0.58, 1.0);
             case "ease-in-out" -> bezier(0.42, 0, 0.58, 1.0);
             case "spring" -> SPRING;
-            default -> s.startsWith("cubic-bezier(") && s.endsWith(")") ? parseBezier(s) : LINEAR;
+            case "step-start" -> steps(1, "jump-start");
+            case "step-end" -> steps(1, "jump-end");
+            default -> s.startsWith("cubic-bezier(") && s.endsWith(")") ? parseBezier(s)
+                    : s.startsWith("steps(") && s.endsWith(")") ? parseSteps(s) : LINEAR;
         };
     }
 
@@ -29,7 +32,42 @@ public interface Easing {
     static boolean isEasingToken(String s) {
         s = s.toLowerCase();
         return s.equals("linear") || s.equals("ease") || s.equals("ease-in") || s.equals("ease-out")
-                || s.equals("ease-in-out") || s.equals("spring") || s.startsWith("cubic-bezier(");
+                || s.equals("ease-in-out") || s.equals("spring") || s.startsWith("cubic-bezier(")
+                || s.startsWith("steps(") || s.equals("step-start") || s.equals("step-end");
+    }
+
+    private static Easing parseSteps(String s) {
+        String[] p = s.substring("steps(".length(), s.length() - 1).split(",");
+        try {
+            int n = Integer.parseInt(p[0].trim());
+            String jump = p.length > 1 ? p[1].trim() : "jump-end";
+            if (n < 1 || p.length > 2) return LINEAR;
+            return steps(n, switch (jump) {
+                case "start", "jump-start" -> "jump-start";
+                case "end", "jump-end" -> "jump-end";
+                case "jump-none" -> n >= 2 ? "jump-none" : "jump-end";
+                case "jump-both" -> "jump-both";
+                default -> "jump-end";
+            });
+        } catch (NumberFormatException e) {
+            return LINEAR;
+        }
+    }
+
+    /** CSS steps(): 값이 계단식으로 바뀐다. 끝(t=1)에서는 항상 1. */
+    static Easing steps(int n, String jump) {
+        return t -> {
+            if (t >= 1) return 1;
+            if (t < 0) t = 0;
+            double k = Math.floor(n * t);
+            double v = switch (jump) {
+                case "jump-start" -> (k + 1) / n;
+                case "jump-none" -> k / (n - 1);
+                case "jump-both" -> (k + 1) / (n + 1);
+                default -> k / n;
+            };
+            return Math.min(1, v);
+        };
     }
 
     private static Easing parseBezier(String s) {

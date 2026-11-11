@@ -391,6 +391,9 @@ public final class UiDocument {
 
     LayoutBox boxOf(UiNode node) { return boxes.get(node); }
 
+    /** 요소의 스타일 값이 어디서 왔는지(inline / 어느 규칙 / 속성 / 기본값 / 상속) 설명한다. 에디터 툴팁용. */
+    public String explainStyle(LayoutBox box, String prop) { return resolver.explain(box, prop); }
+
     // ---- 그리기 ----
 
     /**
