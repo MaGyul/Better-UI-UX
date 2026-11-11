@@ -260,6 +260,16 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                         + "  var w = mcv.createWorld(8, 2, 4);\n  w.fill(0, 0, 0, 7, 0, 3, 'grass_block');\n  " + v[1] + "\n"
                         + "  var cam = w.getCamera();\n  cam.setYaw(0);\n  cam.setPitch(90);\n}\n");
             }
+            for (String[] v : new String[][] {
+                    {"gt_mcv16a", "0", "ortho"}, {"gt_mcv16b", "180", "ortho"}, {"gt_mcv16c", "0", "perspective"}, {"gt_mcv16d", "180", "perspective"}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"240\" height=\"180\"/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(5, 3, 6);\n  w.fill(0, 0, 0, 4, 0, 5, 'white_concrete');\n"
+                        + (v[1].equals("0") ? "  w.fill(0, 1, 5, 4, 2, 5, 'white_concrete');\n" : "  w.fill(0, 1, 0, 4, 2, 0, 'white_concrete');\n")
+                        + "  w.setBlock(2, 1, 1, 'red_stained_glass');\n  w.setBlock(2, 1, 4, 'blue_stained_glass');\n"
+                        + "  var cam = w.getCamera();\n  cam.setProjection('" + v[2] + "');\n  cam.setYaw(" + v[1] + ");\n  cam.setPitch(0);\n}\n");
+            }
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -511,6 +521,30 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             System.out.println("[mc-viewer test] biome r/g default=" + rgDefault + " desert=" + rgDesert + " split left=" + rgLeft + " right=" + rgRight);
             check(rgDesert > rgDefault + 0.03, "사막의 잔디는 기본(초록)보다 누렇다(r/g 기본 " + rgDefault + ", 사막 " + rgDesert + ")");
             check(Math.abs(rgLeft - rgRight) > 0.08, "영역으로 나눈 바이옴(사막|정글)은 좌우 잔디 색이 달라야 한다(" + rgLeft + " vs " + rgRight + ")");
+
+            // 반투명 정렬: 앞뒤로 겹친 색유리(뒤에는 흰 벽)는 "가까운 쪽 색이 우세"해야 한다. 빨강이 앞인 뷰(yaw 0)가 파랑이 앞인 뷰(yaw 180)보다
+            // r − b 가 커야 한다(그리기 순서가 거리와 무관하면 두 뷰 중 하나가 거꾸로 섞여 이 차이가 사라지거나 뒤집힌다). 정사영·원근 모두.
+            double[] rbScore = new double[4];
+            String[] glassScenes = {"gt_mcv16a", "gt_mcv16b", "gt_mcv16c", "gt_mcv16d"};
+            for (int gi = 0; gi < 4; gi++) {
+                BufferedImage glass = openAndShoot(ctx, glassScenes[gi], "mc-viewer-glass-" + glassScenes[gi]);
+                LayoutBox gl = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+                double r = 0, b = 0;
+                int n = 0;
+                for (int dy = -3; dy <= 3; dy++) {
+                    for (int dx = -3; dx <= 3; dx++) {
+                        int x = (int) Math.round((gl.x + gl.w / 2 + dx) * s * sx), y = (int) Math.round((gl.y + gl.h / 2 + dy) * s * sx);
+                        int p = glass.getRGB(x, y);
+                        r += p >> 16 & 0xFF;
+                        b += p & 0xFF;
+                        n++;
+                    }
+                }
+                rbScore[gi] = (r - b) / n;
+            }
+            System.out.println("[mc-viewer test] glass r-b ortho red-near=" + rbScore[0] + " blue-near=" + rbScore[1] + " | perspective red-near=" + rbScore[2] + " blue-near=" + rbScore[3]);
+            check(rbScore[0] > rbScore[1] + 6, "정사영: 빨간 유리가 앞인 뷰가 파란 유리가 앞인 뷰보다 더 붉어야 한다(" + rbScore[0] + " vs " + rbScore[1] + ")");
+            check(rbScore[2] > rbScore[3] + 6, "원근: 빨간 유리가 앞인 뷰가 파란 유리가 앞인 뷰보다 더 붉어야 한다(" + rbScore[2] + " vs " + rbScore[3] + ")");
 
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));
