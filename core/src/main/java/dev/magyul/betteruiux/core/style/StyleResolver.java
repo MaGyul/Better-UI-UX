@@ -22,7 +22,8 @@ import java.util.Set;
  * 마지막에 {@code var(--x, 기본값)} 을 치환한다. :hover/:active 규칙은 {@link LayoutBox#overlays} 로 분리한다.
  */
 public final class StyleResolver {
-    private record Entry(Selector selector, List<Stylesheet.Declaration> declarations, int ordinal) {}
+    private record Entry(Selector selector, List<Stylesheet.Declaration> declarations, int ordinal,
+                         List<MediaQuery> media) {}
 
     private record Applied(Stylesheet.Declaration decl, int specificity, int ordinal) {}
 
@@ -37,7 +38,7 @@ public final class StyleResolver {
         int ordinal = 0;
         for (Stylesheet sheet : sheets) {
             keyframes.putAll(sheet.keyframes());   // 같은 이름이면 나중 시트가 이긴다
-            for (Stylesheet.Rule r : sheet.rules()) entries.add(new Entry(r.selector(), r.declarations(), ordinal++));
+            for (Stylesheet.Rule r : sheet.rules()) entries.add(new Entry(r.selector(), r.declarations(), ordinal++, r.media()));
         }
     }
 
@@ -62,7 +63,7 @@ public final class StyleResolver {
         List<Applied> staticRules = new ArrayList<>();
         Map<String, List<Applied>> dynamicRules = new LinkedHashMap<>();
         for (Entry e : entries) {
-            if (!e.selector().matches(box)) continue;
+            if (!mediaOk(e.media()) || !e.selector().matches(box)) continue;
             Set<String> dyn = e.selector().dynamicPseudos();
             List<Applied> target = dyn.isEmpty() ? staticRules
                     : dynamicRules.computeIfAbsent(String.join("+", dyn), k -> new ArrayList<>());
@@ -103,6 +104,11 @@ public final class StyleResolver {
             "fill-color", "check-color", "block-tint", "hover-background", "pressed-background", "disabled-background");
 
     private int viewW, viewH;
+
+    private boolean mediaOk(List<MediaQuery> media) {
+        for (MediaQuery q : media) if (!q.matches(viewW, viewH)) return false;
+        return true;
+    }
 
     /** vw/vh/vmin/vmax 와 {@code @media} 에 쓰는 뷰포트 크기(레이아웃을 시작할 때마다 갱신). */
     public void setViewport(int w, int h) {

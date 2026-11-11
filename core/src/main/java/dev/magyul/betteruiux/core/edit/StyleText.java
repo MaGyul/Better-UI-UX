@@ -79,6 +79,8 @@ final class StyleText {
             String selector = new String(m, i, open - i).trim();
             if (!selector.isEmpty() && !selector.startsWith("@")) {
                 if (out != null) out.add(new Rule(selector, open + 1, close, decls(m, open + 1, close)));
+            } else if (selector.startsWith("@media") || selector.startsWith("@supports")) {
+                scan(text, open + 1, close, out, kfOut);      // 조건 블록 안의 규칙도 편집 대상(조건은 평가하지 않는다)
             } else if (kfOut != null && selector.startsWith("@keyframes")) {
                 List<Rule> stops = new ArrayList<>();
                 scan(text, open + 1, close, stops, null);

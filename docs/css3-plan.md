@@ -11,7 +11,7 @@
 
 ## 진행 상황 (작업 시 갱신)
 - [~] Phase 0 기반 — 완료: `\s` 버그, 특이도 재설계(1000진 패킹), 시트 `!important` > inline > 시트, 괄호 인식 선택자 목록 분리(`Selector.splitList`, StyleText 반영), 값 처리기 `style/CssMath`. 남음: 프로퍼티 레지스트리, 알 수 없는 프로퍼티 경고
-- [~] Phase 1 선택자·캐스케이드 — 완료: `+ ~` 결합자, `:not/:is/:where`, `:nth-child/-last-child/-of-type/-last-of-type`, `:only-child/:first-of-type/:last-of-type/:only-of-type/:empty/:checked`, `[attr|=v]`·`i` 플래그, `inherit/initial/unset`. 남음: `@media`(`StyleResolver.setViewport` 준비됨), `@import`, `@supports`, `:focus`(상태 오버레이 배선 필요), `::before/::after`, 오버레이를 마지막 compound 외에도 허용
+- [~] Phase 1 선택자·캐스케이드 — 완료: `+ ~` 결합자, `:not/:is/:where`, `:nth-child/-last-child/-of-type/-last-of-type`, `:only-child/:first-of-type/:last-of-type/:only-of-type/:empty/:checked`, `[attr|=v]`·`i` 플래그, `inherit/initial/unset`. `@media`(width/height/aspect-ratio/orientation, min-/max-, 범위 문법, not/and/쉼표, 중첩), `@supports`(prop/selector()/not/and/or), `@import`(미디어 조건, 순환 방지, 가져온 시트가 앞 순서), 에디터 스캔이 조건 블록 안 규칙도 인식. 남음: `:focus`(상태 오버레이 배선 필요), `::before/::after`, 오버레이를 마지막 compound 외에도 허용
 - [~] Phase 2 값·단위·색 — 완료: `#RGB #RGBA #RRGGBB #RRGGBBAA`(CSS 순서로 전면 마이그레이션, 데모·테스트·문서 포함), `rgb/rgba/hsl/hsla/hwb`, CSS 색 이름 148개 + `mc-*` 팔레트, `currentColor`, 단위 `em rem pt pc in cm mm q vw vh vmin vmax`, `calc/min/max/clamp`(퍼센트 없는 식), 숏핸드 `border`, `border-width`, `margin-*`, `padding-*`. 남음: `%` 가 섞인 calc(레이아웃 단계 평가), `font`/`transition`/`background` 숏핸드
 - [ ] Phase 3 박스 모델·레이아웃
 - [ ] Phase 4 렌더링

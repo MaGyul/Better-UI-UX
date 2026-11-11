@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.core.doc;
 
 import dev.magyul.betteruiux.api.TextMetrics;
+import dev.magyul.betteruiux.core.style.MediaQuery;
 import dev.magyul.betteruiux.core.style.Stylesheet;
 import dev.magyul.betteruiux.core.xml.UiNode;
 import dev.magyul.betteruiux.core.xml.UiParseException;
@@ -44,15 +45,34 @@ public final class UiDocumentLoader {
         return new UiDocument(root, text, sheets, warnings);
     }
 
+    private static final int MAX_IMPORT_DEPTH = 8;
+
+    /** 시트를 파싱해 추가한다. {@code @import} 한 시트는 가져오는 시트보다 앞(= 낮은 우선순위)에 끼워 넣는다. */
+    private static void addSheet(String css, List<MediaQuery> media, Path userDir, List<Stylesheet> sheets,
+                                 List<String> warnings, int depth, java.util.Set<String> chain) throws IOException {
+        Stylesheet sheet = Stylesheet.parse(css, media);
+        for (Stylesheet.Import imp : sheet.imports()) {
+            if (depth >= MAX_IMPORT_DEPTH || !chain.add(imp.href())) {
+                warnings.add("스타일: @import '" + imp.href() + "' 가 순환하거나 너무 깊습니다");
+                continue;
+            }
+            Optional<String> text = UiSources.loadFile(userDir, imp.href());
+            if (text.isPresent()) addSheet(text.get(), imp.media(), userDir, sheets, warnings, depth + 1, chain);
+            else warnings.add("스타일: @import '" + imp.href() + "' 를 찾을 수 없습니다");
+            chain.remove(imp.href());
+        }
+        sheets.add(sheet);
+    }
+
     private static void collect(UiNode n, Path userDir, List<Stylesheet> sheets, List<String> warnings) throws IOException {
         switch (n.tag()) {
-            case "style" -> sheets.add(Stylesheet.parse(n.text()));
+            case "style" -> addSheet(n.text(), java.util.List.of(), userDir, sheets, warnings, 0, new java.util.HashSet<>());
             case "link" -> {
                 String rel = n.attr("rel");
                 String href = n.attr("href");
                 if ((rel == null || rel.equals("style") || rel.equals("stylesheet")) && href != null) {
                     Optional<String> css = UiSources.loadFile(userDir, href);
-                    if (css.isPresent()) sheets.add(Stylesheet.parse(css.get()));
+                    if (css.isPresent()) addSheet(css.get(), java.util.List.of(), userDir, sheets, warnings, 0, new java.util.HashSet<>());
                     else warnings.add("스타일시트 '" + href + "' 를 찾을 수 없습니다");
                 }
             }

@@ -14,23 +14,69 @@ import java.util.Map;
 public final class Stylesheet {
     public record Declaration(String prop, String value, boolean important) {}
 
-    public record Rule(Selector selector, List<Declaration> declarations) {}
+    /** {@code media}: 이 규칙을 감싼 {@code @media}(및 {@code @import ... 미디어}) 조건들. 모두 참일 때만 적용. */
+    public record Rule(Selector selector, List<Declaration> declarations, List<MediaQuery> media) {
+        public Rule(Selector selector, List<Declaration> declarations) { this(selector, declarations, List.of()); }
+
+        public boolean appliesTo(int viewW, int viewH) {
+            for (MediaQuery q : media) if (!q.matches(viewW, viewH)) return false;
+            return true;
+        }
+    }
+
+    /** {@code @import "x.uicss" [미디어]}: 로더가 파일을 찾아 이 시트보다 앞에 끼워 넣는다. */
+    public record Import(String href, List<MediaQuery> media) {}
+
+    private static final int MAX_NESTING = 8;
+
+    /** {@code @supports} 가 "지원함"으로 보는 프로퍼티(엔진이 읽는 것들 + {@code --변수}). */
+    private static final java.util.Set<String> KNOWN_PROPS = java.util.Set.of(
+            "width", "height", "min-width", "max-width", "min-height", "max-height", "margin", "padding", "gap",
+            "justify", "align", "align-self", "grow", "anchor", "x", "y", "visible", "display", "background",
+            "background-color", "border", "border-width", "border-color", "color", "shadow", "text-align", "opacity",
+            "overflow", "cursor", "translate-x", "translate-y", "scale", "rotate", "src", "uv", "tex", "tint",
+            "transition", "animation", "columns", "backdrop");
 
     private final List<Rule> rules = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
     private final Map<String, Keyframes> keyframes = new LinkedHashMap<>();
+    private final List<Import> imports = new ArrayList<>();
 
     public List<Rule> rules() { return rules; }
+
+    public List<Import> imports() { return imports; }
 
     public Map<String, Keyframes> keyframes() { return keyframes; }
 
     public List<String> warnings() { return warnings; }
 
-    public static Stylesheet parse(String css) {
+    public static Stylesheet parse(String css) { return parse(css, List.of()); }
+
+    /** @param baseMedia 이 시트 전체에 걸리는 조건(예: {@code @import "a.uicss" (min-width: 300px)}) */
+    public static Stylesheet parse(String css, List<MediaQuery> baseMedia) {
         Stylesheet sheet = new Stylesheet();
-        String s = stripComments(css == null ? "" : css);
+        sheet.parseBlock(stripComments(css == null ? "" : css), baseMedia, 0);
+        return sheet;
+    }
+
+    private void parseBlock(String s, List<MediaQuery> media, int depth) {
+        Stylesheet sheet = this;
         int i = 0, n = s.length();
         while (i < n) {
+            while (i < n && Character.isWhitespace(s.charAt(i))) i++;
+            if (i >= n) break;
+            if (s.charAt(i) == '@') {                       // 블록이 없는 문장: @import / @charset / @namespace
+                String word = s.substring(i, Math.min(n, i + 10)).toLowerCase();
+                if (word.startsWith("@import") || word.startsWith("@charset") || word.startsWith("@namespace")) {
+                    int semi = s.indexOf(';', i);
+                    int brace = s.indexOf('{', i);
+                    if (semi >= 0 && (brace < 0 || semi < brace)) {
+                        sheet.statement(s.substring(i, semi).trim(), media);
+                        i = semi + 1;
+                        continue;
+                    }
+                }
+            }
             int open = s.indexOf('{', i);
             if (open < 0) {
                 if (!s.substring(i).isBlank()) sheet.warnings.add("스타일: 닫히지 않은 규칙 '" + s.substring(i).trim() + "'");
@@ -48,20 +94,132 @@ public final class Stylesheet {
                 sheet.parseKeyframes(selectorText.substring("@keyframes".length()).trim(), body);
                 continue;
             }
+            if (selectorText.toLowerCase().startsWith("@media")) {
+                String cond = selectorText.substring("@media".length());
+                try {
+                    List<MediaQuery> inner = new ArrayList<>(media);
+                    inner.add(MediaQuery.parse(cond));
+                    if (depth >= MAX_NESTING) sheet.warnings.add("스타일: @media 가 너무 깊이 중첩됐습니다");
+                    else sheet.parseBlock(body, inner, depth + 1);
+                } catch (IllegalArgumentException e) {
+                    sheet.warnings.add("스타일: @media " + e.getMessage());
+                }
+                continue;
+            }
+            if (selectorText.toLowerCase().startsWith("@supports")) {
+                if (depth >= MAX_NESTING) sheet.warnings.add("스타일: @supports 가 너무 깊이 중첩됐습니다");
+                else if (supports(selectorText.substring("@supports".length()))) sheet.parseBlock(body, media, depth + 1);
+                continue;
+            }
             if (selectorText.startsWith("@")) {
-                sheet.warnings.add("스타일: '" + selectorText.split("\\s+")[0] + "' 은(는) 지원하지 않아 무시합니다");
+                sheet.warnings.add("스타일: '" + selectorText.split("\s+")[0] + "' 은(는) 지원하지 않아 무시합니다");
                 continue;
             }
             List<Declaration> decls = parseDeclarations(body);
             for (String single : Selector.splitList(selectorText)) {
                 try {
-                    sheet.rules.add(new Rule(Selector.parse(single.trim()), decls));
+                    sheet.rules.add(new Rule(Selector.parse(single.trim()), decls, media));
                 } catch (IllegalArgumentException e) {
                     sheet.warnings.add("스타일: " + e.getMessage());
                 }
             }
         }
-        return sheet;
+    }
+
+    /** {@code @import "a.uicss" [미디어];} 등 블록 없는 문장. */
+    private void statement(String text, List<MediaQuery> media) {
+        String low = text.toLowerCase();
+        if (low.startsWith("@charset") || low.startsWith("@namespace")) return;
+        String rest = text.substring("@import".length()).trim();
+        String href;
+        int end;
+        if (rest.toLowerCase().startsWith("url(")) {
+            int close = rest.indexOf(')');
+            if (close < 0) { warnings.add("스타일: 잘못된 @import: " + text); return; }
+            href = unquote(rest.substring(4, close).trim());
+            end = close + 1;
+        } else if (rest.startsWith("\"") || rest.startsWith("'")) {
+            int close = rest.indexOf(rest.charAt(0), 1);
+            if (close < 0) { warnings.add("스타일: 잘못된 @import: " + text); return; }
+            href = rest.substring(1, close);
+            end = close + 1;
+        } else {
+            warnings.add("스타일: 잘못된 @import: " + text);
+            return;
+        }
+        List<MediaQuery> cond = new ArrayList<>(media);
+        String cq = rest.substring(end).trim();
+        if (!cq.isEmpty()) {
+            try {
+                cond.add(MediaQuery.parse(cq));
+            } catch (IllegalArgumentException e) {
+                warnings.add("스타일: @import " + e.getMessage());
+                return;
+            }
+        }
+        imports.add(new Import(href, cond));
+    }
+
+    private static String unquote(String v) {
+        if (v.length() >= 2 && (v.startsWith("\"") && v.endsWith("\"") || v.startsWith("'") && v.endsWith("'"))) {
+            return v.substring(1, v.length() - 1);
+        }
+        return v;
+    }
+
+    // ---- @supports ----
+
+    /** {@code (prop: value)}, {@code selector(S)}, {@code not}, {@code and}, {@code or} 를 지원한다. */
+    static boolean supports(String condition) {
+        List<String> t = CssMath.tokens(condition.trim());
+        if (t.isEmpty()) return false;
+        int[] pos = {0};
+        boolean result = supportsTerm(t, pos);
+        while (pos[0] < t.size()) {
+            String op = t.get(pos[0]++).toLowerCase();
+            if (pos[0] >= t.size()) return false;
+            boolean next = supportsTerm(t, pos);
+            if (op.equals("and")) result = result && next;
+            else if (op.equals("or")) result = result || next;
+            else return false;
+        }
+        return result;
+    }
+
+    private static boolean supportsTerm(List<String> t, int[] pos) {
+        String tok = t.get(pos[0]++);
+        if (tok.equalsIgnoreCase("not")) return pos[0] < t.size() && !supportsTerm(t, pos);
+        String low = tok.toLowerCase();
+        if (low.startsWith("selector(") && tok.endsWith(")")) {
+            try {
+                Selector.parse(tok.substring(9, tok.length() - 1));
+                return true;
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
+        }
+        if (tok.startsWith("(") && tok.endsWith(")")) {
+            String inner = tok.substring(1, tok.length() - 1).trim();
+            int colon = topLevelColon(inner);
+            if (colon > 0) {
+                String prop = inner.substring(0, colon).trim().toLowerCase();
+                String value = inner.substring(colon + 1).trim();
+                return !value.isEmpty() && (KNOWN_PROPS.contains(prop) || prop.startsWith("--"));
+            }
+            return supports(inner);
+        }
+        return false;
+    }
+
+    private static int topLevelColon(String s) {
+        int depth = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (c == ':' && depth == 0) return i;
+        }
+        return -1;
     }
 
     /** {@code from {..} 50% {..} to {..}} 본문을 정지점 목록으로 읽는다. */
