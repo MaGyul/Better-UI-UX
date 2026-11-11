@@ -110,4 +110,5 @@ M4 완료: HUD(`<hud>` + 읽기 전용 데이터 소스), 외부 이미지(png/j
 - **외부 스타일시트 편집**: `<link href="x.uicss"/>` 로 불러온 파일의 규칙도 속성 패널 "스타일시트: 파일" 구역에서 같은 방식(값 고치기·비우면 삭제·`+ 추가`·`+ 새 규칙`)으로 고친다. 파일에 바로 저장되며(기본 제공 파일은 사용자 폴더에 복사본으로), Ctrl+Z/Y 는 문서 편집과 시간 순서를 맞춰 파일 편집도 되돌린다.
 - **인게임 GameTest**: `./gradlew :fabric:runClientGameTest` 가 실제 창/월드/마우스/키보드로 외부 스타일시트 편집(+Ctrl+Z/Y), File 메뉴 전환, 크기 미리보기, 자동 저장 복구 대화상자를 확인하고 스크린샷을 `fabric/build/run/clientGameTest/screenshots` 에 남긴다(`fabric/src/gametest`). 26.x 는 SDL 입력이라 키/마우스 번호는 `InputConstants` 상수를 쓴다.
 - 정리: `FieldText`(칸 안 글자 편집 상태)와 `LayoutQueries`(상자 트리 조회 함수)를 `EditorController` 에서 분리했다(3,257 → 3,149줄, 동작 변화 없음).
-- 남은 것: `EditorController` 추가 분리(트리/메뉴/툴바 그리기), 나머지 태그, `@keyframes` 편집.
+- **팔레트 "기타" 탭**: `video`(영상)와 `stack`(겹침)을 끌어다 놓을 수 있다. 팔레트에 없던 내장 태그는 이제 없다(나머지는 `tab`(탭 안에서 추가)·`screen`/`hud`(루트)·include/template 계열).
+- 남은 것: `EditorController` 추가 분리(트리/메뉴/툴바 그리기), `@keyframes` 편집.

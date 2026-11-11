@@ -51,15 +51,15 @@ public final class EditorController {
     static final int TAB_W = 10, TAB_H = 26;
     static final List<String> PALETTE_TAGS = List.of("label", "button", "panel", "column", "row", "image", "spacer", "separator", "item",
             "checkbox", "radio", "slider", "textfield", "select", "progress",
-            "grid", "scroll", "tabs", "dialog");
+            "grid", "scroll", "tabs", "dialog", "video", "stack");
     /** 팔레트 탭: {이름, 시작 번호, 끝 번호(미포함)}. */
-    static final Object[][] PALETTE_TABS = {{"기본", 0, 9}, {"입력", 9, 15}, {"구조", 15, 19}};
+    static final Object[][] PALETTE_TABS = {{"기본", 0, 9}, {"입력", 9, 15}, {"구조", 15, 19}, {"기타", 19, 21}};
     static final Map<String, String> PALETTE_LABELS = Map.ofEntries(Map.entry("label", "라벨"), Map.entry("button", "버튼"),
             Map.entry("panel", "패널"), Map.entry("column", "세로"), Map.entry("row", "가로"), Map.entry("image", "이미지"),
             Map.entry("spacer", "여백"), Map.entry("separator", "구분선"), Map.entry("item", "아이템"), Map.entry("checkbox", "체크"),
             Map.entry("radio", "라디오"), Map.entry("slider", "슬라이더"), Map.entry("textfield", "입력칸"), Map.entry("select", "선택"),
             Map.entry("progress", "진행바"), Map.entry("grid", "격자"), Map.entry("scroll", "스크롤"), Map.entry("tabs", "탭"),
-            Map.entry("dialog", "대화상자"));
+            Map.entry("dialog", "대화상자"), Map.entry("video", "영상"), Map.entry("stack", "겹침"));
     private static final int SUGGEST_MAX = 6;
     private static final int HANDLE_R = 3, MIN_SIZE = 4, SNAP_THRESHOLD = 4, DRAG_START = 3, GRID = 8, WHEEL_STEP = 16;
     /** 기준점 자동 추론 임계값: 끌어 놓았을 때 / 팔레트에서 놓았을 때(가운데는 놓을 때 추론하지 않는다). */
@@ -2415,7 +2415,7 @@ public final class EditorController {
             case "screen", "panel", "row", "column", "stack", "fragment" -> 0xFFD08A2E;
             case "label" -> 0xFF4C8DDB;
             case "button" -> 0xFF8A5CD6;
-            case "image" -> 0xFF45A86B;
+            case "image", "video" -> 0xFF45A86B;
             case "spacer", "separator" -> 0xFF7A7F8F;
             case "item" -> 0xFF45A86B;
             case "checkbox", "radio", "slider", "textfield", "select", "progress" -> 0xFFC2547A;
