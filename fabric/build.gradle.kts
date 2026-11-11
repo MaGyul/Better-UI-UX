@@ -61,7 +61,9 @@ fabricApi {
 // 실제 권한 플러그인 확인용: fabric/build/gametest-mods 에 둔 모드 jar(예: LuckPerms)는 GameTest 실행 폴더의 mods 에만 복사한다
 // (개발용 run 폴더와 배포물에는 들어가지 않는다). 폴더가 비어 있으면 아무것도 하지 않는다.
 tasks.matching { it.name == "runClientGameTest" }.configureEach {
-    (this as JavaExec).args("--width", "1920", "--height", "1080")   // 전체화면 모니터 크기: GUI 배율 3·4 까지 확인한다
+    (this as JavaExec).args("--width", "1920", "--height", "1080")
+    // -PgfxBackend=vulkan|opengl : 그래픽 백엔드를 실행 인자로 고정해서 같은 GameTest(픽셀 검사 포함)를 돌린다(없으면 게임 기본값).
+    providers.gradleProperty("gfxBackend").orNull?.let { (this as JavaExec).args("--graphicsBackend", it) }   // 전체화면 모니터 크기: GUI 배율 3·4 까지 확인한다
     doFirst {
         copy {
             from(layout.buildDirectory.dir("gametest-mods"))

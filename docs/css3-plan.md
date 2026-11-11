@@ -100,11 +100,13 @@
 
 - `Css3VisualClientGameTest`: 스크린샷의 **실제 픽셀**로 확인(창 1920x1080 — `fabric/build.gradle.kts` 의 `--width/--height` — 에서 GUI 배율 1~4) — 둥근 모서리 끝 픽셀은 비고 위쪽 변·가운데는 차며, 그라디언트 위는 빨강/아래는 파랑 쪽, 배율이 달라도 같은 모양. View 메뉴의 상태 미리보기(hover/active/focus/없음)를 마우스로 눌러 규칙 색이 바뀌는 것까지.
 
+- **Vulkan / OpenGL**: `-PgfxBackend=vulkan|opengl` 가 게임의 `--graphicsBackend` 인자로 백엔드를 고정한다(로그의 "Using graphics backend" 로 확인). 같은 GameTest(픽셀 검사 포함)가 두 백엔드에서 모두 통과했고(NVIDIA: Vulkan 1.4 / OpenGL 3.3), 렌더링 비용 수치도 같았다.
+
 **NeoForge** — `./gradlew :neoforge:runSmokeClient`: NeoForge 에는 클라이언트 GameTest 가 없어 `NeoSmoke`(`-Dbetteruiux.smoke=true` 일 때만 동작)가 타이틀 화면에서 CSS3 데모를 열어
-실제 렌더링 경로로 그리고, 그리기 명령(합성된 사각형, `::before`, flex-wrap, 경고 없음)을 확인한 뒤 `[SMOKE] PASS/FAIL` 을 찍고 종료한다.
+실제 렌더링 경로로 그리고, 그리기 명령(합성된 사각형, `::before`, flex-wrap, 경고 없음)과 F2 스크린샷 파일의 실제 픽셀(둥근 모서리, 그라디언트)을 확인한 뒤 `[SMOKE] PASS/FAIL` 을 찍고 종료한다.
 
 **성능 측정에서 나온 것** (240칸 격자, 칸마다 장식): 명령 수가 곧 비용이다(명령 1,200개까지는 프레임 영향 없음, 8,400개에서 9fps).
 그래서 둥근 그라디언트는 가운데 구간을 `fillGradient` 한 번으로 그리고(키가 커도 명령 수 불변), 번진 그림자는 층 수를 줄이고 층의 모서리를 거칠게 해서 상자당 명령을 56 → 약 20 으로 줄였다(`DrawCostTest` 가 지킨다).
 남은 큰 비용은 둥근 테두리(상자당 ~17): 모서리 행마다 사각형이 필요해서다. 한 화면에 장식 상자를 수백 개 쓰지 않는 것이 좋다.
 
-아직 확인하지 못한 것: Vulkan/OpenGL 구분 비교, NeoForge 의 스크린샷 픽셀 검사.
+아직 확인하지 못한 것: 다른 GPU/드라이버(AMD·Intel), 외부 이미지·영상 배경의 둥근 모서리.
