@@ -100,7 +100,8 @@ public final class StyleResolver {
     // ---- 값 후처리: 숏핸드 마무리, inherit/initial/unset, currentColor, 단위/calc ----
 
     private static final Set<String> LENGTH_PROPS = Set.of("width", "height", "min-width", "max-width", "min-height",
-            "max-height", "margin", "padding", "gap", "x", "y", "border", "translate-x", "translate-y");
+            "max-height", "margin", "padding", "gap", "x", "y", "border", "translate-x", "translate-y",
+            "row-gap", "column-gap", "top", "left", "right", "bottom", "flex-basis");
     private static final Set<String> COLOR_PROPS = Set.of("background", "border-color", "tint", "bar-color",
             "fill-color", "check-color", "block-tint", "hover-background", "pressed-background", "disabled-background");
 

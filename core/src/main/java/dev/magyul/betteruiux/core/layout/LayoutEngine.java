@@ -285,7 +285,7 @@ public final class LayoutEngine {
             case "image", "video": return naturalSize(b, 0);
             case "item": return Math.max(1, b.style.integer("size", 16));
             case "spacer", "separator": return 0;
-            case "grid": return gridMetrics(b)[0][0];
+            case "grid": return gridPlan(b, -1, -1).totalW();
             default: break;
         }
         List<LayoutBox> kids = visibleChildren(b);
@@ -307,7 +307,7 @@ public final class LayoutEngine {
             case "image", "video": return naturalSize(b, 1);
             case "item": return Math.max(1, b.style.integer("size", 16));
             case "spacer", "separator": return 0;
-            case "grid": return gridMetrics(b)[1][0];
+            case "grid": return gridPlan(b, -1, -1).totalH();
             default: break;
         }
         List<LayoutBox> kids = visibleChildren(b);
@@ -344,7 +344,7 @@ public final class LayoutEngine {
             return;
         }
         switch (b.tag()) {
-            case "grid" -> grid(b, cx, cy);
+            case "grid" -> grid(b, cx, cy, cw, ch);
             case "scroll" -> {
                 int content = contentH(b), bar = 0, offset = 0;
                 if (b.widget instanceof BuiltinWidgets.Scroll sw) {
@@ -395,51 +395,237 @@ public final class LayoutEngine {
 
     // ---- grid ----
 
-    /** {{열 너비들 합(0번)...}, {행 높이들 합(0번)...}} 대신 [0]=열 너비 배열, [1]=행 높이 배열의 첫 칸에 전체 크기를 담아 돌려준다. */
-    private int[][] gridMetrics(LayoutBox b) {
-        int cols = Math.max(1, b.style.integer("columns", 2)), gap = b.style.integer("gap", 0);
-        List<LayoutBox> items = visibleChildren(b);
-        int usedCols = Math.min(cols, Math.max(1, items.size())), rows = (items.size() + cols - 1) / cols;
-        int[] colW = new int[usedCols], rowH = new int[Math.max(rows, 0)];
-        for (int i = 0; i < items.size(); i++) {
-            LayoutBox c = items.get(i);
-            colW[i % cols] = Math.max(colW[i % cols], outerW(c));
-            rowH[i / cols] = Math.max(rowH[i / cols], outerH(c));
-        }
-        int totalW = 0, totalH = 0;
-        for (int w : colW) totalW += w;
-        for (int h : rowH) totalH += h;
-        if (items.size() > 0) {
-            totalW += gap * (usedCols - 1);
-            totalH += gap * (rows - 1);
-        }
-        return new int[][] {Arrays_prepend(totalW, colW), Arrays_prepend(totalH, rowH)};
-    }
+    /** 트랙 하나: kind 는 'p'(px) 'f'(fr) 'a'(auto) '%'(퍼센트). */
+    record Track(char kind, float v) {}
 
-    private static int[] Arrays_prepend(int first, int[] rest) {
-        int[] out = new int[rest.length + 1];
-        out[0] = first;
-        System.arraycopy(rest, 0, out, 1, rest.length);
+    private record GridPlan(int[] colW, int[] rowH, int[] col, int[] row, int[] cspan, int[] rspan, int totalW, int totalH) {}
+
+    /** {@code 100px 1fr auto 20% repeat(3, 1fr) minmax(10px, 1fr)} → 트랙 목록(해석 불가면 빈 목록). */
+    static List<Track> parseTracks(String s) {
+        List<Track> out = new ArrayList<>();
+        if (s == null || s.isBlank()) return out;
+        for (String tok : dev.magyul.betteruiux.core.style.CssMath.tokens(s.trim())) {
+            String t = tok.toLowerCase();
+            try {
+                if (t.startsWith("repeat(") && t.endsWith(")")) {
+                    List<String> parts = dev.magyul.betteruiux.core.style.Selector.splitList(t.substring(7, t.length() - 1));
+                    if (parts.size() != 2) return new ArrayList<>();
+                    int count = Math.min(64, Integer.parseInt(parts.get(0).trim()));
+                    List<Track> inner = parseTracks(parts.get(1));
+                    if (inner.isEmpty()) return new ArrayList<>();
+                    for (int i = 0; i < count; i++) out.addAll(inner);
+                } else if (t.startsWith("minmax(") && t.endsWith(")")) {
+                    List<String> parts = dev.magyul.betteruiux.core.style.Selector.splitList(t.substring(7, t.length() - 1));
+                    if (parts.size() != 2) return new ArrayList<>();
+                    List<Track> max = parseTracks(parts.get(1));
+                    if (max.size() != 1) return new ArrayList<>();
+                    out.add(max.get(0));
+                } else if (t.equals("auto") || t.equals("min-content") || t.equals("max-content") || t.startsWith("fit-content(")) {
+                    out.add(new Track('a', 0));
+                } else if (t.endsWith("fr")) {
+                    out.add(new Track('f', Float.parseFloat(t.substring(0, t.length() - 2))));
+                } else if (t.endsWith("%")) {
+                    out.add(new Track('%', Float.parseFloat(t.substring(0, t.length() - 1)) / 100f));
+                } else {
+                    out.add(new Track('p', Float.parseFloat(t.endsWith("px") ? t.substring(0, t.length() - 2) : t)));
+                }
+            } catch (NumberFormatException e) {
+                return new ArrayList<>();
+            }
+        }
         return out;
     }
 
-    private void grid(LayoutBox b, int cx, int cy) {
-        int cols = Math.max(1, b.style.integer("columns", 2)), gap = b.style.integer("gap", 0);
-        List<LayoutBox> items = visibleChildren(b);
-        int[][] m = gridMetrics(b);
-        int y = cy;
-        for (int r = 0; r * cols < items.size(); r++) {
-            int x = cx, rowH = m[1][r + 1];
-            for (int k = 0; k < cols && r * cols + k < items.size(); k++) {
-                LayoutBox c = items.get(r * cols + k);
-                Insets mg = margin(c);
-                int colW = m[0][k + 1];
-                int w = clamp(c, true, resolve(c.style.size("width", Size.AUTO), colW - mg.horizontal(), prefW(c), adj(c, true)), colW - mg.horizontal());
-                int h = clamp(c, false, resolve(c.style.size("height", Size.AUTO), rowH - mg.vertical(), prefH(c), adj(c, false)), rowH - mg.vertical());
-                place(c, x + mg.left(), y + mg.top(), w, h);
-                x += colW + gap;
+    /** {@code span 2} / {@code 3} / {@code 2 / span 2} / {@code 1 / 3} → {시작 줄(0 = 자동), 칸 수}. */
+    static int[] gridLine(String v) {
+        if (v == null || v.isBlank()) return new int[] {0, 1};
+        String[] p = v.toLowerCase().split("/");
+        try {
+            String a = p[0].trim();
+            if (p.length == 1) {
+                if (a.startsWith("span")) return new int[] {0, Math.max(1, Integer.parseInt(a.substring(4).trim()))};
+                return new int[] {Math.max(1, Integer.parseInt(a)), 1};
             }
-            y += rowH + gap;
+            int start = a.startsWith("span") || a.equals("auto") ? 0 : Math.max(1, Integer.parseInt(a));
+            String z = p[1].trim();
+            if (z.startsWith("span")) return new int[] {start, Math.max(1, Integer.parseInt(z.substring(4).trim()))};
+            if (start == 0) return new int[] {0, 1};
+            return new int[] {start, Math.max(1, Integer.parseInt(z) - start)};
+        } catch (NumberFormatException e) {
+            return new int[] {0, 1};
+        }
+    }
+
+    private static boolean gridFree(List<boolean[]> occ, int r, int c, int rs, int cs) {
+        for (int i = r; i < r + rs; i++) {
+            if (i >= occ.size()) continue;
+            for (int j = c; j < c + cs; j++) if (occ.get(i)[j]) return false;
+        }
+        return true;
+    }
+
+    private static void gridMark(List<boolean[]> occ, int nc, int r, int c, int rs, int cs) {
+        while (occ.size() < r + rs) occ.add(new boolean[nc]);
+        for (int i = r; i < r + rs; i++) for (int j = c; j < c + cs; j++) occ.get(i)[j] = true;
+    }
+
+    /** 칸 배치와 트랙 크기를 계산한다. avail 이 음수면 크기를 모르는 것(내용 크기 측정). */
+    private GridPlan gridPlan(LayoutBox b, int availW, int availH) {
+        List<LayoutBox> items = visibleChildren(b);
+        int gapAll = b.style.integer("gap", b.style.integer("grid-gap", 0));
+        int colGap = b.style.integer("column-gap", gapAll), rowGap = b.style.integer("row-gap", gapAll);
+        List<Track> cols = parseTracks(b.style.get("grid-template-columns"));
+        if (cols.isEmpty()) {
+            cols = new ArrayList<>();
+            for (int i = Math.max(1, b.style.integer("columns", 2)); i > 0; i--) cols.add(new Track('a', 0));
+        }
+        List<Track> rowTracks = parseTracks(b.style.get("grid-template-rows"));
+        int nc = cols.size(), n = items.size();
+        int[] col = new int[n], row = new int[n], cs = new int[n], rs = new int[n];
+        List<boolean[]> occ = new ArrayList<>();
+        int curR = 0, curC = 0;
+        for (int i = 0; i < n; i++) {
+            LayoutBox c = items.get(i);
+            int[] gc = gridLine(c.style.get("grid-column")), gr = gridLine(c.style.get("grid-row"));
+            cs[i] = Math.min(nc, gc[1]);
+            rs[i] = Math.max(1, gr[1]);
+            int r, cc;
+            if (gc[0] > 0 && gr[0] > 0) {
+                r = gr[0] - 1;
+                cc = Math.min(gc[0] - 1, nc - cs[i]);
+            } else if (gc[0] > 0) {
+                cc = Math.min(gc[0] - 1, nc - cs[i]);
+                r = 0;
+                while (!gridFree(occ, r, cc, rs[i], cs[i])) r++;
+            } else if (gr[0] > 0) {
+                r = gr[0] - 1;
+                cc = 0;
+                while (cc + cs[i] <= nc && !gridFree(occ, r, cc, rs[i], cs[i])) cc++;
+                if (cc + cs[i] > nc) cc = 0;
+            } else {
+                r = curR;
+                cc = curC;
+                for (;;) {
+                    if (cc + cs[i] > nc) { r++; cc = 0; continue; }
+                    if (gridFree(occ, r, cc, rs[i], cs[i])) break;
+                    cc++;
+                }
+                curR = r;
+                curC = cc + cs[i];
+                if (curC >= nc) { curR++; curC = 0; }
+            }
+            col[i] = cc;
+            row[i] = r;
+            gridMark(occ, nc, r, cc, rs[i], cs[i]);
+        }
+        int nr = Math.max(occ.size(), rowTracks.size());
+        List<Track> rowsT = new ArrayList<>(rowTracks);
+        while (rowsT.size() < nr) rowsT.add(new Track('a', 0));
+
+        int[] colW = sizeTracks(cols, colGap, availW, items, col, cs, true);
+        int[] rowH = sizeTracks(rowsT, rowGap, availH, items, row, rs, false);
+        int totalW = 0, totalH = 0;
+        for (int w : colW) totalW += w;
+        for (int h : rowH) totalH += h;
+        if (n > 0) {
+            totalW += colGap * (nc - 1);
+            totalH += rowGap * (nr - 1);
+        } else {
+            totalW = 0;
+            totalH = 0;
+        }
+        return new GridPlan(colW, rowH, col, row, cs, rs, totalW, totalH);
+    }
+
+    private int[] sizeTracks(List<Track> tracks, int gap, int avail, List<LayoutBox> items, int[] start, int[] span, boolean horiz) {
+        int nt = tracks.size();
+        int[] content = new int[nt];
+        for (int pass = 0; pass < 2; pass++) {               // 0: 한 칸짜리, 1: 여러 칸에 걸친 것
+            for (int i = 0; i < items.size(); i++) {
+                if ((pass == 0) != (span[i] == 1)) continue;
+                LayoutBox c = items.get(i);
+                int need = horiz ? outerW(c) : outerH(c);
+                int s = start[i], e = Math.min(nt, s + span[i]);
+                if (pass == 0) {
+                    content[s] = Math.max(content[s], need);
+                } else {
+                    int have = gap * (e - s - 1);
+                    for (int k = s; k < e; k++) have += content[k];
+                    if (need > have) {
+                        int share = (need - have + (e - s) - 1) / (e - s);
+                        for (int k = s; k < e; k++) content[k] += share;
+                    }
+                }
+            }
+        }
+        int[] size = new int[nt];
+        float totalFr = 0;
+        int fixed = gap * Math.max(0, nt - 1);
+        for (int k = 0; k < nt; k++) {
+            Track t = tracks.get(k);
+            switch (t.kind()) {
+                case 'p' -> size[k] = Math.round(t.v());
+                case '%' -> size[k] = avail >= 0 ? Math.round(t.v() * avail) : content[k];
+                case 'f' -> {
+                    if (avail >= 0) totalFr += Math.max(0.0001f, t.v());
+                    else size[k] = content[k];
+                }
+                default -> size[k] = content[k];
+            }
+            if (t.kind() != 'f' || avail < 0) fixed += size[k];
+        }
+        if (totalFr > 0) {
+            int remaining = Math.max(0, avail - fixed), given = 0, last = -1;
+            for (int k = 0; k < nt; k++) if (tracks.get(k).kind() == 'f') last = k;
+            for (int k = 0; k < nt; k++) {
+                if (tracks.get(k).kind() != 'f') continue;
+                float fr = Math.max(0.0001f, tracks.get(k).v());
+                size[k] = k == last ? remaining - given : Math.round(remaining * fr / totalFr);
+                given += size[k];
+            }
+        }
+        return size;
+    }
+
+    private void grid(LayoutBox b, int cx, int cy, int cw, int ch) {
+        List<LayoutBox> items = visibleChildren(b);
+        if (items.isEmpty()) return;
+        int gapAll = b.style.integer("gap", b.style.integer("grid-gap", 0));
+        int colGap = b.style.integer("column-gap", gapAll), rowGap = b.style.integer("row-gap", gapAll);
+        GridPlan p = gridPlan(b, cw, ch);
+        int[] colX = new int[p.colW().length], rowY = new int[p.rowH().length];
+        int x = cx;
+        for (int k = 0; k < colX.length; k++) {
+            colX[k] = x;
+            x += p.colW()[k] + colGap;
+        }
+        int y = cy;
+        for (int k = 0; k < rowY.length; k++) {
+            rowY[k] = y;
+            y += p.rowH()[k] + rowGap;
+        }
+        for (int i = 0; i < items.size(); i++) {
+            LayoutBox c = items.get(i);
+            Insets mg = margin(c);
+            int c0 = p.col()[i], c1 = Math.min(colX.length, c0 + p.cspan()[i]);
+            int r0 = p.row()[i], r1 = Math.min(rowY.length, r0 + p.rspan()[i]);
+            int cellW = colX[c1 - 1] + p.colW()[c1 - 1] - colX[c0];
+            int cellH = rowY[r1 - 1] + p.rowH()[r1 - 1] - rowY[r0];
+            int w = clamp(c, true, resolve(c.style.size("width", Size.AUTO), cellW - mg.horizontal(), prefW(c), adj(c, true)), cellW - mg.horizontal());
+            int h = clamp(c, false, resolve(c.style.size("height", Size.AUTO), cellH - mg.vertical(), prefH(c), adj(c, false)), cellH - mg.vertical());
+            String js = norm(c.style.get("justify-self", "start"));
+            String as = norm(c.style.get("align-self", "start"));
+            int px = colX[c0] + mg.left() + switch (js) {
+                case "center" -> (cellW - mg.horizontal() - w) / 2;
+                case "end" -> cellW - mg.horizontal() - w;
+                default -> 0;
+            };
+            int py = rowY[r0] + mg.top() + switch (as) {
+                case "center" -> (cellH - mg.vertical() - h) / 2;
+                case "end" -> cellH - mg.vertical() - h;
+                default -> 0;
+            };
+            place(c, px, py, w, h);
         }
     }
 
