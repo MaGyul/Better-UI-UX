@@ -203,6 +203,12 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                         + "  var w = mcv.createWorld(5, 3, 3);\n  w.fill(0, 0, 0, 4, 0, 2, 'white_concrete');\n"
                         + "  w.setBlock(1, 1, 1, 'chest[facing=south]');\n  w.setBlock(3, 1, 1, 'ender_chest[facing=south]');\n  " + v[1] + "\n}\n");
             }
+            for (String[] v : new String[][] {{"gt_mcv11a", ""}, {"gt_mcv11b", "w.spawnEntity(1.5, 1, 1.5, 'pig');\n  w.spawnEntity(3.5, 1, 2.2, 'cow');\n  w.setBlock(3, 1, 0, 'chest[facing=south]');"}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"240\" height=\"180\"/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(5, 3, 3);\n  w.fill(0, 0, 0, 4, 0, 2, 'white_concrete');\n  " + v[1] + "\n}\n");
+            }
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -423,6 +429,39 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             check(demoRed > 50, "데모의 빨간 블록이 그려져야 한다(" + demoRed + ")");
 
         }
+
+        // 월드에 접속하지 않은 상태(타이틀 화면): 가상 레벨로 엔티티(돼지)와 블록 엔티티(상자)가 그려진다.
+        ctx.waitFor(mc -> mc.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen);
+        ctx.runOnClient(mc -> check(mc.level == null, "타이틀 화면에서는 진짜 월드가 없어야 한다"));
+        ctx.runOnClient(mc -> UiOpener.open("gt_mcv11a", base, false));
+        ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv11a"));
+        ctx.waitTicks(60);
+        BufferedImage titlePlain = read(ctx.takeScreenshot("mc-viewer-title-plain"));
+        ctx.runOnClient(mc -> UiOpener.open("gt_mcv11b", base, false));
+        ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv11b"));
+        ctx.waitTicks(240);                                                 // 가상 레벨의 레지스트리를 백그라운드로 불러오는 시간
+        BufferedImage titleRich = read(ctx.takeScreenshot("mc-viewer-title-entities"));
+        LayoutBox tview = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+        int ts = ctx.computeOnClient(mc -> mc.getWindow().getGuiScale());
+        double tsx = titleRich.getWidth() / (double) ctx.computeOnClient(mc -> mc.getWindow().getWidth());
+        int pinkPlain = pinkCount(titlePlain, tview, ts, tsx), pinkRich = pinkCount(titleRich, tview, ts, tsx);
+        System.out.println("[mc-viewer test] title screen pig pixels plain=" + pinkPlain + " rich=" + pinkRich);
+        check(pinkRich > 60 && pinkRich > pinkPlain * 4 + 20, "타이틀 화면에서도 돼지(분홍색)가 그려져야 한다(없는 장면 " + pinkPlain + ", 있는 장면 " + pinkRich + ")");
+        ctx.runOnClient(mc -> mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));      // 테스트는 타이틀 화면에서 끝나야 한다
+        ctx.waitFor(mc -> mc.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen);
+    }
+
+    /** 스크린샷의 뷰어 영역에서 돼지의 분홍색 픽셀 수(타이틀 화면 배경에는 거의 없는 색). */
+    private static int pinkCount(BufferedImage img, LayoutBox v, int guiScale, double sx) {
+        int n = 0;
+        for (int gy = v.y; gy < v.y + v.h; gy++) {
+            for (int gx = v.x; gx < v.x + v.w; gx++) {
+                int x = (int) Math.min(img.getWidth() - 1, Math.round(gx * guiScale * sx)), y = (int) Math.min(img.getHeight() - 1, Math.round(gy * guiScale * sx));
+                int p = img.getRGB(x, y), r = p >> 16 & 0xFF, g = p >> 8 & 0xFF, b = p & 0xFF;
+                if (r > 170 && r - g > 40 && r - b > 40 && g > 90 && b > 90 && Math.abs(g - b) < 40) n++;
+            }
+        }
+        return n;
     }
 
     /** 스크린샷의 뷰어 영역에서 빨간 픽셀 수(빨간 콘크리트). */

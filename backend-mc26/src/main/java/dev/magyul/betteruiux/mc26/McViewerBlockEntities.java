@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
@@ -19,6 +18,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory;
  * <ul>
  *   <li>블록 엔티티 객체는 렌더 스레드에서 필요할 때 만들어 두고(진짜 월드에는 넣지 않는다), 블록이 바뀌면 다시 만든다.</li>
  *   <li>블록에 준 NBT(표지판 글자 등)는 SNBT 로 읽어 블록 엔티티에 불러 준다. 실패하면 한 번만 경고하고 NBT 없이 그린다.</li>
- *   <li>만들려면 {@link ClientLevel} 이 필요해서, 월드에 접속하지 않은 상태(타이틀 화면)에서는 그리지 않는다(엔티티와 같은 제약).</li>
+ *   <li>만들려면 {@link Level} 이 필요하다: 접속 중이면 진짜 클라이언트 레벨, 타이틀 화면이면 가상 레벨({@link McViewerFakeWorld}).</li>
  *   <li><b>동작</b>: 스크립트가 보낸 블록 이벤트({@code world.blockEvent}, {@code world.setOpen})를 받아 주고, 월드 틱마다 클라이언트 애니메이션을 돌린다.
  *       <b>허용 목록</b>의 블록 엔티티만 이 동작을 한다({@link #supported}). 그 밖의 블록 엔티티의 틱/이벤트는 가상 좌표에서 진짜 월드를
  *       건드릴 수 있어서(이웃 갱신, 충돌 검사 등) 일부러 막아 두었다.</li>
@@ -64,7 +64,7 @@ final class McViewerBlockEntities {
     private final Set<String> warned = new HashSet<>();
     private Map<Long, Held> current;
     private Set<Long> seen;
-    private ClientLevel level;
+    private Level level;
     private CameraRenderState camera;
 
     /** 이벤트/틱 동작을 해 주는 블록 엔티티인지(허용 목록). */
@@ -74,11 +74,10 @@ final class McViewerBlockEntities {
 
     /** 한 프레임의 시작. 월드에 접속하지 않았으면 false(그릴 수 없다). */
     boolean begin(McvWorld w, float yaw, float pitch) {
-        level = Minecraft.getInstance().level;
-        if (level == null) {
-            live.remove(w);                                          // 월드를 떠났다: 옛 레벨에 묶인 것들은 버린다
-            return false;
-        }
+        Level now = McViewerFakeWorld.current();                     // 접속 중이면 진짜 클라이언트 레벨, 아니면 가상 레벨(준비되기 전에는 null)
+        if (now != level) live.clear();                              // 진짜 ↔ 가상 레벨이 바뀌면 옛 레벨에 묶인 것들은 버린다
+        level = now;
+        if (level == null) return false;
         current = live.computeIfAbsent(w, k -> new HashMap<>());
         seen = new HashSet<>();
         camera = McViewerEntities.camera(yaw, pitch);

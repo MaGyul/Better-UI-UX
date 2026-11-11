@@ -95,7 +95,7 @@ world.setTickRate(~);
   - 미구현: 블록 엔티티(상자 등은 아직 안 그려짐), 바이옴별 틴트, 반투명 블록 간 정렬, 면 단위 컬링
 - [x] 5단계: 엔티티 (`McViewerEntities`, 게임 테스트로 소/돼지 렌더 확인)
   - 데이터 모델과 매 프레임 동기화(저널 불필요). 엔티티는 실제 월드에 추가하지 않고 만들기만 한다.
-  - **제약: 엔티티를 만들려면 `ClientLevel`이 필요해서 월드에 접속하지 않은 상태(타이틀 화면)에서는 엔티티를 그리지 않는다.** 가상 `Level` 구현은 데이터팩 레지스트리(소 변종 등) 때문에 비용이 커서 보류.
+  - (이 제약은 아래 "가상 레벨" 항목에서 해결됨) ~~엔티티를 만들려면 `ClientLevel`이 필요해서 타이틀 화면에서는 안 그려진다.~~ 가상 `Level` 구현은 데이터팩 레지스트리(소 변종 등) 때문에 비용이 커서 보류.
   - 허용 필드: `customName`, `customNameVisible`, `invisible`; 메서드: `setPosition`, `setRotation`, `remove`
   - 알려진 문제: 엔티티 조명이 블록용 라이팅을 공유해 다소 어둡다(PiP 한 번에 라이팅 하나만 설정 가능)
 - [x] 6단계: 틱 시뮬레이션 (`McvWorldTickTest`, 게임 테스트로 위젯→스크립트 `onTick`→문서 갱신 전체 경로 확인: 80틱 대기 후 레이블 78)
@@ -125,7 +125,7 @@ world.setTickRate(~);
 
 ## 후속 완료: 블록 엔티티 렌더
 - `McViewerBlockEntities`: `EntityBlock.newBlockEntity` 로 만들어 두고(블록 상태+NBT 가 바뀌면 재생성, 지워진 블록은 정리) `BlockEntityRenderDispatcher.tryExtractRenderState`/`submit` 으로 그린다. 거리 컬링은 `prepare(블록 중심)` 으로 무력화. 블록 NBT(SNBT)는 `loadWithComponents` 로 불러 준다.
-- 월드 접속 필요(엔티티와 같은 제약). 게임 테스트: 상자/엔더상자/셜커/침대/표지판 장면이 바닥만 있는 장면과 확연히 달라짐을 확인, 스크린샷 육안 확인
+- (월드 접속 제약은 "가상 레벨"에서 해결됨) 게임 테스트: 상자/엔더상자/셜커/침대/표지판 장면이 바닥만 있는 장면과 확연히 달라짐을 확인, 스크린샷 육안 확인
 
 ## 후속 완료: 엔티티 맞히기 + 엔티티 NBT
 - 맞히기: `McvEntity.setBounds` 를 백엔드가 진짜 엔티티 크기로 채우면(= 실제로 그려진 엔티티) core `McvView.raycast` 가 충돌 상자(슬랩 교차)로 맞히고 블록과 거리(`t`)를 비교해 가까운 쪽을 고른다. `Hit` 에 `entity`·`t` 추가, 결과에 `kind`(block/entity). 위젯은 `onEntityHover/onEntityClick` 을 보낸다.
@@ -155,8 +155,15 @@ world.setTickRate(~);
 - **허용 목록**(상자/함정 상자/엔더상자/마법 부여대)만: 일반 틱/이벤트는 가상 좌표에서 진짜 `ClientLevel` 의 이웃 갱신·충돌 검사를 부를 수 있어 위험하다(셜커 상자의 `updateAnimation` 등).
 - 테스트: `McvHostTest`(기록·순서·상한·삭제), `McvScriptTest`(API), 게임 테스트(상자·엔더상자 뚜껑이 열려 화면이 달라짐: 픽셀 차이 1669, 스크린샷 확인)
 
+## 후속 완료: 타이틀 화면 엔티티(가상 레벨)
+- `McViewerFakeLevel extends Level`: 모든 칸이 공기인 청크(`EmptyLevelChunk`), 빈 엔티티 조회, 소리/폭발/블록 갱신 무시, 레시피·시계·환경 속성은 호출되면 예외(엔티티 생성/렌더 경로에서는 안 불림). `ClientLevel` 생성자 대신 추상 `Level` 을 직접 구현해 연결(`ClientPacketListener`)이 필요 없다.
+- `McViewerFakeWorld`: 접속 중이면 `mc.level`, 아니면 가상 레벨. 레지스트리는 바닐라 `WorldLoader` 가 하는 것과 같은 순서(태그 읽기 → `RegistryDataLoader.load(WORLD_REGISTRIES)`)로 **바닐라 데이터팩에서 백그라운드 1회** 로드(~0.2s). 태그 `apply()` 는 진짜 정적 레지스트리를 건드리므로 일부러 안 부른다. 가상 `Level` 은 만든 스레드를 자기 스레드로 기억하므로 로드 스레드가 아니라 렌더 스레드에서 만든다.
+- 엔티티/블록 엔티티 캐시는 레벨이 바뀌면(진짜 ↔ 가상) 비운다.
+- 게임 테스트: 월드를 닫아 타이틀 화면으로 간 뒤 돼지(분홍 픽셀 0 → 279)·소(데이터팩 변종)·상자가 그려짐, 스크린샷 확인. 로그 `virtual level registries loaded in 181 ms`
+- 알려진 한계: 가상 레벨에는 `RecipeAccess`/`ClockManager`/`EnvironmentAttributeSystem` 가 없어 이를 요구하는 엔티티/블록 엔티티는 만들지 못하고 경고 후 건너뛴다(바닐라 몹 대부분은 문제없음). 진짜 월드에서는 영향 없음.
+
 ## 완료 후 남은 과제 (후속, 우선순위 순)
 - 셜커 상자·종 같은 **나머지 블록 엔티티 동작**(진짜 월드를 건드리지 않는 방식으로 직접 구현해야 함)
-- **원근 투영**(별도 렌더 타깃 경로 필요), **타이틀 화면에서 엔티티**(가상 Level 필요)
+- **원근 투영**(별도 렌더 타깃 경로 필요)
 - 바이옴별 틴트, 반투명 블록 정렬, 면 단위 컬링(큰 월드 성능), 월드 스냅샷을 프레임마다 복사하는 비용 줄이기
 - NeoForge 실행 확인(컴파일만 확인됨)

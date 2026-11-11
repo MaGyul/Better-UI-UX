@@ -30,6 +30,7 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.Level;
 import org.joml.Quaternionf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +41,7 @@ import org.slf4j.LoggerFactory;
  * <ul>
  *   <li>엔티티 객체는 렌더 스레드에서만 만지고, 매 프레임 데이터 모델과 맞춘다(위치·회전·허용된 필드). 저널을 쓰지 않아 위젯이 여러 개여도 안전하다.</li>
  *   <li>엔티티는 <b>진짜 클라이언트 월드에 넣지 않는다</b>(만들기만 하고 월드에 추가하지 않으므로 게임에 영향이 없다).
- *       다만 만들려면 {@link ClientLevel} 이 필요해서, 월드에 접속하지 않은 상태(타이틀 화면)에서는 엔티티를 그리지 않는다.</li>
+ *       만들려면 {@link Level} 이 필요하다: 접속 중이면 진짜 클라이언트 레벨, 타이틀 화면이면 가상 레벨({@link McViewerFakeWorld}, 처음에 1~2초 준비).</li>
  * </ul>
  */
 final class McViewerEntities {
@@ -48,15 +49,17 @@ final class McViewerEntities {
 
     private final Map<McvWorld, Map<Integer, Optional<Entity>>> live = new WeakHashMap<>();
     private final Set<String> warned = new HashSet<>();
+    private Level cachedLevel;
 
     void render(McvWorld w, float yaw, float pitch, PoseStack pose, SubmitNodeCollector collector) {
         Minecraft mc = Minecraft.getInstance();
-        ClientLevel level = mc.level;
-        Map<Integer, Optional<Entity>> entities = live.computeIfAbsent(w, k -> new HashMap<>());
-        if (level == null) {
-            entities.clear();                                                // 월드를 떠났다: 옛 레벨에 묶인 엔티티는 버린다
-            return;
+        Level level = McViewerFakeWorld.current();                          // 접속 중이면 진짜 클라이언트 레벨, 아니면 가상 레벨(준비되기 전에는 null)
+        if (level != cachedLevel) {
+            live.clear();                                                    // 진짜 ↔ 가상 레벨이 바뀌면 옛 레벨에 묶인 엔티티는 버린다
+            cachedLevel = level;
         }
+        if (level == null) return;
+        Map<Integer, Optional<Entity>> entities = live.computeIfAbsent(w, k -> new HashMap<>());
         Set<Integer> present = new HashSet<>();
         EntityRenderDispatcher dispatcher = mc.getEntityRenderDispatcher();
         CameraRenderState camera = camera(yaw, pitch);
@@ -109,7 +112,7 @@ final class McViewerEntities {
         return camera;
     }
 
-    private Entity create(ClientLevel level, McvEntity me) {
+    private Entity create(Level level, McvEntity me) {
         try {
             Optional<EntityType<?>> type = BuiltInRegistries.ENTITY_TYPE.getOptional(Identifier.parse(me.type()));
             if (type.isEmpty()) {
@@ -159,7 +162,7 @@ final class McViewerEntities {
      * 스크립트가 요청한 NBT 병합을 진짜 엔티티에 적용한다(/data merge 처럼: 현재 NBT 를 저장해 요청 값을 덮어씌우고 다시 불러온다).
      * 처음 한 번과 병합할 때마다 지금 NBT 를 스냅샷으로 남겨 스크립트의 getNbt() 가 읽는다. 위치/회전은 매 프레임 데이터 모델이 다시 이긴다.
      */
-    private void applyNbt(Entity e, McvEntity me, ClientLevel level) {
+    private void applyNbt(Entity e, McvEntity me, Level level) {
         String pending = me.pollPendingNbt();
         if (pending == null && me.nbtSnapshot() != null) return;
         try {
@@ -182,7 +185,7 @@ final class McViewerEntities {
         }
     }
 
-    private static CompoundTag save(Entity e, ClientLevel level) {
+    private static CompoundTag save(Entity e, Level level) {
         TagValueOutput out = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
         e.saveWithoutId(out);
         return out.buildResult();
