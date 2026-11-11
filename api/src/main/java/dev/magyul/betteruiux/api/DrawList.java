@@ -22,10 +22,12 @@ public final class DrawList implements UiGfx {
                         t.u(), t.v(), t.regionW(), t.regionH(), t.texW(), t.texH(), t.argb());
                 case DrawCommand.DrawText t -> target.drawText(t.text(), t.x(), t.y(), t.argb(), t.shadow());
                 case DrawCommand.FillRoundRect f -> {
-                    if (!target.fillRoundRect(f.x(), f.y(), f.w(), f.h(), f.radius(), f.argb())) target.fillRect(f.x(), f.y(), f.w(), f.h(), f.argb());
+                    if (!target.fillRoundRect(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(), f.argb())) target.fillRect(f.x(), f.y(), f.w(), f.h(), f.argb());
                 }
-                case DrawCommand.StrokeRoundRect f -> target.strokeRoundRect(f.x(), f.y(), f.w(), f.h(), f.radius(), f.thickness(), f.argb());
-                case DrawCommand.ShadowRoundRect f -> target.shadowRoundRect(f.x(), f.y(), f.w(), f.h(), f.radius(), f.blur(), f.argb());
+                case DrawCommand.StrokeRoundRect f -> target.strokeRoundRect(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(), f.thickness(), f.argb());
+                case DrawCommand.ShadowRoundRect f -> target.shadowRoundRect(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(), f.blur(), f.argb());
+                case DrawCommand.FillRoundGradient f ->
+                        target.fillRoundGradient(f.x(), f.y(), f.w(), f.h(), f.tl(), f.tr(), f.br(), f.bl(), f.mode(), f.colors(), f.stops());
                 case DrawCommand.DrawStyledText t -> target.drawStyledText(t.text(), t.x(), t.y(), t.argb(), t.shadow(), t.italic(), t.font());
                 case DrawCommand.PushClip p -> target.pushClip(p.x(), p.y(), p.w(), p.h());
                 case DrawCommand.PopClip p -> target.popClip();
@@ -47,21 +49,27 @@ public final class DrawList implements UiGfx {
         return this;
     }
 
-    @Override public boolean strokeRoundRect(int x, int y, int w, int h, int radius, int thickness, int argb) {
+    @Override public boolean fillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, int mode, int[] colors, float[] stops) {
         if (!roundRects) return false;
-        commands.add(new DrawCommand.StrokeRoundRect(x, y, w, h, radius, thickness, argb));
+        commands.add(new DrawCommand.FillRoundGradient(x, y, w, h, tl, tr, br, bl, mode, colors, stops));
         return true;
     }
 
-    @Override public boolean shadowRoundRect(int x, int y, int w, int h, int radius, int blur, int argb) {
+    @Override public boolean strokeRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int thickness, int argb) {
         if (!roundRects) return false;
-        commands.add(new DrawCommand.ShadowRoundRect(x, y, w, h, radius, blur, argb));
+        commands.add(new DrawCommand.StrokeRoundRect(x, y, w, h, tl, tr, br, bl, thickness, argb));
         return true;
     }
 
-    @Override public boolean fillRoundRect(int x, int y, int w, int h, int radius, int argb) {
+    @Override public boolean shadowRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int blur, int argb) {
         if (!roundRects) return false;
-        commands.add(new DrawCommand.FillRoundRect(x, y, w, h, radius, argb));
+        commands.add(new DrawCommand.ShadowRoundRect(x, y, w, h, tl, tr, br, bl, blur, argb));
+        return true;
+    }
+
+    @Override public boolean fillRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int argb) {
+        if (!roundRects) return false;
+        commands.add(new DrawCommand.FillRoundRect(x, y, w, h, tl, tr, br, bl, argb));
         return true;
     }
 

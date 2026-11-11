@@ -66,6 +66,19 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
         int[] rc = px(img, sx, rad.x + rad.w / 2, rad.y + rad.h / 2, s), rk = px(img, sx, rad.x + 1, rad.y + 1, s);
         check(rc[0] > rc[2] + 60, "방사형 그라디언트 가운데는 빨강 쪽이어야 한다: " + hex(rc));
         check(rk[2] > rk[0] + 60, "방사형 그라디언트 모서리는 파랑 쪽이어야 한다: " + hex(rk));
+        LayoutBox asym = box(ctx, "asym");
+        int[] tlc = px(img, sx, asym.x, asym.y, s), trc = px(img, sx, asym.x + asym.w - 1, asym.y, s);
+        check(!isNear(tlc, 0x00, 0xDD, 0x00, 60), "반지름이 다른 모서리: 왼쪽 위(14)는 비어 있어야 한다: " + hex(tlc));
+        check(isNear(trc, 0x00, 0xDD, 0x00, 40), "반지름이 다른 모서리: 오른쪽 위(0)는 채워져야 한다: " + hex(trc));
+        LayoutBox rg = box(ctx, "rg"), hg = box(ctx, "hg"), con = box(ctx, "con");
+        int[] rgTop = px(img, sx, rg.x + rg.w / 2, rg.y + 3, s), rgBot = px(img, sx, rg.x + rg.w / 2, rg.y + rg.h - 4, s), rgCorner = px(img, sx, rg.x, rg.y, s);
+        check(rgTop[0] > rgTop[2] + 60 && rgBot[2] > rgBot[0] + 60, "둥근 세로 그라디언트: 위 빨강 → 아래 파랑: " + hex(rgTop) + " / " + hex(rgBot));
+        check(!(rgCorner[0] > 200 && rgCorner[2] < 80), "둥근 그라디언트의 모서리 끝은 비어 있어야 한다: " + hex(rgCorner));
+        int[] hgL = px(img, sx, hg.x + 3, hg.y + hg.h / 2, s), hgR = px(img, sx, hg.x + hg.w - 4, hg.y + hg.h / 2, s);
+        check(hgL[0] > hgL[2] + 60 && hgR[2] > hgR[0] + 60, "가로 그라디언트: 왼쪽 빨강 → 오른쪽 파랑: " + hex(hgL) + " / " + hex(hgR));
+        int[] conTop = px(img, sx, con.x + con.w / 2 + 2, con.y + 3, s), conBottom = px(img, sx, con.x + con.w / 2, con.y + con.h - 4, s);
+        check(conTop[0] > conTop[1] + 60, "원뿔 그라디언트: 위쪽(0도)은 첫 색(빨강)이어야 한다: " + hex(conTop));
+        check(conBottom[1] > conBottom[0] + 60 && conBottom[1] > conBottom[2] + 60, "원뿔 그라디언트: 아래쪽(180도)은 가운데 색(초록)이어야 한다: " + hex(conBottom));
         LayoutBox fx = box(ctx, "fx");
         int[] ring = px(img, sx, fx.x + 1, fx.y + fx.h / 2, s), inner = px(img, sx, fx.x + fx.w / 2, fx.y + fx.h / 2, s);
         int[] nearShadow = px(img, sx, fx.x - 3, fx.y + fx.h / 2, s), farBg = px(img, sx, fx.x - 15, fx.y + fx.h / 2, s);
@@ -197,6 +210,12 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
                         <panel id="rad" width="60" height="60" style="background: radial-gradient(#FF0000, #0000FF)"/>
                         <panel id="fx" width="60" height="30" style="background: #00DD00; border-radius: 10; border: 3 solid #FFFFFF; box-shadow: 0 0 8 #000000FF"/>
                         <panel id="clipbox" width="40" height="40" style="border-radius: 10; overflow: hidden; background: #202020"><panel width="40" height="40" style="background: #FF0000"/></panel>
+                      </column>
+                      <column gap="6" anchor="top-left" x="160" y="20">
+                        <panel id="asym" width="40" height="40" style="background: #00DD00; border-radius: 14 0 0 0"/>
+                        <panel id="rg" width="60" height="40" style="background: linear-gradient(#FF0000, #0000FF); border-radius: 12"/>
+                        <panel id="hg" width="60" height="20" style="background: linear-gradient(to right, #FF0000, #0000FF)"/>
+                        <panel id="con" width="50" height="50" style="background: conic-gradient(#FF0000, #00FF00, #0000FF)"/>
                       </column>
                     </screen>
                     """);

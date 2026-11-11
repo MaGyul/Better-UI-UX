@@ -29,24 +29,32 @@ final class RoundPipelines {
     static final Identifier WHITE = Identifier.parse("better_uiux:textures/gui/white.png");
 
     /** @param thick 0 이 아니면 테두리 고리, @param blur 0 이 아니면 그림자 */
-    static RenderPipeline get(int radius, int thick, int blur) {
-        if (broken || radius < 0 || radius > 64 || thick < 0 || thick > 32 || blur < 0 || blur > 48) return null;
-        if (radius == 0 && thick == 0 && blur == 0) return null;
-        long key = ((long) radius << 40) | ((long) thick << 20) | blur;
+    static RenderPipeline get(int tl, int tr, int br, int bl, int thick, int blur) { return get(tl, tr, br, bl, thick, blur, 0); }
+
+    /** @param grad 0 이 아니면 그라디언트 채움: 1 세로, 2 가로, 3 방사형, 4 원뿔(색은 Sampler0 의 가로 1줄 색 띠에서 읽는다) */
+    static RenderPipeline get(int tl, int tr, int br, int bl, int thick, int blur, int grad) {
+        if (broken || thick < 0 || thick > 32 || blur < 0 || blur > 48) return null;
+        for (int r : new int[] {tl, tr, br, bl}) if (r < 0 || r > 64) return null;
+        if (tl + tr + br + bl == 0 && thick == 0 && blur == 0 && grad == 0) return null;   // 둥글지도 번지지도 않는 단색 채움은 사각형 하나면 된다
+        long key = (((((((long) tl * 128 + tr) * 128 + br) * 128 + bl) * 64 + thick) * 64) + blur) * 8 + grad;
         RenderPipeline p = CACHE.get(key);
         if (p != null) return p;
         if (CACHE.size() >= MAX) return null;
         try {
             p = RenderPipeline.builder()
-                    .withLocation(Identifier.parse("better_uiux:round_" + radius + "_" + thick + "_" + blur))
+                    .withLocation(Identifier.parse("better_uiux:round_" + tl + "_" + tr + "_" + br + "_" + bl + "_" + thick + "_" + blur + "_" + grad))
                     .withBindGroupLayout(BindGroupLayouts.PROJECTION)
                     .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
                     .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
                     .withVertexShader(SHADER)
                     .withFragmentShader(SHADER)
-                    .withShaderDefine("RADIUS", radius)
+                    .withShaderDefine("RTL", tl)
+                    .withShaderDefine("RTR", tr)
+                    .withShaderDefine("RBR", br)
+                    .withShaderDefine("RBL", bl)
                     .withShaderDefine("THICK", thick)
                     .withShaderDefine("BLUR", blur)
+                    .withShaderDefine("GRAD", grad)
                     .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
                     .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
                     .withPrimitiveTopology(PrimitiveTopology.QUADS)
@@ -57,7 +65,7 @@ final class RoundPipelines {
             return null;
         }
         CACHE.put(key, p);
-        LOGGER.info("[better-uiux] 둥근 사각형 파이프라인 생성: 반지름 {} 두께 {} 번짐 {}", radius, thick, blur);
+        LOGGER.info("[better-uiux] 둥근 사각형 파이프라인 생성: 반지름 {}/{}/{}/{} 두께 {} 번짐 {} 그라디언트 {}", tl, tr, br, bl, thick, blur, grad);
         return p;
     }
 }

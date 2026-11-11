@@ -67,8 +67,19 @@ class RoundPrimitivesTest {
     }
 
     @Test
-    void nonUniformRadiiStayOnTheRectPath() throws Exception {
-        List<DrawCommand> c = paint("border-radius: 8 2 8 2", true);
+    void differentCornerRadiiAreOnePrimitiveToo() throws Exception {
+        List<DrawCommand> c = paint("border-radius: 8 2 6 0", true);
+        DrawCommand.FillRoundRect f = (DrawCommand.FillRoundRect) c.stream().filter(x -> x instanceof DrawCommand.FillRoundRect).findFirst().orElseThrow();
+        assertEquals(8, f.tl());
+        assertEquals(2, f.tr());
+        assertEquals(6, f.br());
+        assertEquals(0, f.bl());
+        assertEquals(0, count(c, DrawCommand.FillRect.class));
+    }
+
+    @Test
+    void nonUniformRadiiFallBackWhenUnsupported() throws Exception {
+        List<DrawCommand> c = paint("border-radius: 8 2 8 2", false);
         assertEquals(0, count(c, DrawCommand.FillRoundRect.class));
         assertTrue(count(c, DrawCommand.FillRect.class) > 1);
     }

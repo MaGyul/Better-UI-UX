@@ -63,24 +63,34 @@ public final class McGfx implements UiGfx {
     }
 
     @Override
-    public boolean fillRoundRect(int x, int y, int w, int h, int radius, int argb) {
-        com.mojang.renderpearl.api.pipeline.RenderPipeline p = RoundPipelines.get(radius, 0, 0);
+    public boolean fillRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int argb) {
+        com.mojang.renderpearl.api.pipeline.RenderPipeline p = RoundPipelines.get(tl, tr, br, bl, 0, 0);
         if (p == null || w <= 0 || h <= 0) return false;
         g.blit(p, RoundPipelines.WHITE, x, y, 0f, 0f, w, h, 1, 1, 1, 1, argb);      // 1x1 흰 텍스처를 사각형 전체(UV 0..1)에 입힌다
         return true;
     }
 
     @Override
-    public boolean strokeRoundRect(int x, int y, int w, int h, int radius, int thickness, int argb) {
-        com.mojang.renderpearl.api.pipeline.RenderPipeline p = RoundPipelines.get(radius, thickness, 0);
+    public boolean fillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, int mode, int[] colors, float[] stops) {
+        if (w <= 0 || h <= 0 || mode < 0 || mode > 3) return false;
+        com.mojang.renderpearl.api.pipeline.RenderPipeline p = RoundPipelines.get(tl, tr, br, bl, 0, 0, mode + 1);
+        Identifier lut = p == null ? null : GradientTextures.get(colors, stops);
+        if (lut == null) return false;
+        g.blit(p, lut, x, y, 0f, 0f, w, h, 1, 1, 1, 1, 0xFFFFFFFF);
+        return true;
+    }
+
+    @Override
+    public boolean strokeRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int thickness, int argb) {
+        com.mojang.renderpearl.api.pipeline.RenderPipeline p = RoundPipelines.get(tl, tr, br, bl, thickness, 0);
         if (p == null || thickness <= 0 || w <= 0 || h <= 0) return false;
         g.blit(p, RoundPipelines.WHITE, x, y, 0f, 0f, w, h, 1, 1, 1, 1, argb);
         return true;
     }
 
     @Override
-    public boolean shadowRoundRect(int x, int y, int w, int h, int radius, int blur, int argb) {
-        com.mojang.renderpearl.api.pipeline.RenderPipeline p = RoundPipelines.get(radius, 0, blur);
+    public boolean shadowRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int blur, int argb) {
+        com.mojang.renderpearl.api.pipeline.RenderPipeline p = RoundPipelines.get(tl, tr, br, bl, 0, blur);
         if (p == null || blur <= 0 || w <= 0 || h <= 0) return false;
         g.blit(p, RoundPipelines.WHITE, x - blur, y - blur, 0f, 0f, w + 2 * blur, h + 2 * blur, 1, 1, 1, 1, argb);   // 그림자는 사방으로 blur 만큼 더 크게
         return true;

@@ -26,19 +26,25 @@ public interface UiGfx {
     }
 
     /**
-     * 네 모서리 반지름이 같은 둥근 사각형을 (가장자리가 부드럽게) 한 번에 그린다. 지원하지 않으면(또는 지금 못 그리면) 아무것도 그리지 않고
+     * 모서리 반지름이 (왼쪽 위, 오른쪽 위, 오른쪽 아래, 왼쪽 아래) 각각 {@code tl tr br bl} 인 둥근 사각형을 (가장자리가 부드럽게) 한 번에 그린다. 지원하지 않으면(또는 지금 못 그리면) 아무것도 그리지 않고
      * false 를 돌려주며, 호출자는 사각형 여러 개로 근사해서 그린다.
      */
-    default boolean fillRoundRect(int x, int y, int w, int h, int radius, int argb) { return false; }
+    default boolean fillRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int argb) { return false; }
 
     /** 둥근 사각형의 테두리 고리(안쪽으로 {@code thickness} 두께, 부드러운 가장자리). 지원하지 않으면 false. */
-    default boolean strokeRoundRect(int x, int y, int w, int h, int radius, int thickness, int argb) { return false; }
+    default boolean strokeRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int thickness, int argb) { return false; }
 
     /**
      * 둥근 사각형(x,y,w,h)의 바깥 그림자: 가장자리에서 {@code blur} 만큼 부드럽게 퍼진다(그림자는 사각형 밖으로 blur 만큼 더 그려진다).
      * 지원하지 않으면 false.
      */
-    default boolean shadowRoundRect(int x, int y, int w, int h, int radius, int blur, int argb) { return false; }
+    default boolean shadowRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int blur, int argb) { return false; }
+
+    /**
+     * 둥근 사각형을 그라디언트로 채운다(부드러운 가장자리). {@code mode}: 0 위→아래, 1 왼쪽→오른쪽, 2 방사형(가운데 기준 타원), 3 원뿔(위에서 시계방향).
+     * {@code colors}/{@code stops} 는 같은 길이의 정지점(argb, 0..1 위치, 오름차순). 지원하지 않으면 false.
+     */
+    default boolean fillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, int mode, int[] colors, float[] stops) { return false; }
 
     /** 이후 그리기를 사각형 안으로 제한한다. 중첩 가능, {@link #popClip()} 으로 복원. */
     void pushClip(int x, int y, int w, int h);

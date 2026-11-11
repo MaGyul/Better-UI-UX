@@ -83,7 +83,7 @@ final class BoxPainter {
             return;
         }
         Radii f = r.fit(w, h);
-        if (f.tl() == f.tr() && f.tl() == f.br() && f.tl() == f.bl() && f.tl() > 0 && g.fillRoundRect(x, y, w, h, f.tl(), argb)) return;   // 지원하면 부드러운 가장자리로 한 번에
+        if (g.fillRoundRect(x, y, w, h, f.tl(), f.tr(), f.br(), f.bl(), argb)) return;   // 지원하면 부드러운 가장자리로 한 번에(반지름이 달라도)
         int[][] sp = spans(w, h, r);
         int start = 0;
         for (int i = 1; i <= h; i++) {
@@ -114,8 +114,8 @@ final class BoxPainter {
         int color = colors[0];
         if ((color >>> 24) == 0) return;
         Radii outer = r.fit(w, h);
-        if (t == rt && t == b && t == l && "solid".equals(style) && outer.tl() > 0 && outer.tl() == outer.tr() && outer.tl() == outer.br()
-                && outer.tl() == outer.bl() && g.strokeRoundRect(x, y, w, h, outer.tl(), t, color)) return;       // 지원하면 부드러운 고리 한 번에
+        if (t == rt && t == b && t == l && "solid".equals(style)
+                && g.strokeRoundRect(x, y, w, h, outer.tl(), outer.tr(), outer.br(), outer.bl(), t, color)) return;       // 지원하면 부드러운 고리 한 번에
         int iw = w - l - rt, ih = h - t - b;
         int[][] os = spans(w, h, outer);
         int[][] is = iw > 0 && ih > 0 ? spans(iw, ih, outer.shrink(t, rt, b, l).fit(iw, ih)) : null;
@@ -166,8 +166,13 @@ final class BoxPainter {
     // ---- 그라디언트 ----
 
     /** @param vertical 세로(위→아래)인지, @param colors/pos 정지점(pos 는 0..1, 오름차순) */
-    record Gradient(boolean vertical, int[] colors, float[] pos, boolean radial) {
-        Gradient(boolean vertical, int[] colors, float[] pos) { this(vertical, colors, pos, false); }
+    record Gradient(boolean vertical, int[] colors, float[] pos, boolean radial, boolean conic) {
+        Gradient(boolean vertical, int[] colors, float[] pos) { this(vertical, colors, pos, false, false); }
+
+        Gradient(boolean vertical, int[] colors, float[] pos, boolean radial) { this(vertical, colors, pos, radial, false); }
+
+        /** 셰이더 모드: 0 위→아래, 1 왼쪽→오른쪽, 2 방사형, 3 원뿔. */
+        int mode() { return conic ? 3 : radial ? 2 : vertical ? 0 : 1; }
 
         int at(float t) {
             if (t <= pos[0]) return colors[0];
@@ -209,11 +214,12 @@ final class BoxPainter {
         if (open < 0 || !s.endsWith(")")) return null;
         boolean linear = low.startsWith("linear-gradient(") || low.startsWith("repeating-linear-gradient(");
         boolean radial = low.startsWith("radial-gradient(");
+        boolean conic = low.startsWith("conic-gradient(");
         List<String> args = Selector.splitList(s.substring(open + 1, s.length() - 1));
         if (args.isEmpty()) return null;
         boolean vertical = true, reversed = false;
         int first = 0;
-        if (radial) {                                       // 모양/크기/위치(circle, ellipse, at center ...)는 읽고 건너뛰며, 가운데 기준 타원(farthest-corner)만 쓴다
+        if (radial || conic) {                              // 모양/크기/위치(circle, ellipse, at center ...)는 읽고 건너뛰며, 가운데 기준 타원(farthest-corner)만 쓴다
             List<String> t0 = CssMath.tokens(args.get(0));
             if (!t0.isEmpty() && Colors.tryParse(t0.get(0)) == null) first = 1;
         }
@@ -259,10 +265,7 @@ final class BoxPainter {
             pos.add(p);
         }
         if (cols.isEmpty()) return null;
-        if (!linear && !radial) {                           // conic: 첫 색 단색으로 근사
-            return new Gradient(true, new int[] {cols.get(0), cols.get(0)}, new float[] {0, 1});
-        }
-        if (cols.size() == 1) return new Gradient(vertical, new int[] {cols.get(0), cols.get(0)}, new float[] {0, 1}, radial);
+        if (cols.size() == 1) return new Gradient(vertical, new int[] {cols.get(0), cols.get(0)}, new float[] {0, 1}, radial, conic);
         int n = cols.size();
         float[] p = new float[n];
         for (int i = 0; i < n; i++) p[i] = pos.get(i) == null ? Float.NaN : pos.get(i);
@@ -288,7 +291,7 @@ final class BoxPainter {
             c = rc;
             p = rp;
         }
-        return new Gradient(vertical, c, p, radial);
+        return new Gradient(vertical, c, p, radial, conic);
     }
 
     private static double angle(String a) {
@@ -308,7 +311,15 @@ final class BoxPainter {
         if (w <= 0 || h <= 0) return;
         int[] cs = new int[gr.colors().length];
         for (int i = 0; i < cs.length; i++) cs[i] = scaleAlpha(gr.colors()[i], opacity);
-        Gradient o = new Gradient(gr.vertical(), cs, gr.pos(), gr.radial());
+        Gradient o = new Gradient(gr.vertical(), cs, gr.pos(), gr.radial(), gr.conic());
+        if (!(r.none() && o.mode() == 0)) {                 // 모서리가 없는 세로 그라디언트는 fillGradient 가 가장 싸다. 그 밖에는 지원하면 셰이더로 한 번에
+            Radii f = r.fit(w, h);
+            if (g.fillRoundGradient(x, y, w, h, f.tl(), f.tr(), f.br(), f.bl(), o.mode(), o.colors(), o.pos())) return;
+        }
+        if (o.conic()) {                                    // 셰이더가 없으면 원뿔은 첫 색 단색으로 근사
+            fillShape(g, x, y, w, h, r, o.colors()[0]);
+            return;
+        }
         if (o.radial()) {
             radialFill(g, x, y, w, h, r, o);
             return;
@@ -525,7 +536,7 @@ final class BoxPainter {
                 continue;
             }
             Radii sr = base.fit(sw, sh);
-            if (sr.tl() == sr.tr() && sr.tl() == sr.br() && sr.tl() == sr.bl() && g.shadowRoundRect(sx, sy, sw, sh, sr.tl(), s.blur(), color)) continue;   // 지원하면 부드러운 그림자 한 번에
+            if (g.shadowRoundRect(sx, sy, sw, sh, sr.tl(), sr.tr(), sr.br(), sr.bl(), s.blur(), color)) continue;   // 지원하면 부드러운 그림자 한 번에
             int n = Math.max(1, Math.min((s.blur() + 1) / 2, 6));      // 층 수: 번짐 2px 당 한 층(최대 6) — 명령 수를 줄이려고 번짐 1px 당 한 층이던 것을 줄였다
             double prev = 0;
             for (int layer = 1; layer <= n + 1; layer++) {

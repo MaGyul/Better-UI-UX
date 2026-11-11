@@ -6,11 +6,20 @@ public sealed interface DrawCommand {
 
     record DrawStyledText(String text, int x, int y, int argb, boolean shadow, boolean italic, String font) implements DrawCommand {}
 
-    record FillRoundRect(int x, int y, int w, int h, int radius, int argb) implements DrawCommand {}
+    record FillRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int argb) implements DrawCommand {
+        /** 네 반지름이 같을 때의 반지름(아니면 왼쪽 위). */
+        public int radius() { return tl; }
+    }
 
-    record StrokeRoundRect(int x, int y, int w, int h, int radius, int thickness, int argb) implements DrawCommand {}
+    record StrokeRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int thickness, int argb) implements DrawCommand {
+        public int radius() { return tl; }
+    }
 
-    record ShadowRoundRect(int x, int y, int w, int h, int radius, int blur, int argb) implements DrawCommand {}
+    record ShadowRoundRect(int x, int y, int w, int h, int tl, int tr, int br, int bl, int blur, int argb) implements DrawCommand {
+        public int radius() { return tl; }
+    }
+
+    record FillRoundGradient(int x, int y, int w, int h, int tl, int tr, int br, int bl, int mode, int[] colors, float[] stops) implements DrawCommand {}
 
     record FillGradient(int x, int y, int w, int h, int topArgb, int bottomArgb) implements DrawCommand {}
 
