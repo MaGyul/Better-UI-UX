@@ -20,7 +20,7 @@ let world = mcv.createWorld(x, y, z);              // 비어 있는(void) 월드
 world.setBlock(x, y, z, "minecraft:oak_stairs[facing=east]", nbt); // 블록 상태는 문자열, 블록 엔티티 NBT는 별도 인자
 let block = world.getBlock(x, y, z);
 let entity = world.spawnEntity(x, y, z, "minecraft:cow");
-entity.methods... / entity.fields...               // 화이트리스트만
+entity.setPosition(~) / entity.customName = ~      // 엔티티에서 바로(메서드·필드 모두), 화이트리스트만. 소환 때 NBT: spawnEntity(x,y,z,type,nbt)
 let camera = world.getCamera();
 camera.setYaw(~); camera.setPitch(~); camera.setPosition(~);   // (원안의 setPotition 은 setPosition)
 world.setViewArea(~);                              // 영역 안의 블록·엔티티만 렌더
@@ -131,6 +131,10 @@ world.setTickRate(~);
 - NBT: `entity.mergeNbt(snbt)`(검증 후 큐, 최대 16개) → 렌더 스레드 `McViewerEntities.applyNbt` 가 현재 NBT 저장 → 병합 → `load` → 다시 저장해 스냅샷, `entity.getNbt()` 가 스냅샷을 읽는다. 매 프레임 동기화는 스크립트가 값을 준 필드(customName/invisible 등)만 적용해 NBT 로 바꾼 값을 덮어쓰지 않는다.
 - 테스트: `McvViewTest`(엔티티 크기를 알기 전엔 안 맞음, 가까운 쪽 선택, 보기 영역), `McvHostTest`(NBT 검증/한도), 게임 테스트(소 호버·클릭 이벤트, 병합한 NBT 가 `getNbt` 에 보이고 새끼 소로 화면이 바뀜 — 스크린샷 확인)
 - 알려진 제약: `Invisible` 은 이 버전에서 공통 NBT 키가 아니다(종류별 키만 유효), 이름표는 뷰어에서 안정적으로 안 보인다
+
+## 후속 변경: 엔티티 API 단순화 + 소환 시 NBT
+- 스크립트의 엔티티는 `entity.methods.X()` / `entity.fields.X` 가 아니라 **`entity.X`** 로 바로 쓴다(JS `Proxy`: 메서드 이름이면 함수, 아니면 필드 읽기/쓰기, `x y z`/`yaw pitch` 대입은 `setPosition`/`setRotation` 으로 변환). `methods`/`fields` 는 제거했다.
+- `world.spawnEntity(x, y, z, type, nbt)` — `nbt`(SNBT 글자)는 소환과 함께 첫 병합 요청으로 걸린다. 올바르지 않으면 엔티티를 만들지 않고 거부한다.
 
 ## 완료 후 남은 과제 (후속, 우선순위 순)
 - 블록 엔티티 **동작**(상자 뚜껑 열림 등; 렌더 자체는 완료)

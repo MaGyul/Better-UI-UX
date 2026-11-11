@@ -88,8 +88,10 @@ function onInit() {
   var b = world.getBlock(3, 1, 3);                         // {id, block, nbt}. 비어 있으면 id 가 minecraft:air
 
   var cow = world.spawnEntity(4.5, 1, 4.5, 'cow');         // 엔티티 소환
-  cow.methods.setRotation(135, 0);                         // 메서드: setPosition(x,y,z), setRotation(yaw,pitch), remove()
-  cow.fields.customName = 'Bessie';                        // 필드: customName, customNameVisible, invisible (+ x y z yaw pitch type 읽기)
+  var calf = world.spawnEntity(2.5, 1, 4.5, 'cow', '{Age:-24000}');   // 소환하면서 NBT(SNBT 글자)를 적용한다
+  cow.setRotation(135, 0);                                 // 엔티티에서 바로: setPosition(x,y,z), setRotation(yaw,pitch), remove()
+  cow.customName = 'Bessie';                               // 필드도 바로: customName, customNameVisible, invisible
+  cow.x = 5;                                               // x y z yaw pitch 는 읽고 쓸 수 있다(type, id 는 읽기 전용)
   cow.mergeNbt('{Age:-24000}');                            // 엔티티 NBT 병합(/data merge 와 같다): 새끼 소로. 아래 "엔티티 NBT" 참고
   var nbt = cow.getNbt();                                  // 마지막으로 본 엔티티 NBT(SNBT 글자). 아직 그려지기 전이면 null
 
@@ -120,8 +122,8 @@ function onInit() {
 
 블록 이벤트 `e = {world, kind:'block', x, y, z, face, block, id, button}`, 엔티티 이벤트 `e = {world, kind:'entity', entity(번호), type, x, y, z, face, button}`(`x y z` 는 맞은 지점이 있는 칸). 엔티티가 블록보다 가까우면 엔티티 이벤트가 오고 그 자리의 블록 이벤트는 "블록 없음"이다. `face` 는 `up down north south east west`, `button` 은 0=좌 1=가운데 2=우(호버는 -1). 빈 곳을 눌러도 `onBlockClick` 은 불리며 `e.block == null` 이다.
 
-**엔티티 NBT**: `entity.mergeNbt('{...}')` 는 요청한 NBT 를 진짜 엔티티에 **병합**한다(`/data merge entity` 와 같다: 현재 NBT 에 덮어쓰고 다시 불러온다). 새끼로(`Age`), 이름(`CustomName`), 색(`Color`, `variant`) 같은 **엔티티 종류별 NBT** 를 바꿀 수 있다.
-- 적용은 렌더 스레드에서 다음 프레임에 이뤄지고, 월드에 접속하지 않았거나 엔티티를 만들 수 없으면 적용되지 않는다. NBT 가 올바르지 않으면 로그에 경고하고 건너뛴다.
+**엔티티 NBT**: `world.spawnEntity(x, y, z, type, nbt)` 의 `nbt` 와 `entity.mergeNbt('{...}')` 는 요청한 NBT 를 진짜 엔티티에 **병합**한다(`/data merge entity` 와 같다: 현재 NBT 에 덮어쓰고 다시 불러온다). 새끼로(`Age`), 이름(`CustomName`), 색(`Color`, `variant`) 같은 **엔티티 종류별 NBT** 를 바꿀 수 있다.
+- 소환할 때 준 NBT 는 첫 프레임에 적용된다(올바르지 않으면 엔티티를 만들지 않고 오류를 던진다). 적용은 렌더 스레드에서 이뤄지고, 월드에 접속하지 않았거나 엔티티를 만들 수 없으면 적용되지 않는다. NBT 가 올바르지 않으면 로그에 경고하고 건너뛴다.
 - `entity.getNbt()` 는 **마지막으로 본 값**을 돌려준다(처음 그려진 직후와 병합할 때마다 갱신). 그려지기 전에는 `null`. 클라이언트 쪽 값이라 서버와 다를 수 있다(예: 새끼 소의 `Age` 는 `-24000` 이 아니라 `-1` 로 나온다).
 - 위치와 회전은 `setPosition`/`setRotation` 이 매 프레임 이긴다(NBT 의 `Pos`/`Rotation` 은 덮어써진다). 요청은 한 번에 16개까지 밀릴 수 있고 글자는 4096자 이하의 `{...}` 여야 한다.
 - 이름표는 바닐라가 실제 카메라와의 거리로 표시 여부를 정해서 뷰어에서는 `CustomName` 이 안정적으로 보이지 않는다.

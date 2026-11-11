@@ -69,20 +69,40 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                 });
               }
               function entity(w, id) {
-                var fields = new Proxy({}, {
-                  get: function (_, n) { return typeof n === 'string' ? H({cmd: 'entityGet', world: w, entity: id, name: n}) : undefined; },
-                  set: function (_, n, v) { H({cmd: 'entitySet', world: w, entity: id, name: String(n), value: v}); return true; }
-                });
-                var methods = new Proxy({}, {
+                function call(method, args) { return H({cmd: 'entityCall', world: w, entity: id, method: method, args: args}); }
+                function get(n) { return H({cmd: 'entityGet', world: w, entity: id, name: n}); }
+                // 엔티티에서 바로 쓰는 메서드. 이름이 여기 없으면 필드(customName 등)로 읽고 쓴다.
+                var methods = {
+                  setPosition: function (x, y, z) { return call('setPosition', [x, y, z]); },
+                  setRotation: function (yaw, pitch) { return call('setRotation', [yaw, pitch]); },
+                  remove: function () { return call('remove', []); },
+                  mergeNbt: function (snbt) { return call('mergeNbt', [String(snbt)]); },
+                  getNbt: function () { return call('getNbt', []); },
+                  toString: function () { return 'Entity#' + id; },
+                  toJSON: function () { return {id: id}; }
+                };
+                return new Proxy(Object.create(null), {
                   get: function (_, n) {
                     if (typeof n !== 'string') return undefined;
-                    return function () { return H({cmd: 'entityCall', world: w, entity: id, method: n, args: Array.prototype.slice.call(arguments)}); };
+                    if (n === 'id') return id;
+                    if (Object.prototype.hasOwnProperty.call(methods, n)) return methods[n];
+                    return get(n);
+                  },
+                  set: function (_, n, v) {
+                    n = String(n);
+                    if (n === 'x' || n === 'y' || n === 'z') {            // entity.x = 3 처럼 한 축만 바꿔도 된다
+                      var pos = {x: get('x'), y: get('y'), z: get('z')};
+                      pos[n] = v;
+                      call('setPosition', [pos.x, pos.y, pos.z]);
+                    } else if (n === 'yaw' || n === 'pitch') {
+                      var rot = {yaw: get('yaw'), pitch: get('pitch')};
+                      rot[n] = v;
+                      call('setRotation', [rot.yaw, rot.pitch]);
+                    } else {
+                      H({cmd: 'entitySet', world: w, entity: id, name: n, value: v});
+                    }
+                    return true;
                   }
-                });
-                return Object.freeze({
-                  id: id, fields: fields, methods: methods,
-                  mergeNbt: function (snbt) { H({cmd: 'entityCall', world: w, entity: id, method: 'mergeNbt', args: [String(snbt)]}); },
-                  getNbt: function () { return H({cmd: 'entityCall', world: w, entity: id, method: 'getNbt', args: []}); }
                 });
               }
               function world(w) {
@@ -99,7 +119,7 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                   },
                   setBlocks: function (list) { return H({cmd: 'setBlocks', world: w, blocks: list}); },
                   loadStructure: function (name, x, y, z) { return H({cmd: 'loadStructure', world: w, name: String(name), x: x || 0, y: y || 0, z: z || 0}); },
-                  spawnEntity: function (x, y, z, type) { return entity(w, H({cmd: 'spawnEntity', world: w, x: x, y: y, z: z, type: String(type)})); },
+                  spawnEntity: function (x, y, z, type, nbt) { return entity(w, H({cmd: 'spawnEntity', world: w, x: x, y: y, z: z, type: String(type), nbt: nbt == null ? null : String(nbt)})); },
                   getCamera: function () { return cam; },
                   project: function (x, y, z) { return H({cmd: 'project', world: w, x: x, y: y, z: z}); },
                   raycast: function (sx, sy) { return H({cmd: 'raycast', world: w, x: sx, y: sy}); },

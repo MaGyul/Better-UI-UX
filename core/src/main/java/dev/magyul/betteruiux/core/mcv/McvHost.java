@@ -127,7 +127,7 @@ public final class McvHost {
                         r.get("y") == null ? 0 : integer(r, "y"), r.get("z") == null ? 0 : integer(r, "z"));
             }
             case "spawnEntity" -> {
-                return w.spawnEntity(num(r, "x"), num(r, "y"), num(r, "z"), str(r, "type")).id();
+                return w.spawnEntity(num(r, "x"), num(r, "y"), num(r, "z"), str(r, "type"), r.get("nbt") instanceof String n ? n : null).id();
             }
             case "entityGet" -> {
                 return w.getEntityField(integer(r, "entity"), str(r, "name"));

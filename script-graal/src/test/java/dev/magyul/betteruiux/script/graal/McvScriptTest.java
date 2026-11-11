@@ -36,11 +36,11 @@ class McvScriptTest {
                   w.fill(0, 0, 0, 3, 0, 3, 'white_concrete');
                   seen = w.getBlock(1, 1, 1).block + '|' + w.getBlock(5, 5, 5).id;
                   var cow = w.spawnEntity(2, 1, 2, 'cow');
-                  cow.methods.setPosition(3, 1, 3);
-                  cow.fields.customName = 'Bessie';
+                  cow.setPosition(3, 1, 3);
+                  cow.customName = 'Bessie';
                   var cam = w.getCamera();
                   cam.setYaw(90); cam.setProjection('perspective');
-                  seen += '|' + cow.fields.x + '|' + cow.fields.customName + '|' + cam.get().yaw;
+                  seen += '|' + cow.x + '|' + cow.customName + '|' + cam.get().yaw;
                   ui.log(seen);
                 }
                 """);
@@ -49,6 +49,46 @@ class McvScriptTest {
         var w = host.world(1);
         assertEquals(17, w.blockCount());
         assertEquals(1, w.entities().size());
+    }
+
+    @Test
+    void entitiesAreUsedDirectlyWithoutMethodsOrFieldsObjects() throws Exception {
+        rt.load("t.uijs", """
+                function go() {
+                  var w = mcv.createWorld(6, 3, 6);
+                  var cow = w.spawnEntity(1, 1, 1, 'cow', '{Age:-24000}');
+                  cow.setPosition(2, 1, 3);
+                  cow.x = 4;                                  // 한 축만 바꿔도 된다
+                  cow.yaw = 90;
+                  cow.customName = 'Bessie';
+                  cow.mergeNbt('{Silent:1b}');
+                  ui.log('pos=' + cow.x + ',' + cow.y + ',' + cow.z + ' yaw=' + cow.yaw + ' name=' + cow.customName
+                         + ' type=' + cow.type + ' id=' + cow.id + ' str=' + String(cow) + ' json=' + JSON.stringify({e: cow}));
+                  var pig = w.spawnEntity(0, 1, 0, 'pig');
+                  pig.remove();
+                }
+                """);
+        String out = call("go");
+        assertTrue(out.contains("pos=4,1,3 yaw=90 name=Bessie type=minecraft:cow id=1 str=Entity#1 json={\\\"e\\\":{\\\"id\\\":1}}"), out);
+        var w = host.world(1);
+        assertEquals(1, w.entities().size(), "remove() 로 돼지는 사라졌다");
+        var cow = w.entities().iterator().next();
+        assertEquals("{Age:-24000}", cow.pollPendingNbt(), "소환할 때 준 NBT 가 먼저 걸린다");
+        assertEquals("{Silent:1b}", cow.pollPendingNbt());
+        assertEquals(null, cow.pollPendingNbt());
+    }
+
+    @Test
+    void spawnWithInvalidNbtIsRejectedAndLeavesNoEntity() throws Exception {
+        rt.load("t.uijs", """
+                function go() {
+                  var w = mcv.createWorld(3, 3, 3);
+                  try { w.spawnEntity(1, 1, 1, 'cow', 'not nbt'); } catch (e) { ui.log('err:' + e.message); }
+                }
+                """);
+        String out = call("go");
+        assertTrue(out.contains("err:"), out);
+        assertEquals(0, host.world(1).entities().size());
     }
 
     @Test

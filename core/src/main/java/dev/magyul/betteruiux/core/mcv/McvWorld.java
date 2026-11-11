@@ -179,10 +179,18 @@ public final class McvWorld {
 
     // ---- 엔티티 ----
 
-    public McvEntity spawnEntity(double x, double y, double z, String type) {
+    public McvEntity spawnEntity(double x, double y, double z, String type) { return spawnEntity(x, y, z, type, null); }
+
+    /**
+     * 엔티티를 소환한다. {@code nbt}(SNBT, 예: {@code {Age:-24000,CustomName:"Moo"}})를 주면 소환과 함께 병합 요청으로 걸린다
+     * ({@link #mergeEntityNbt} 와 같은 규칙). NBT 가 올바르지 않으면 엔티티를 만들지 않고 거부한다.
+     */
+    public McvEntity spawnEntity(double x, double y, double z, String type, String nbt) {
         if (entities.size() >= MAX_ENTITIES) throw new IllegalArgumentException("엔티티가 너무 많습니다(" + MAX_ENTITIES + ")");
         String t = McvEntity.normalizeType(type);
+        String checked = nbt == null || nbt.isBlank() ? null : checkNbt(nbt);
         McvEntity e = new McvEntity(nextEntity.getAndIncrement(), t, x, y, z);
+        if (checked != null) e.queueNbt(checked);
         entities.put(e.id(), e);
         log(new Change.EntitySpawn(e.id(), t, x, y, z));
         return e;
@@ -218,11 +226,15 @@ public final class McvWorld {
      * 실제 적용은 렌더 스레드가 진짜 엔티티에 한다(월드에 접속하지 않았다면 적용되지 않는다). 위치/회전은 setPosition/setRotation 이 매 프레임 이긴다.
      */
     public void mergeEntityNbt(int id, String snbt) {
+        entity(id).queueNbt(checkNbt(snbt));
+    }
+
+    private static String checkNbt(String snbt) {
         if (snbt == null) throw new IllegalArgumentException("NBT 글자가 필요합니다");
         String t = snbt.trim();
         if (t.length() > McvEntity.MAX_NBT) throw new IllegalArgumentException("NBT 가 너무 깁니다(" + McvEntity.MAX_NBT + "자)");
         if (!t.startsWith("{") || !t.endsWith("}")) throw new IllegalArgumentException("NBT 는 {...} 형식이어야 합니다");
-        entity(id).queueNbt(t);
+        return t;
     }
 
     public Object getEntityField(int id, String name) {

@@ -112,4 +112,19 @@ class McvHostTest {
         h.world(w).entity(e).setNbtSnapshot("{Age:0}");
         assertEquals("{Age:0}", call(h, base + "\"getNbt\"}").get("value"));
     }
+
+    @Test
+    void spawnEntityAcceptsNbtAndRefusesBadNbtWithoutCreatingAnything() {
+        McvHost h = new McvHost();
+        int w = world(h, 4, 4, 4);
+        String spawn = "{\"cmd\":\"spawnEntity\",\"world\":" + w + ",\"x\":1,\"y\":1,\"z\":1,\"type\":\"cow\",\"nbt\":";
+        Map<String, Object> ok = call(h, spawn + "\"{Age:-24000}\"}");
+        assertTrue((Boolean) ok.get("ok"));
+        int id = ((Double) ok.get("value")).intValue();
+        assertEquals("{Age:-24000}", h.world(w).entity(id).pollPendingNbt());
+        assertFalse((Boolean) call(h, spawn + "\"nope\"}").get("ok"));
+        assertFalse((Boolean) call(h, spawn + "\"{" + "x".repeat(5000) + "}\"}").get("ok"));
+        assertEquals(1, h.world(w).entities().size(), "잘못된 NBT 로는 엔티티가 만들어지지 않는다");
+        assertTrue((Boolean) call(h, spawn + "null}").get("ok"), "nbt 를 안 줘도 된다");
+    }
 }

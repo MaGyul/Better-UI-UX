@@ -28,8 +28,8 @@ function onInit() {
 // 돼지가 집 옆을 한 바퀴 돈다(틱마다 호출된다).
 function onTick(tick) {
   var a = tick * 0.04;
-  pig.methods.setPosition(7.5 + Math.cos(a) * 2.5, 1, 7.5 + Math.sin(a) * 2.5);
-  pig.methods.setRotation(a * 180 / Math.PI + 90, 0);
+  pig.setPosition(7.5 + Math.cos(a) * 2.5, 1, 7.5 + Math.sin(a) * 2.5);
+  pig.setRotation(a * 180 / Math.PI + 90, 0);
 }
 
 function onBlockHover(e) {

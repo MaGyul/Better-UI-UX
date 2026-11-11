@@ -46,10 +46,10 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                       w.fill(1, 1, 1, 3, 3, 3, 'red_concrete');
                       w.setBlock(0, 1, 0, 'grass_block');
                       var cow = w.spawnEntity(4.5, 1, 4.5, 'cow');
-                      cow.methods.setRotation(135, 0);
+                      cow.setRotation(135, 0);
                       w.spawnEntity(0.5, 1, 4.5, 'pig');
                       var sheep = w.spawnEntity(4.5, 1, 0.5, 'sheep');
-                      sheep.fields.customName = 'Dolly';
+                      sheep.customName = 'Dolly';
                     }
                     """);
             Files.writeString(base.resolve("ui/gt_mcv3.uiml"), """
@@ -130,20 +130,24 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                         <label id="h" text="h"/>
                         <label id="c" text="c"/>
                         <label id="n" text="n"/>
+                        <label id="s" text="s"/>
                       </column>
                       <mc-viewer id="view" anchor="center" width="240" height="180"/>
                     </screen>
                     """);
             Files.writeString(base.resolve("ui/gt_mcv7.uijs"), """
-                    var w, cow;
+                    var w, cow, calf;
                     function onInit() {
                       w = mcv.createWorld(5, 3, 5);
                       w.fill(0, 0, 0, 4, 0, 4, 'white_concrete');
                       cow = w.spawnEntity(2.5, 1, 2.5, 'cow');
+                      calf = w.spawnEntity(0.5, 1, 0.5, 'cow', '{Age:-24000}');          // 소환하면서 NBT
                     }
                     function onTick() {
                       var p = w.project(2.5, 1.5, 2.5);
                       if (p) ui.setText('#p', Math.round(p.x) + ',' + Math.round(p.y));
+                      var c = calf.getNbt();
+                      if (c) ui.setText('#s', c.indexOf('Age:-1') >= 0 ? 'calf' : 'adult');
                       var n = cow.getNbt();
                       if (n) ui.setText('#n', n.indexOf('Age:-1') >= 0 && n.indexOf('Moo') >= 0 ? 'merged' : 'plain');
                     }
@@ -244,6 +248,7 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             System.out.println("[mc-viewer test] " + text(ctx, "#h") + " / nbt " + text(ctx, "#n"));
             check(text(ctx, "#h").equals("hover minecraft:cow"), "소 위에서 호버가 와야 한다: " + text(ctx, "#h"));
             check(text(ctx, "#n").equals("plain"), "처음엔 어른 소다: " + text(ctx, "#n"));
+            check(text(ctx, "#s").equals("calf"), "소환할 때 준 NBT({Age:-24000})가 적용되어 새끼여야 한다: " + text(ctx, "#s"));
             BufferedImage cowBefore = read(ctx.takeScreenshot("mc-viewer-cow-adult"));
             inp.pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
             ctx.waitTicks(20);
