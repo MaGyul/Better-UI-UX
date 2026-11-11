@@ -59,6 +59,11 @@ public final class BetterUiuxFabricClient implements ClientModInitializer {
                         .then(ClientCommands.literal("publish")
                                 .then(ClientCommands.argument("id", StringArgumentType.word())
                                         .executes(ctx -> ClientSync.publishUi(StringArgumentType.getString(ctx, "id")) ? 1 : 0)))
+                        .then(ClientCommands.literal("editor")                       // 열린 화면 없는 빈 에디터: 안에서 편집할 화면을 고른다
+                                .executes(ctx -> {
+                                    UiApi.editor();
+                                    return 1;
+                                }))
                         .then(ClientCommands.literal("edit")
                                 .then(ClientCommands.argument("id", StringArgumentType.word())
                                         .executes(ctx -> {

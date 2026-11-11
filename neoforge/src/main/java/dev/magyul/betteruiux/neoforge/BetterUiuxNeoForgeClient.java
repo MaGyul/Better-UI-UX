@@ -61,6 +61,11 @@ public final class BetterUiuxNeoForgeClient {
                         .then(Commands.literal("publish")
                                 .then(Commands.argument("id", StringArgumentType.word())
                                         .executes(ctx -> ClientSync.publishUi(StringArgumentType.getString(ctx, "id")) ? 1 : 0)))
+                        .then(Commands.literal("editor")                       // 열린 화면 없는 빈 에디터: 안에서 편집할 화면을 고른다
+                                .executes(ctx -> {
+                                    UiApi.editor();
+                                    return 1;
+                                }))
                         .then(Commands.literal("edit")
                                 .then(Commands.argument("id", StringArgumentType.word())
                                         .executes(ctx -> {

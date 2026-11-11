@@ -150,6 +150,8 @@ public final class EditorController {
 
     private String editKey;
     private final FieldText fieldText = new FieldText();
+    /** 열린 화면이 없는 빈 에디터(패널/저장 없음, 파일을 고르는 목록만 보인다). */
+    private final boolean blank;
 
     // ---- 외부 스타일시트(.uicss) 편집: 파일에 바로 쓰고, 되돌리기는 문서 편집과 순서를 맞춘다 ----
     private record ExtEdit(String href, String before, String after) {}
@@ -229,6 +231,7 @@ public final class EditorController {
 
     public EditorController(EditorHost host, TextMetrics tm, String text, int viewW, int viewH) throws UiParseException {
         this.host = host;
+        this.blank = host.isBlank();
         this.animatePan = host.panAnimation();
         this.tm = tm;
         this.help = new HelpOverlay(tm);
@@ -404,10 +407,10 @@ public final class EditorController {
     private boolean dragStarted() { return drag != null && drag.started; }
 
     /** 왼쪽 패널(블록+구조): 접었거나, 캔버스에서 요소를 끄는 중이면 숨긴다. */
-    private boolean leftVisible() { return panelsVisible && (!leftCollapsed || leftPeek) && !dragStarted(); }
+    private boolean leftVisible() { return !blank && panelsVisible && (!leftCollapsed || leftPeek) && !dragStarted(); }
 
     /** 오른쪽 패널(속성): 접었거나, 무엇이든 끄는 중이면 숨긴다. */
-    private boolean rightVisible() { return panelsVisible && (rightShown() || rightPeek) && !dragStarted() && dnd == null; }
+    private boolean rightVisible() { return !blank && panelsVisible && (rightShown() || rightPeek) && !dragStarted() && dnd == null; }
 
     /** 접어 두었어도 요소를 선택하고 있는 동안은 잠깐 펼쳐 보인다(선택이 풀리면 다시 접힘). */
     private boolean rightShown() { return !rightCollapsed || (selected >= 0 && !tempDismissed); }
@@ -928,6 +931,7 @@ public final class EditorController {
             if (r.action() != null) r.action().run();
             return true;
         }
+        if (blank) return true;                              // 빈 에디터: 고를 요소가 없다
         int cx = x - panX, cy = y - panY;                   // 이후는 문서 좌표
         boolean underToolbar = toolbarVisible() && y < TOOLBAR_H;
         marqPending = false;
@@ -1779,6 +1783,10 @@ public final class EditorController {
     }
 
     public boolean save() {
+        if (blank) {
+            setStatus("저장할 화면이 없어요 — File 메뉴에서 화면을 고르세요", true);
+            return false;
+        }
         commitFieldQuietly();
         String disk = host.diskText();
         if (!overwriteArmed && !java.util.Objects.equals(disk, diskBase)) {       // 에디터 밖에서 파일이 바뀌었다
@@ -2282,9 +2290,13 @@ public final class EditorController {
         updateSidePeek();
         autoPan();
         stepPan();
-        g.pushTransform(panX, panY, 1f, 0f, 0f, 0f);
-        paintCanvasOverlay(g);
-        g.popTransform();
+        if (blank) {
+            paintBlankPicker(g);                             // 화면이 없으니 캔버스 대신 고르는 목록
+        } else {
+            g.pushTransform(panX, panY, 1f, 0f, 0f, 0f);
+            paintCanvasOverlay(g);
+            g.popTransform();
+        }
         if (leftVisible()) paintLeftPanel(g);
         if (rightVisible()) paintProperties(g);
         if (selected != lastSelected) {
@@ -2294,8 +2306,8 @@ public final class EditorController {
         }
         if (toolbarVisible()) paintToolbar(g);
         else paintPeekSliver(g);
-        paintSideSlivers(g);
-        if (panelsVisible && !dragStarted()) paintTabs(g);
+        if (!blank) paintSideSlivers(g);
+        if (!blank && panelsVisible && !dragStarted()) paintTabs(g);
         popupRect = null;
         paintPicker(g);
         paintSuggestions(g);
@@ -2479,7 +2491,7 @@ public final class EditorController {
         regions.add(new Region(new Rect(0, 0, viewW, TOOLBAR_H), null, null, true));   // 버튼이 아닌 빈 곳은 아래 캔버스로 통과
         int y = 2, h = TOOLBAR_H - 4;
         boolean panned = panX != 0 || panY != 0 || targetPanX != 0 || targetPanY != 0;
-        List<ToolItem> items = List.of(
+        List<ToolItem> all = List.of(
                 new ToolItem("File", true, r -> openFileMenu(r), C_BTN, 0),
                 new ToolItem("Save" + (session.isDirty() ? "*" : ""), true, r -> save(), C_BTN, 0),
                 new ToolItem("Undo", canUndoAny(), r -> undo(), C_BTN, 0),
@@ -2503,6 +2515,7 @@ public final class EditorController {
                 }), C_BTN, 0),
                 new ToolItem("Pub", host.canPublish(), r -> { if (!session.isDirty() || save()) host.publish(); }, C_BTN, 4),
                 new ToolItem(panned ? "Fit!" : "Fit", panned, r -> resetView(), C_BTN_HOT, 0));
+        List<ToolItem> items = blank ? all.subList(0, 1) : all;                            // 빈 에디터는 File 만(저장/편집 도구는 화면이 있어야 쓴다)
         int exitW = tm.width("Exit") + 8;
         int exitX = viewW - exitW - 2, limit = exitX - 2;
         ToolbarLayout.Result lay = ToolbarLayout.layout(items.stream().map(it -> new ToolbarLayout.Item(it.label(), it.gap())).toList(), tm, limit);
@@ -2909,27 +2922,62 @@ public final class EditorController {
     private static final List<String> NEW_KINDS = List.of("빈 화면", "대화상자");
 
     /** File 메뉴: 다른 UI 열기, 새 UI 만들기. 저장하지 않은 변경이 있으면 전환하지 않고 먼저 저장하라고 알린다. */
-    private void openFileMenu(Rect near) {
+    private void openFileMenu(Rect near) { menu.open(near, fileItems(), this::pickFileItem); }
+
+    private List<String> fileItems() {
         List<String> items = new ArrayList<>();
         List<String> screens = host.screens();
         for (int i = 0; i < screens.size() && i < 24; i++) items.add(OPEN_PREFIX + screens.get(i));
         for (String k : NEW_KINDS) items.add(NEW_PREFIX + k);
-        menu.open(near, items, item -> {
-            if (session.isDirty()) {
-                setStatus("저장하지 않은 변경이 있어요 — 저장(Ctrl+S)한 뒤 다른 화면으로 전환하세요", true);
-                return;
+        return items;
+    }
+
+    /** File 메뉴(또는 빈 에디터의 목록)에서 고른 항목: 열기 / 새 화면. 새 화면은 저장하기 전에는 파일로 만들어지지 않는다. */
+    private void pickFileItem(String item) {
+        if (session.isDirty()) {
+            setStatus("저장하지 않은 변경이 있어요 — 저장(Ctrl+S)한 뒤 다른 화면으로 전환하세요", true);
+            return;
+        }
+        if (item.startsWith(OPEN_PREFIX)) {
+            host.switchTo(item.substring(OPEN_PREFIX.length()));
+        } else if (item.startsWith(NEW_PREFIX)) {
+            try {
+                String id = host.createScreen(NEW_KINDS.indexOf(item.substring(NEW_PREFIX.length())));
+                if (id != null) host.switchTo(id);
+            } catch (IOException e) {
+                setStatus("새 화면을 만들지 못했습니다: " + e.getMessage(), true);
             }
-            if (item.startsWith(OPEN_PREFIX)) {
-                host.switchTo(item.substring(OPEN_PREFIX.length()));
-            } else if (item.startsWith(NEW_PREFIX)) {
-                try {
-                    String id = host.createScreen(NEW_KINDS.indexOf(item.substring(NEW_PREFIX.length())));
-                    if (id != null) host.switchTo(id);
-                } catch (IOException e) {
-                    setStatus("새 화면을 만들지 못했습니다: " + e.getMessage(), true);
-                }
-            }
-        });
+        }
+    }
+
+    /** 빈 에디터: 가운데에 편집할 화면 목록과 "새 화면" 항목을 보여 준다(누르면 File 메뉴와 같다). */
+    private void paintBlankPicker(UiGfx g) {
+        List<String> items = fileItems();
+        List<String> screens = host.screens();
+        int lineH = ROW_H + 2;
+        String title = "편집할 화면을 고르세요", none = "저장된 화면이 없어요 — 아래에서 새로 만드세요";
+        int w = tm.width(title) + 24;
+        for (String s : items) w = Math.max(w, tm.width(s) + 24);
+        w = Math.max(w, Math.min(tm.width(none) + 24, viewW - 20));
+        int rows = items.size() + (screens.isEmpty() ? 1 : 0);
+        int h = 26 + rows * lineH + 8;
+        int x = (viewW - w) / 2, y = Math.max(TOOLBAR_H + 8, (viewH - h) / 2);
+        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
+        g.fillRect(x, y, w, h, 0xFF161820);
+        regions.add(new Region(new Rect(x, y, w, h), null));
+        g.drawText(title, x + (w - tm.width(title)) / 2, y + 8, C_TEXT, false);
+        int ry = y + 22;
+        if (screens.isEmpty()) {
+            g.drawText(none, x + 12, ry + 1, C_DIM, false);
+            ry += lineH;
+        }
+        for (String item : items) {
+            Rect row = new Rect(x + 6, ry, w - 12, lineH - 1);
+            if (row.contains(mouseX, mouseY)) g.fillRect(row.x(), row.y(), row.w(), row.h(), C_ROW_SEL);
+            g.drawText(item, x + 12, row.y() + 2, item.startsWith(NEW_PREFIX) ? C_DIM : C_TEXT, false);
+            regions.add(new Region(row, () -> pickFileItem(item)));
+            ry += lineH;
+        }
     }
 
     // ---- 복사 / 붙여넣기 / 감싸기 ----

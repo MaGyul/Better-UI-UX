@@ -67,6 +67,9 @@ public interface EditorHost {
     /** 스타일시트 파일을 바로 저장한다(편집기에서 외부 규칙을 고칠 때). */
     default void writeFile(String name, String text) throws IOException { throw new IOException("이 환경에서는 파일을 쓸 수 없어요"); }
 
+    /** 열린 화면이 하나도 없는 빈 에디터인가(파일 고르기 안내만 보이고, 저장·패널은 없다). */
+    default boolean isBlank() { return false; }
+
     /** 자동 저장본을 지운다(저장했거나 버렸을 때). */
     default void clearAutosave() { }
 

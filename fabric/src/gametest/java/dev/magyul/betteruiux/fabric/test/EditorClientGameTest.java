@@ -24,7 +24,8 @@ public class EditorClientGameTest implements FabricClientGameTest {
     private static final int KEY_ENTER = com.mojang.blaze3d.platform.InputConstants.KEY_RETURN,
             KEY_ESCAPE = com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE,
             KEY_Z = com.mojang.blaze3d.platform.InputConstants.KEY_Z,
-            KEY_Y = com.mojang.blaze3d.platform.InputConstants.KEY_Y;
+            KEY_Y = com.mojang.blaze3d.platform.InputConstants.KEY_Y,
+            KEY_S = com.mojang.blaze3d.platform.InputConstants.KEY_S;
 
     private Path base;
 
@@ -43,6 +44,7 @@ public class EditorClientGameTest implements FabricClientGameTest {
             keyframes(ctx);
             fileMenuSwitchesScreens(ctx);
             sizePreview(ctx);
+            blankEditorAndLazyNewFile(ctx);
             autosaveRecovery(ctx);
         }
     }
@@ -125,6 +127,65 @@ public class EditorClientGameTest implements FabricClientGameTest {
         ctx.takeScreenshot("6-size-preview-480x270");
         check(find(ctx, "480x270") != null, "미리보기 크기 라벨이 보여야 한다");
         ctx.runOnClient(mc -> ((UiScreen) mc.gui.screen()).editor().setPreviewSize(0, 0));
+    }
+
+    /**
+     * /uiux editor: 열린 화면 없는 빈 에디터가 뜨고 화면 목록이 보인다. 거기서 새 화면을 만들어도 저장하기 전에는 파일이 없고,
+     * 변경 없이 닫으면 아무 파일도 남지 않는다. 고친 뒤 Ctrl+S 를 하면 그때 파일이 생긴다.
+     */
+    private void blankEditorAndLazyNewFile(ClientGameTestContext ctx) {
+        Path newFile = base.resolve("ui/new_1.xml");
+        check(!Files.exists(newFile), "시작할 때 new_1.xml 이 없어야 한다");
+
+        ctx.runOnClient(mc -> dev.magyul.betteruiux.mc26.UiApi.editor());
+        ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen sc && sc.uiId().isEmpty() && sc.editor() != null);
+        ctx.waitTicks(3);
+        ctx.takeScreenshot("6b-blank-editor");
+        check(find(ctx, "편집할 화면을 고르세요") != null, "빈 에디터의 안내가 보여야 한다");
+        check(find(ctx, "열기: gt_ext") != null && find(ctx, "열기: gt_kf") != null, "화면 목록이 보여야 한다");
+        check(find(ctx, "Save") == null, "빈 에디터에는 Save 가 없다");
+
+        // 1) 새 화면을 만들어도 변경이 없으면 파일이 생기지 않는다
+        int[] fresh = find(ctx, "새 화면: 빈 화면");
+        click(ctx, fresh[0] + 2, fresh[1] + 2);
+        ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen sc && sc.uiId().equals("new_1") && sc.editor() != null);
+        ctx.waitTicks(3);
+        ctx.takeScreenshot("6c-new-unsaved");
+        check(!Files.exists(newFile), "새 화면은 저장하기 전에는 파일이 없어야 한다");
+        check(find(ctx, "new_1.xml (새 파일 - 저장 전)") != null, "제목에 저장 전 표시가 있어야 한다");
+        check(!editor(ctx, EditorController::isDirty), "고치지 않았으면 변경 없음");
+        ctx.getInput().pressKey(KEY_ESCAPE);                                   // 변경 없이 닫기: 묻지 않고 닫힌다
+        ctx.waitFor(mc -> !(mc.gui.screen() instanceof UiScreen));
+        check(!Files.exists(newFile), "변경 없이 닫으면 아무 파일도 남지 않아야 한다");
+
+        // 2) 새로 만들어 고친 뒤 Ctrl+S 를 하면 그때 파일이 생긴다
+        ctx.runOnClient(mc -> dev.magyul.betteruiux.mc26.UiApi.editor());
+        ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen sc && sc.uiId().isEmpty() && sc.editor() != null);
+        ctx.waitTicks(3);
+        int[] dialog = find(ctx, "새 화면: 대화상자");
+        click(ctx, dialog[0] + 2, dialog[1] + 2);
+        ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen sc && sc.uiId().equals("new_1") && sc.editor() != null);
+        ctx.waitTicks(3);
+        check(!Files.exists(newFile), "아직 저장 전이다");
+        ctx.runOnClient(mc -> ((UiScreen) mc.gui.screen()).editor().add("label"));
+        check(editor(ctx, EditorController::isDirty), "요소를 더하면 변경이 생긴다");
+        check(!Files.exists(newFile), "고쳤어도 저장 전에는 파일이 없다");
+        ctrl(ctx, KEY_S);
+        ctx.waitTicks(3);
+        ctx.takeScreenshot("6d-new-saved");
+        check(Files.exists(newFile), "Ctrl+S 를 하면 파일이 생겨야 한다");
+        check(read("ui/new_1.xml").contains("<label"), "저장된 파일에 추가한 요소가 있어야 한다: " + read("ui/new_1.xml"));
+        check(find(ctx, "new_1.xml (새 파일 - 저장 전)") == null && find(ctx, "new_1.xml") != null, "저장 뒤에는 저장 전 표시가 사라진다");
+        for (int i = 0; i < 3 && ctx.computeOnClient(mc -> mc.gui.screen() instanceof UiScreen); i++) {   // 선택이 있으면 첫 Esc 는 선택만 푼다
+            ctx.getInput().pressKey(KEY_ESCAPE);
+            ctx.waitTicks(3);
+        }
+        check(!ctx.computeOnClient(mc -> mc.gui.screen() instanceof UiScreen), "저장한 뒤에는 묻지 않고 닫혀야 한다");
+        try {
+            Files.deleteIfExists(newFile);                                    // 다음 시나리오에 영향이 없게
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
     }
 
     /** 저장 안 하고 끝난 편집이 남아 있으면 열 때 복구 대화상자가 뜨고, Enter 로 복구된다. */
