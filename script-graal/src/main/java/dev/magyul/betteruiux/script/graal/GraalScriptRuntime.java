@@ -53,12 +53,65 @@ public final class GraalScriptRuntime implements ScriptRuntime {
               };
               Object.freeze(ui);
               globalThis.ui = ui;
+              var host = globalThis.__host;                    // 동기 호스트 콜백: 스크립트가 직접 부를 수 없게 전역에서 지운다
+              delete globalThis.__host;
+              var jsonParse = JSON.parse, jsonStringify = JSON.stringify;    // 스크립트가 JSON 을 덮어써도 요청이 위조되지 않게 원본을 잡아 둔다
+              function H(req) {
+                var r = jsonParse(host(jsonStringify(req)));
+                if (!r.ok) throw new Error(r.error);
+                return r.value;
+              }
+              function camera(w) {
+                function c(op) { return function () { return H({cmd: 'camera', world: w, op: op, args: Array.prototype.slice.call(arguments)}); }; }
+                return Object.freeze({
+                  setYaw: c('setYaw'), setPitch: c('setPitch'), setPosition: c('setPosition'), setZoom: c('setZoom'),
+                  setFov: c('setFov'), setProjection: c('setProjection'), get: c('get')
+                });
+              }
+              function entity(w, id) {
+                var fields = new Proxy({}, {
+                  get: function (_, n) { return typeof n === 'string' ? H({cmd: 'entityGet', world: w, entity: id, name: n}) : undefined; },
+                  set: function (_, n, v) { H({cmd: 'entitySet', world: w, entity: id, name: String(n), value: v}); return true; }
+                });
+                var methods = new Proxy({}, {
+                  get: function (_, n) {
+                    if (typeof n !== 'string') return undefined;
+                    return function () { return H({cmd: 'entityCall', world: w, entity: id, method: n, args: Array.prototype.slice.call(arguments)}); };
+                  }
+                });
+                return Object.freeze({id: id, fields: fields, methods: methods});
+              }
+              function world(w) {
+                var cam = camera(w);
+                return Object.freeze({
+                  id: w,
+                  size: function () { return H({cmd: 'size', world: w}); },
+                  setBlock: function (x, y, z, block, nbt) {
+                    H({cmd: 'setBlock', world: w, x: x, y: y, z: z, block: String(block), nbt: nbt == null ? null : String(nbt)});
+                  },
+                  getBlock: function (x, y, z) { return H({cmd: 'getBlock', world: w, x: x, y: y, z: z}); },
+                  fill: function (x1, y1, z1, x2, y2, z2, block, nbt) {
+                    return H({cmd: 'fill', world: w, x1: x1, y1: y1, z1: z1, x2: x2, y2: y2, z2: z2, block: String(block), nbt: nbt == null ? null : String(nbt)});
+                  },
+                  setBlocks: function (list) { return H({cmd: 'setBlocks', world: w, blocks: list}); },
+                  spawnEntity: function (x, y, z, type) { return entity(w, H({cmd: 'spawnEntity', world: w, x: x, y: y, z: z, type: String(type)})); },
+                  getCamera: function () { return cam; },
+                  setViewArea: function (x1, y1, z1, x2, y2, z2) { H({cmd: 'setViewArea', world: w, x1: x1, y1: y1, z1: z1, x2: x2, y2: y2, z2: z2}); },
+                  clearViewArea: function () { H({cmd: 'clearViewArea', world: w}); },
+                  setTickRate: function (rate) { H({cmd: 'setTickRate', world: w, rate: rate}); }
+                });
+              }
+              globalThis.mcv = Object.freeze({
+                createWorld: function (x, y, z) { return world(H({cmd: 'createWorld', x: x, y: y, z: z})); }
+              });
               globalThis.console = Object.freeze({log: ui.log, warn: ui.log, error: ui.log, info: ui.log});
               globalThis.__dispatch = function (json) {
                 ops = [];
                 var msg = JSON.parse(json);
                 if (msg.type === 'init') {
                   if (typeof globalThis.onInit === 'function') globalThis.onInit(msg.state);
+                } else if (msg.type === 'tick') {
+                  if (typeof globalThis.onTick === 'function') globalThis.onTick(msg.tick, msg.state);
                 } else if (msg.type === 'call') {
                   var f = globalThis[msg.fn];
                   if (typeof f === 'function') f(msg.event, msg.state);
@@ -124,8 +177,43 @@ public final class GraalScriptRuntime implements ScriptRuntime {
         }
     }
 
+    private final long statementLimit;
+    private final Duration timeLimit;
+    private volatile java.util.function.Function<String, String> hostCallback;
+
     public GraalScriptRuntime() {
+        this(STATEMENT_LIMIT, TIME_LIMIT);
+    }
+
+    /** mc-viewer 처럼 무거운 스크립트를 위해 한도를 직접 정한다(워치독 상한은 그대로 적용된다). */
+    public GraalScriptRuntime(long statementLimit, Duration timeLimit) {
+        this.statementLimit = statementLimit;
+        this.timeLimit = timeLimit;
         withLoader(this::create);
+    }
+
+    /** 생성자가 받는 한도 인자(리플렉션용): (long 문장 수, long 밀리초). */
+    public GraalScriptRuntime(long statementLimit, long timeLimitMillis) {
+        this(statementLimit, Duration.ofMillis(timeLimitMillis));
+    }
+
+    @Override
+    public void setHostCallback(java.util.function.Function<String, String> callback) {
+        this.hostCallback = callback;
+    }
+
+    /** 스크립트가 {@code __host} 로 부르는 다리: 글자 하나를 호스트 콜백에 넘기고 글자 하나를 받는다. */
+    private final class HostBridge implements org.graalvm.polyglot.proxy.ProxyExecutable {
+        @Override
+        public Object execute(Value... args) {
+            java.util.function.Function<String, String> cb = hostCallback;
+            if (cb == null || args.length != 1 || !args[0].isString()) return "{\"ok\":false,\"error\":\"mcv 를 쓸 수 없습니다\"}";
+            try {
+                return cb.apply(args[0].asString());
+            } catch (RuntimeException e) {
+                return "{\"ok\":false,\"error\":\"mcv 내부 오류\"}";
+            }
+        }
     }
 
     /**
@@ -144,7 +232,7 @@ public final class GraalScriptRuntime implements ScriptRuntime {
     }
 
     private void create() {
-        ResourceLimits limits = ResourceLimits.newBuilder().statementLimit(STATEMENT_LIMIT, null).build();
+        ResourceLimits limits = ResourceLimits.newBuilder().statementLimit(statementLimit, null).build();
         this.context = Context.newBuilder("js")
                 .engine(sharedEngine())
                 .allowHostAccess(HostAccess.NONE)
@@ -159,6 +247,7 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                 .resourceLimits(limits)
                 .option("js.string-length-limit", Integer.toString(STRING_LIMIT))
                 .build();
+        context.getBindings("js").putMember("__host", new HostBridge());
         context.eval(Source.create("js", BOOTSTRAP));
         this.dispatch = context.getBindings("js").getMember("__dispatch");
         needsRebuild = false;
@@ -189,6 +278,8 @@ public final class GraalScriptRuntime implements ScriptRuntime {
 
     @Override
     public synchronized String call(String messageJson) throws ScriptException {
+        java.util.function.Function<String, String> cb = hostCallback;
+        if (cb != null) cb.apply("{\"cmd\":\"beginCall\"}");                       // mcv 호출 횟수 예산을 새로 시작
         Value result = run(() -> dispatch.execute(messageJson), "call");
         return result.isString() ? result.asString() : "[]";
     }
@@ -218,7 +309,7 @@ public final class GraalScriptRuntime implements ScriptRuntime {
             } catch (java.util.concurrent.TimeoutException | RuntimeException ignored) {
                 // 이미 끝났거나 닫힘
             }
-        }, TIME_LIMIT.toMillis(), TimeUnit.MILLISECONDS);
+        }, timeLimit.toMillis(), TimeUnit.MILLISECONDS);
         try {
             return job.run();
         } catch (PolyglotException e) {
@@ -229,9 +320,9 @@ public final class GraalScriptRuntime implements ScriptRuntime {
         }
     }
 
-    private static String describe(PolyglotException e, String what) {
-        if (e.isResourceExhausted()) return "실행 한도를 넘었습니다(문장 수 " + STATEMENT_LIMIT + ")";
-        if (e.isCancelled() || e.isInterrupted()) return "실행 시간 한도를 넘었습니다(" + TIME_LIMIT.toMillis() + "ms)";
+    private String describe(PolyglotException e, String what) {
+        if (e.isResourceExhausted()) return "실행 한도를 넘었습니다(문장 수 " + statementLimit + ")";
+        if (e.isCancelled() || e.isInterrupted()) return "실행 시간 한도를 넘었습니다(" + timeLimit.toMillis() + "ms)";
         if (e.isSyntaxError()) return "문법 오류: " + e.getMessage();
         return e.getMessage();
     }

@@ -15,6 +15,13 @@ public interface ScriptRuntime extends AutoCloseable {
      */
     String call(String messageJson) throws ScriptException;
 
+    /**
+     * 스크립트가 동기로 부르는 호스트 콜백(전역 {@code mcv} 가 쓴다). JSON 글자를 받아 JSON 글자를 돌려준다.
+     * 문자열만 오가므로 Java 객체는 경계를 넘지 못한다. 설정하지 않으면 {@code mcv} 호출은 오류가 된다.
+     * 호출 직전에 {@code {"cmd":"beginCall"}} 이 한 번 먼저 온다(호출 횟수 예산을 되돌리는 신호, 스크립트는 보낼 수 없다).
+     */
+    default void setHostCallback(java.util.function.Function<String, String> callback) { }
+
     @Override
     void close();
 

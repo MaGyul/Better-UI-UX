@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.mc26;
 
 import dev.magyul.betteruiux.core.doc.UiDocument;
+import dev.magyul.betteruiux.core.mcv.McvHost;
 import dev.magyul.betteruiux.core.script.CommandPolicy;
 import dev.magyul.betteruiux.core.script.ScriptHost;
 import dev.magyul.betteruiux.core.script.ScriptRuntime;
@@ -49,16 +50,33 @@ final class ScriptBridge {
     /** 화면이 닫히거나 문서가 바뀔 때 부르는 핸들. 런타임이 준비되기 전에 닫아도 안전하다. */
     static final class Attached {
         private volatile boolean closed;
-        private ScriptHost host;
+        private volatile ScriptHost host;
+        private final java.util.concurrent.ExecutorService scriptThread = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "better-uiux-script");
+            t.setDaemon(true);
+            return t;
+        });
+        /** {@code <mc-viewer>} 가 있는 문서에서만 만들어진다. 위젯이 이 월드들을 그린다. */
+        volatile McvHost mcv;
 
         void close() {
             closed = true;
-            if (host != null) {
-                host.close();
-                host = null;
-            }
+            ScriptHost h = host;
+            host = null;
+            if (h != null) h.close();
+            scriptThread.shutdown();
+            if (mcv != null) mcv.clear();
+        }
+
+        /** 월드 틱 같은 주기 신호를 스크립트의 onTick 으로 보낸다(스크립트가 바쁘면 그 틱은 버려진다). */
+        void tick(long tick) {
+            ScriptHost h = host;
+            if (h != null) h.tick(tick);
         }
     }
+
+    // mc-viewer 문서의 스크립트 한도: 큰 월드를 만들 수 있게 기본(300ms/50만 문장)보다 넉넉하게. 전용 스레드라 프레임은 멈추지 않는다.
+    private static final long MCV_STATEMENT_LIMIT = 5_000_000L, MCV_TIME_LIMIT_MS = 1_500L;
 
     private static final java.util.concurrent.ExecutorService LOADER = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "better-uiux-script-loader");
@@ -82,10 +100,17 @@ final class ScriptBridge {
         doc.setScriptDispatcher((el, fn) -> doc.warn("스크립트를 준비하는 중입니다… 잠시 뒤에 다시 눌러 주세요"));
         Minecraft mc = Minecraft.getInstance();
         CommandPolicy policy = options.scriptCommands().isEmpty() ? CommandPolicy.denyAll() : CommandPolicy.allowing(Set.copyOf(options.scriptCommands()));
+        boolean hasViewer = !doc.queryAll("mc-viewer").isEmpty();
+        McvHost mcvHost = hasViewer ? new McvHost() : null;
+        handle.mcv = mcvHost;
         LOADER.execute(() -> {
             ScriptRuntime runtime;
             try {
-                runtime = (ScriptRuntime) Class.forName(RUNTIME_CLASS).getDeclaredConstructor().newInstance();
+                Class<?> cls = Class.forName(RUNTIME_CLASS);
+                runtime = (ScriptRuntime) (hasViewer
+                        ? cls.getDeclaredConstructor(long.class, long.class).newInstance(MCV_STATEMENT_LIMIT, MCV_TIME_LIMIT_MS)
+                        : cls.getDeclaredConstructor().newInstance());
+                if (mcvHost != null) runtime.setHostCallback(mcvHost::invoke);
             } catch (ReflectiveOperationException | LinkageError e) {
                 Throwable cause = e instanceof java.lang.reflect.InvocationTargetException && e.getCause() != null ? e.getCause() : e;
                 boolean missing = cause instanceof ClassNotFoundException || cause instanceof NoClassDefFoundError;
@@ -102,6 +127,7 @@ final class ScriptBridge {
                 }
                 ScriptHost host = new ScriptHost(doc, rt, policy, ScriptBridge::runCommand);
                 host.setLogSink(line -> LOG.info("[better-uiux][script] {}", line));
+                host.setThreading(handle.scriptThread, mc);          // 스크립트는 전용 스레드, 문서 변경은 렌더 스레드(mc.execute)
                 host.loadScripts(name -> read(userDir, name));
                 host.init();
                 handle.host = host;

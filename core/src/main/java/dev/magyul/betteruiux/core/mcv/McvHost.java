@@ -41,6 +41,10 @@ public final class McvHost {
     public String invoke(String requestJson) {
         Map<String, Object> out = new LinkedHashMap<>();
         try {
+            if ("{\"cmd\":\"beginCall\"}".equals(requestJson)) {          // 런타임이 보내는 신호(스크립트는 이 통로에 닿지 못한다)
+                beginCall();
+                return "{\"ok\":true}";
+            }
             if (++calls > maxCalls) throw new IllegalArgumentException("한 번의 실행에서 mcv 호출을 너무 많이 했습니다(" + maxCalls + ")");
             Object parsed = Json.parse(requestJson);
             if (!(parsed instanceof Map<?, ?> raw)) throw new IllegalArgumentException("요청은 객체여야 합니다");

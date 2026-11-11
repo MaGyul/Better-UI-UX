@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -35,8 +37,23 @@ public final class ScriptHost {
     private final ScriptRuntime runtime;
     private final CommandPolicy policy;
     private final Consumer<String> commandSink;
-    private boolean broken;
+    private volatile boolean broken;
     private Consumer<String> logSink = line -> { };
+    private Executor scriptThread = Runnable::run;       // 기본은 호출한 스레드에서 바로 실행(동기)
+    private Executor mainThread = Runnable::run;         // 문서를 만지는 일을 실행할 스레드(렌더 스레드)
+    private volatile boolean threaded;
+    private final AtomicBoolean tickQueued = new AtomicBoolean();
+
+    /**
+     * 스크립트를 전용 스레드에서 돌린다: 스크립트 호출은 {@code script} 실행기로 가고, 문서에 대한 변경(요청 적용, 경고)은
+     * {@code main} 실행기(렌더 스레드)로 돌아온다. 호출 순서는 {@code script} 가 단일 스레드이면 보장된다.
+     * 설정하지 않으면 모두 호출한 스레드에서 동기로 실행된다.
+     */
+    public void setThreading(Executor script, Executor main) {
+        this.threaded = script != null;
+        this.scriptThread = script == null ? Runnable::run : script;
+        this.mainThread = main == null ? Runnable::run : main;
+    }
 
     /** {@code ui.log}/{@code console.log} 로 온 글자를 받을 곳(기본은 버린다). */
     public void setLogSink(Consumer<String> sink) { this.logSink = sink == null ? line -> { } : sink; }
@@ -71,13 +88,35 @@ public final class ScriptHost {
                 text = el.node().text();
             }
             if (text == null || text.isBlank()) continue;
-            try {
-                runtime.load(name, text);
-            } catch (ScriptRuntime.ScriptException e) {
-                doc.warn("스크립트 '" + name + "': " + e.getMessage());
-                broken = true;
-            }
+            String n = name, t = text;
+            scriptThread.execute(() -> {
+                try {
+                    runtime.load(n, t);
+                } catch (ScriptRuntime.ScriptException e) {
+                    broken = true;
+                    mainThread.execute(() -> doc.warn("스크립트 '" + n + "': " + e.getMessage()));
+                }
+            });
         }
+    }
+
+    /**
+     * 월드 틱 같은 주기적 신호를 스크립트의 {@code onTick(tick)} 으로 보낸다. 스크립트가 아직 이전 틱을 처리 중이면
+     * 이번 틱은 버린다(밀린 틱을 쌓지 않는다).
+     */
+    public void tick(long tick) {
+        if (broken || !tickQueued.compareAndSet(false, true)) return;
+        Map<String, Object> msg = new LinkedHashMap<>();
+        msg.put("type", "tick");
+        msg.put("tick", tick);
+        msg.put("state", Map.of());
+        scriptThread.execute(() -> {
+            try {
+                invoke(Json.write(msg));
+            } finally {
+                tickQueued.set(false);
+            }
+        });
     }
 
     /** 스크립트에 {@code init} 메시지를 보낸다(문서가 열린 직후 한 번). */
@@ -122,19 +161,27 @@ public final class ScriptHost {
         return state;
     }
 
+    /** 메시지는 호출한(렌더) 스레드에서 만들어 두고(문서 읽기), 스크립트 실행만 스크립트 스레드에서 한다. */
     private void send(Map<String, Object> message) {
+        if (broken) return;
+        String json = Json.write(message);
+        scriptThread.execute(() -> invoke(json));
+    }
+
+    /** 스크립트 스레드에서: 호출하고, 결과 적용/경고는 메인 스레드로 넘긴다. */
+    private void invoke(String json) {
         if (broken) return;
         String response;
         try {
-            response = runtime.call(Json.write(message));
+            response = runtime.call(json);
         } catch (ScriptRuntime.ScriptException e) {
-            doc.warn("스크립트 오류: " + e.getMessage());
+            mainThread.execute(() -> doc.warn("스크립트 오류: " + e.getMessage()));
             return;
         } catch (RuntimeException e) {
-            doc.warn("스크립트 호출 실패: " + e);
+            mainThread.execute(() -> doc.warn("스크립트 호출 실패: " + e));
             return;
         }
-        apply(response);
+        mainThread.execute(() -> apply(response));
     }
 
     // ---- 요청 검증 + 실행 ----
@@ -292,5 +339,18 @@ public final class ScriptHost {
         return null;
     }
 
-    public void close() { runtime.close(); }
+    /**
+     * 런타임을 닫는다. 스크립트가 실행 중이면 닫는 쪽이 기다리게 되므로, 스레드를 나눠 쓰는 중에는 렌더 스레드를 막지 않도록
+     * 별도 데몬 스레드에서 닫는다(실행 중인 호출은 워치독 시간 안에 끝난다).
+     */
+    public void close() {
+        broken = true;
+        if (!threaded) {
+            runtime.close();
+            return;
+        }
+        Thread t = new Thread(runtime::close, "better-uiux-script-closer");
+        t.setDaemon(true);
+        t.start();
+    }
 }

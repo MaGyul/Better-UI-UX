@@ -78,7 +78,11 @@ world.setTickRate(~);
 ## 진행 상황
 - [x] 1단계: `McvBlock`, `McvCamera`, `McvEntity`, `McvWorld`, `McvHost` + `McvHostTest` (통과)
   - 빌드 메모: 이 PC에서 `gradle.properties`의 JDK 경로가 깨져 있으면 `-Dorg.gradle.java.home="C:/Program Files/Java/jdk-25.0.5.0.3"` 로 실행
-- [ ] 2단계: 스크립트 경계(호스트 콜백, `mcv` 전역, 한도, 전용 스레드, 워치독, `onTick`)
+- [x] 2단계: 스크립트 경계 (`McvScriptTest`, `ScriptHostThreadingTest` 통과, `:fabric:compileJava` 확인)
+  - `ScriptRuntime.setHostCallback`, Graal `mcv` 전역(`__host`는 전역에서 삭제, JSON 원본 함수를 잡아 위조 방지), `beginCall` 예산 리셋
+  - `GraalScriptRuntime(long statements, long millis)` 생성자, `ScriptBridge`가 `<mc-viewer>` 문서에만 5,000,000 문장 / 1,500ms 적용
+  - `ScriptHost.setThreading(script, main)`: 스크립트는 전용 스레드, 문서 변경은 `mc.execute`로 렌더 스레드. `tick(n)`은 바쁘면 드롭, `onTick(tick)` 메시지
+  - 남은 것(후속): `config.toml [scripting]`의 `maxCallMillis/maxStatements/maxHostCalls` 노출, `UiScreen.tick()`에서 `Attached.tick` 호출(6단계 틱 시뮬레이션과 함께), 스크립트 문서 전체가 비동기 적용(한 프레임 지연)이 되어 기존 데모 인게임 확인 필요
 - [ ] 3단계: 위젯 골격
 - [ ] 4단계: 가상 Level + 블록 렌더(스파이크 포함)
 - [ ] 5단계: 엔티티
