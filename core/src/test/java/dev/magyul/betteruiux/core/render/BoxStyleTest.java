@@ -218,7 +218,7 @@ class BoxStyleTest {
         assertTrue(BoxPainter.isGradient("linear-gradient(red, blue)"));
         assertTrue(!BoxPainter.isGradient("#ff0000"));
         assertEquals(2, BoxPainter.parseShadows("0 0 4 red, 2px 2px #00000080").size());
-        assertEquals(0, BoxPainter.parseShadows("inset 0 0 4 red").size());
+        assertTrue(BoxPainter.parseShadows("inset 0 0 4 red").get(0).inset());
         assertEquals(0, BoxPainter.parseShadows("none").size());
         var g = BoxPainter.parseGradient("linear-gradient(to right, red 10%, green, blue 90%)");
         assertEquals(3, g.colors().length);

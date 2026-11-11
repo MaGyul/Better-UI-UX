@@ -102,6 +102,7 @@ public final class UiPainter {
             if (gr != null) BoxPainter.gradient(g, b.x, b.y, b.w, b.h, radii, gr, opacity);
         }
 
+        if (shadow != null) BoxPainter.insetShadows(g, b.x, b.y, b.w, b.h, radii, BoxPainter.parseShadows(shadow), opacity);
         Insets bw = s.borderInsets(button ? 1 : 0);
         if ((bw.top() | bw.right() | bw.bottom() | bw.left()) > 0) {
             int bc = s.color("border-color", 0xFF000000);

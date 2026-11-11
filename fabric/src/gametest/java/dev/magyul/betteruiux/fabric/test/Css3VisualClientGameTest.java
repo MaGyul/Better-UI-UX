@@ -38,7 +38,35 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
             });
             ctx.waitTicks(3);
             statePreviewMenu(ctx);
+            ctx.runOnClient(mc -> {
+                mc.options.guiScale().set(2);
+                mc.resizeGui();
+            });
+            ctx.waitTicks(3);
+            newFeatures(ctx);
         }
+    }
+
+    /** 이미지 둥근 모서리, 안쪽 그림자, :has(), row-reverse, 겹치는 애니메이션이 실제 화면에서 맞게 나온다(GUI 배율 2). */
+    private void newFeatures(ClientGameTestContext ctx) {
+        open(ctx, "gt_vis_new", false);
+        ctx.waitTicks(30);                                                  // 외부 이미지는 비동기로 불러온다
+        Path shot = ctx.takeScreenshot("vis-new-features");
+        BufferedImage img = read(shot);
+        int s = ctx.computeOnClient(mc -> mc.getWindow().getGuiScale());
+        double sx = img.getWidth() / (double) ctx.computeOnClient(mc -> mc.getWindow().getWidth());
+        LayoutBox pic = box(ctx, "pic"), inset = box(ctx, "inset");
+        int[] center = px(img, sx, pic.x + pic.w / 2, pic.y + pic.h / 2, s), corner = px(img, sx, pic.x, pic.y, s);
+        check(isNear(center, 0xFF, 0x00, 0xFF, 40), "이미지 가운데는 마젠타여야 한다: " + hex(center));
+        check(!isNear(corner, 0xFF, 0x00, 0xFF, 80), "둥근 이미지의 모서리 끝 픽셀은 비어 있어야 한다: " + hex(corner));
+        int[] edge = px(img, sx, inset.x + 1, inset.y + inset.h / 2, s), mid = px(img, sx, inset.x + inset.w / 2, inset.y + inset.h / 2, s);
+        check(edge[0] > edge[1] + 80, "안쪽 그림자(빨강)가 가장자리에 보여야 한다: " + hex(edge));
+        check(isNear(mid, 0x00, 0xDD, 0x00, 40), "상자 가운데는 배경(초록) 그대로여야 한다: " + hex(mid));
+        List<DrawCommand> cmds = paint(ctx);
+        check(hasFill(cmds, box(ctx, "w1"), 0xFF0000FF), ":has(> .flag) 인 상자는 파랑이어야 한다");
+        check(!hasFill(cmds, box(ctx, "w2"), 0xFF0000FF), ":has 에 안 맞는 상자는 파랑이 아니어야 한다");
+        LayoutBox ra = box(ctx, "ra"), rb = box(ctx, "rb");
+        check(rb.x < ra.x && ra.x + ra.w == box(ctx, "rv").x + box(ctx, "rv").w, "row-reverse: 순서가 뒤집혀 오른쪽 끝에 붙어야 한다");
     }
 
     /** 화면 픽셀로: 단색 둥근 상자(모서리는 비고 가운데는 참)와 그라디언트(위는 빨강 쪽, 아래는 파랑 쪽). */
@@ -127,6 +155,30 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
                       <column gap="8" anchor="top-left" x="20" y="20">
                         <panel id="solid"/>
                         <panel id="grad"/>
+                      </column>
+                    </screen>
+                    """);
+            Path images = base.resolve("images");
+            Files.createDirectories(images);
+            BufferedImage magenta = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
+            for (int y = 0; y < 32; y++) for (int x = 0; x < 32; x++) magenta.setRGB(x, y, 0xFFFF00FF);
+            ImageIO.write(magenta, "png", images.resolve("gt_magenta.png").toFile());
+            Files.writeString(base.resolve("ui/gt_vis_new.xml"), """
+                    <screen>
+                      <style>
+                        #pic { border-radius: 14; }
+                        #inset { width: 60; height: 30; background: #00DD00; box-shadow: inset 0 0 0 4 #FF0000; }
+                        .wrap { width: 30; height: 20; }
+                        .wrap:has(> .flag) { background: #0000FF; }
+                        .flag { width: 4; height: 4; background: #FFFFFF; }
+                        #rv { width: 100; height: 10; flex-direction: row-reverse; }
+                        #rv > panel { width: 10; height: 10; background: #888888; }
+                      </style>
+                      <column gap="6" anchor="top-left" x="20" y="20">
+                        <image id="pic" src="file:gt_magenta.png" width="40" height="40"/>
+                        <panel id="inset"/>
+                        <row gap="4"><panel id="w1" class="wrap"><panel class="flag"/></panel><panel id="w2" class="wrap"><label text="x"/></panel></row>
+                        <row id="rv"><panel id="ra"/><panel id="rb"/></row>
                       </column>
                     </screen>
                     """);

@@ -63,7 +63,7 @@ public final class Selector {
     private static final Set<String> STATIC = Set.of("first-child", "last-child", "only-child", "root", "empty",
             "disabled", "enabled", "checked", "first-of-type", "last-of-type", "only-of-type");
     private static final Set<String> NTH = Set.of("nth-child", "nth-last-child", "nth-of-type", "nth-last-of-type");
-    private static final Set<String> LISTS = Set.of("not", "is", "where", "matches");
+    private static final Set<String> LISTS = Set.of("not", "is", "where", "matches", "has");
 
     private final List<Step> steps;
     private final String source;
@@ -239,6 +239,22 @@ public final class Selector {
     }
 
     private static Pseudo parseFunctional(String name, String arg, String whole) {
+        if (name.equals("has")) {                           // :has(> a, + b, ~ c, d): 상대 선택자. 항목마다 결합자를 a 에 2비트씩 담는다(0 후손 1 자식 2 인접 3 형제)
+            List<Selector> list = new ArrayList<>();
+            int packed = 0, i = 0;
+            for (String one : splitList(arg)) {
+                String t = one.trim();
+                int comb = 0;
+                if (t.startsWith(">")) comb = 1;
+                else if (t.startsWith("+")) comb = 2;
+                else if (t.startsWith("~")) comb = 3;
+                if (comb != 0) t = t.substring(1).trim();
+                if (t.isEmpty() || i >= 15) throw new IllegalArgumentException("잘못된 :has() 인자 (" + whole + ")");
+                list.add(parse(t, true));
+                packed |= comb << (2 * i++);
+            }
+            return new Pseudo("has", packed, 0, list);
+        }
         if (LISTS.contains(name)) {
             List<Selector> list = new ArrayList<>();
             for (String one : splitList(arg)) list.add(parse(one, true));
@@ -304,7 +320,7 @@ public final class Selector {
             for (Pseudo p : c.pseudos()) {
                 switch (p.name()) {
                     case "where" -> { }
-                    case "not", "is" -> {
+                    case "not", "is", "has" -> {
                         int best = 0;
                         for (Selector sel : p.list()) best = Math.max(best, sel.specificity());
                         ids += best / (BASE * BASE);
@@ -472,8 +488,47 @@ public final class Selector {
                 for (Selector s : p.list()) if (s.matches(n, dyn)) return true;
                 return false;
             }
+            case "has": {
+                for (int i = 0; i < p.list().size(); i++) {
+                    if (hasMatch(n, (p.a() >> (2 * i)) & 3, p.list().get(i), dyn)) return true;
+                }
+                return false;
+            }
             default: return dyn == null || dynTest(p.name(), n, dyn);   // 상태 판정자가 없으면 구조만 본다
         }
+    }
+
+    /** {@code :has()} 한 항목: n 의 (후손/자식/바로 다음 형제/뒤따르는 형제) 중 sel 에 맞는 것이 있는지. */
+    private static boolean hasMatch(UiNode n, int comb, Selector sel, DynState dyn) {
+        switch (comb) {
+            case 1:
+                for (UiNode c : n.children()) if (!isMeta(c) && sel.matches(c, dyn)) return true;
+                return false;
+            case 2: {
+                UiNode next = nextSibling(n);
+                return next != null && sel.matches(next, dyn);
+            }
+            case 3:
+                for (UiNode x = nextSibling(n); x != null; x = nextSibling(x)) if (sel.matches(x, dyn)) return true;
+                return false;
+            default:
+                for (UiNode c : n.children()) {
+                    if (isMeta(c)) continue;
+                    if (sel.matches(c, dyn) || hasMatch(c, 0, sel, dyn)) return true;
+                }
+                return false;
+        }
+    }
+
+    private static UiNode nextSibling(UiNode n) {
+        UiNode p = n.parent();
+        if (p == null) return null;
+        boolean seen = false;
+        for (UiNode c : p.children()) {
+            if (seen && !isMeta(c)) return c;
+            if (c == n) seen = true;
+        }
+        return null;
     }
 
     /** 형제 중 (같은 타입만) 몇 번째인지(1부터, fromEnd 면 뒤에서)가 an+b (n>=0) 에 맞는지. */

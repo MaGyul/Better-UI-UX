@@ -80,7 +80,15 @@ CSS3 의 게임 UI 에 의미 있는 부분집합. 구현 계획과 진행 상�
 속성 패널의 값 칸에 마우스를 올리면 "출처: …" 툴팁이 뜬다 — 인라인인지, 어느 시트 규칙인지(숏핸드 포함), XML 속성인지, 태그 기본값인지, 상속인지, 상태 규칙이 덮어쓰는지.
 View 메뉴의 상태 미리보기로 `:hover :active :focus` 를 선택한 요소에 강제로 보여 줄 수 있다. 자세한 내용은 [editor.md](editor.md).
 
+## 최근 추가
+
+- 레이아웃: `flex-direction: row-reverse | column-reverse`, `align-content`(wrap 한 줄들의 교차축 분배), `position: absolute` 는 가장 가까운 `position` 지정 조상 기준(없으면 부모), `fixed` 는 화면 기준.
+- 이미지 `border-radius` 와 `border`: 이미지는 테두리 안쪽에만 그려지고 모서리가 둥글게 잘린다.
+- `box-shadow: inset ...` (안쪽 그림자; 오프셋은 변마다 두께로 반영).
+- `animation: a 1s, b 2s` (여러 개; 뒤의 것이 같은 속성을 덮어씀), `animation-play-state: paused | running`.
+- `:has(.x)`, `:has(> .x)`, `:has(+ .x)`, `:has(~ .x)`, `:has(a, b)`.
+
 ## 아직 없는 것
 
-`:has()`, `font-family`/italic, `inset` 그림자, `radial/conic` 그라디언트, 둥근 클립, `filter`/`backdrop-filter`, 3D 변환, 다중 `animation`/`animation-play-state`,
+`font-family`/italic, `radial/conic` 그라디언트, 자식을 둥글게 잘라내는 클립, `filter`/`backdrop-filter`, 3D 변환,
 레이아웃에 영향을 주는 `:hover` 규칙(상태 규칙은 그리기에만 적용), 프로퍼티 레지스트리 기반의 값 타입 검증(속성 이름만 검사한다).

@@ -84,13 +84,14 @@
 
 ## 남은 일 (2026-11 기준)
 
-- 레이아웃: `fixed` 를 뷰포트 기준으로, absolute 의 기준 조상(가장 가까운 positioned 조상), grid 칸·컨테이너 auto 높이의 줄바꿈 반영, `row-reverse`, `align-content`
-- 렌더링: 안티앨리어싱, 둥근 클립, inset 그림자, radial/conic, 이미지 모서리, 필요하면 `UiGfx` 프리미티브(rounded rect 등) 추가 + `McGfx` 실기 검증
+구현됨(최근): `row-reverse`/`column-reverse`, `align-content`, absolute 의 기준 조상(가장 가까운 positioned 조상, 없으면 부모)·`fixed` 는 화면 기준, 이미지 둥근 모서리(행 묶음으로 잘라 그림, 테두리 안쪽에만),
+`inset` 그림자, 쉼표로 여러 `animation`, `animation-play-state`, `:has()`(후손/`>`/`+`/`~`).
+
+- 레이아웃: grid 칸·컨테이너 auto 높이의 줄바꿈 반영
+- 렌더링: 안티앨리어싱, 둥근 클립(자식 잘라내기), radial/conic, 필요하면 `UiGfx` 프리미티브(rounded rect 등) 추가
 - 텍스트: `font-family`/italic, 위젯 `textfield`/`select` 입력 글자
-- 애니메이션: 다중 `animation`, `animation-play-state`
-- 선택자: `:has()`, 레이아웃에 영향을 주는 상태 규칙
+- 선택자: 레이아웃에 영향을 주는 상태 규칙
 - 도구: `@media` 조건 평가 표시, 새 문법에 대한 규칙 편집기 안내, 프로퍼티 레지스트리(타입 검증)
-- 검증: 이 작업 전체는 core 단위/골든 테스트로만 확인했다. Fabric/NeoForge 실기(Vulkan·OpenGL)와 에디터 UI 조작은 직접 확인하지 못했다.
 
 ## 실기 검증 (GameTest / 스모크)
 
@@ -101,6 +102,7 @@
 - `Css3VisualClientGameTest`: 스크린샷의 **실제 픽셀**로 확인(창 1920x1080 — `fabric/build.gradle.kts` 의 `--width/--height` — 에서 GUI 배율 1~4) — 둥근 모서리 끝 픽셀은 비고 위쪽 변·가운데는 차며, 그라디언트 위는 빨강/아래는 파랑 쪽, 배율이 달라도 같은 모양. View 메뉴의 상태 미리보기(hover/active/focus/없음)를 마우스로 눌러 규칙 색이 바뀌는 것까지.
 
 - `Css3BehaviorClientGameTest`: 실제 시간·입력으로 — `@keyframes` 가 시간에 따라 움직임, 호버 색 `transition` 이 중간 값을 거쳐 끝값에 도달, 진짜 클릭으로 `:focus` 켜짐/꺼짐, `z-index` 겹침 순서, 외부 `@import`, `calc(var(--w) * 2 + 10px)`, 시트 `!important` 가 인라인을 이김.
+- `Css3VisualClientGameTest` 의 `newFeatures`: 이미지 둥근 모서리(픽셀), `inset` 그림자(픽셀), `:has()`, `row-reverse` 를 실제 화면(GUI 배율 2)에서 확인.
 - **Vulkan / OpenGL**: `-PgfxBackend=vulkan|opengl` 가 게임의 `--graphicsBackend` 인자로 백엔드를 고정한다(로그의 "Using graphics backend" 로 확인). 같은 GameTest(픽셀 검사 포함)가 두 백엔드에서 모두 통과했고(NVIDIA: Vulkan 1.4 / OpenGL 3.3), 렌더링 비용 수치도 같았다.
 
 **NeoForge** — `./gradlew :neoforge:runSmokeClient`: NeoForge 에는 클라이언트 GameTest 가 없어 `NeoSmoke`(`-Dbetteruiux.smoke=true` 일 때만 동작)가 타이틀 화면에서 CSS3 데모를 열어

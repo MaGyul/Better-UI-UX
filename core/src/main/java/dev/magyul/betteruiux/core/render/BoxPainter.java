@@ -377,7 +377,9 @@ final class BoxPainter {
 
     // ---- 그림자 ----
 
-    record Shadow(int ox, int oy, int blur, int spread, int color) {}
+    record Shadow(int ox, int oy, int blur, int spread, int color, boolean inset) {
+        Shadow(int ox, int oy, int blur, int spread, int color) { this(ox, oy, blur, spread, color, false); }
+    }
 
     /** {@code box-shadow: ox oy [blur [spread]] color [, ...]} (inset 은 무시). */
     static List<Shadow> parseShadows(String v) {
@@ -400,9 +402,9 @@ final class BoxPainter {
                     ok = false;
                 }
             }
-            if (!ok || inset || nums.size() < 2) continue;
+            if (!ok || nums.size() < 2) continue;
             out.add(new Shadow(nums.get(0), nums.get(1), nums.size() > 2 ? Math.max(0, nums.get(2)) : 0,
-                    nums.size() > 3 ? nums.get(3) : 0, color == null ? 0x80000000 : color));
+                    nums.size() > 3 ? nums.get(3) : 0, color == null ? 0x80000000 : color, inset));
         }
         return out;
     }
@@ -420,6 +422,7 @@ final class BoxPainter {
     static void shadows(UiGfx g, int x, int y, int w, int h, Radii r, List<Shadow> list, float opacity) {
         for (int k = list.size() - 1; k >= 0; k--) {          // 먼저 쓴 그림자가 위에 오도록 뒤에서부터
             Shadow s = list.get(k);
+            if (s.inset()) continue;
             int sx = x + s.ox() - s.spread(), sy = y + s.oy() - s.spread();
             int sw = w + 2 * s.spread(), sh = h + 2 * s.spread();
             Radii base = r.grow(s.spread());
@@ -444,6 +447,35 @@ final class BoxPainter {
                 Radii rr = base.grow(e);
                 rr = new Radii(Math.min(rr.tl(), 3), Math.min(rr.tr(), 3), Math.min(rr.br(), 3), Math.min(rr.bl(), 3));   // 번진 층은 모서리를 거칠게(명령 수 절약)
                 fillShape(g, sx - e, sy - e, sw + 2 * e, sh + 2 * e, rr, (a8 << 24) | (color & 0xFFFFFF));
+            }
+        }
+    }
+
+    /**
+     * 안쪽 그림자({@code inset}): 배경 위, 테두리 아래에 상자 가장자리를 따라 그린다. 안쪽으로 번지는 층(겹친 고리)으로 근사하고,
+     * 오프셋은 변마다 두께를 다르게 해서 반영한다(예: {@code 0 2 ...} 이면 위쪽이 두꺼움).
+     */
+    static void insetShadows(UiGfx g, int x, int y, int w, int h, Radii r, List<Shadow> list, float opacity) {
+        for (int k = list.size() - 1; k >= 0; k--) {
+            Shadow s = list.get(k);
+            if (!s.inset()) continue;
+            int color = scaleAlpha(s.color(), opacity), alpha = color >>> 24;
+            if (alpha == 0) continue;
+            int n = s.blur() <= 0 ? 0 : Math.max(1, Math.min((s.blur() + 1) / 2, 6));
+            double prev = 0;
+            for (int layer = 1; layer <= n + 1; layer++) {                 // 가장 두꺼운(옅은) 층부터 겹쳐서 가장자리일수록 진해진다
+                double t = layer / (double) (n + 1);
+                double target = alpha / 255.0 * (t * t * (3 - 2 * t));
+                double a = 1 - (1 - target) / (1 - prev);
+                prev = target;
+                int a8 = (int) Math.round(a * 255);
+                if (a8 <= 0) continue;
+                int e = layer == n + 1 ? 0 : (int) Math.round(s.blur() * (n + 1 - layer) / (double) n);
+                int top = Math.max(0, s.spread() + s.oy() + e), bottom = Math.max(0, s.spread() - s.oy() + e);
+                int left = Math.max(0, s.spread() + s.ox() + e), right = Math.max(0, s.spread() - s.ox() + e);
+                if (top + bottom >= h || left + right >= w) continue;
+                int c = (a8 << 24) | (color & 0xFFFFFF);
+                ring(g, x, y, w, h, r, new Insets(top, right, bottom, left), new int[] {c, c, c, c}, "solid");
             }
         }
     }
