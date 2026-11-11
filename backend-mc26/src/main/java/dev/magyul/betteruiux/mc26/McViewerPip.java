@@ -34,8 +34,9 @@ import net.minecraft.world.level.block.state.properties.Property;
  */
 public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderState> {
     /** 블록 하나(상태 문자열)를 그릴 때 필요한 것들. 리소스가 다시 불러와지면 버린다. */
-    private record Resolved(List<BlockStateModelPart> parts, boolean translucent, boolean solid) { }
+    private record Resolved(List<BlockStateModelPart> parts, boolean translucent, boolean solid, int[] tints) { }
 
+    private final McViewerEntities entities = new McViewerEntities();
     private final Map<String, Resolved> cache = new HashMap<>();
     private BlockStateModelSet cachedFor;
 
@@ -81,9 +82,10 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
             pose.pushPose();
             pose.translate(p[0], p[1], p[2]);
             collector.submitBlockModel(pose, r.translucent() ? Sheets.translucentBlockItemSheet() : Sheets.cutoutBlockItemSheet(),
-                    r.parts(), new int[0], LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+                    r.parts(), r.tints(), LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
             pose.popPose();
         }
+        entities.render(w, s.yaw(), s.pitch(), pose, collector);
     }
 
     private boolean enclosed(McvWorld w, Map<Long, McvBlock> blocks, int x, int y, int z, BlockStateModelSet models) {
@@ -109,10 +111,18 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
             List<BlockStateModelPart> parts = new ArrayList<>();
             model.collectParts(RandomSource.create(42L), parts);
             r = new Resolved(parts, model.hasMaterialFlag(net.minecraft.client.resources.model.geometry.BakedQuad.FLAG_TRANSLUCENT),
-                    state.isSolidRender());
+                    state.isSolidRender(), tints(state));
         }
         cache.put(key, r);
         return r;
+    }
+
+    /** 잔디/잎/물 같은 블록의 색조(틴트). 월드의 바이옴이 없으므로 기본 색을 쓴다. */
+    private static int[] tints(BlockState state) {
+        List<net.minecraft.client.color.block.BlockTintSource> sources = Minecraft.getInstance().getBlockColors().getTintSources(state);
+        int[] out = new int[sources.size()];
+        for (int i = 0; i < out.length; i++) out[i] = 0xFF000000 | sources.get(i).color(state);
+        return out;
     }
 
     /** "minecraft:oak_stairs[facing=east]" → 실제 블록 상태. 모르는 블록이면 null(그리지 않는다). */
