@@ -100,6 +100,7 @@
 
 - `Css3VisualClientGameTest`: 스크린샷의 **실제 픽셀**로 확인(창 1920x1080 — `fabric/build.gradle.kts` 의 `--width/--height` — 에서 GUI 배율 1~4) — 둥근 모서리 끝 픽셀은 비고 위쪽 변·가운데는 차며, 그라디언트 위는 빨강/아래는 파랑 쪽, 배율이 달라도 같은 모양. View 메뉴의 상태 미리보기(hover/active/focus/없음)를 마우스로 눌러 규칙 색이 바뀌는 것까지.
 
+- `Css3BehaviorClientGameTest`: 실제 시간·입력으로 — `@keyframes` 가 시간에 따라 움직임, 호버 색 `transition` 이 중간 값을 거쳐 끝값에 도달, 진짜 클릭으로 `:focus` 켜짐/꺼짐, `z-index` 겹침 순서, 외부 `@import`, `calc(var(--w) * 2 + 10px)`, 시트 `!important` 가 인라인을 이김.
 - **Vulkan / OpenGL**: `-PgfxBackend=vulkan|opengl` 가 게임의 `--graphicsBackend` 인자로 백엔드를 고정한다(로그의 "Using graphics backend" 로 확인). 같은 GameTest(픽셀 검사 포함)가 두 백엔드에서 모두 통과했고(NVIDIA: Vulkan 1.4 / OpenGL 3.3), 렌더링 비용 수치도 같았다.
 
 **NeoForge** — `./gradlew :neoforge:runSmokeClient`: NeoForge 에는 클라이언트 GameTest 가 없어 `NeoSmoke`(`-Dbetteruiux.smoke=true` 일 때만 동작)가 타이틀 화면에서 CSS3 데모를 열어
