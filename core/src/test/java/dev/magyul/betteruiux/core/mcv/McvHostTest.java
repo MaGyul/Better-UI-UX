@@ -204,4 +204,31 @@ class McvHostTest {
         assertEquals(0, h.world(w).blockEventsAt(1, 1, 1).size(), "다른 블록이 되면 기록을 버린다");
         assertFalse((Boolean) call(h, ev.replace("\"x\":1", "\"x\":9") + "\"id\":1,\"param\":1}").get("ok"), "범위 밖");
     }
+
+    @Test
+    void biomesAreSetPerWorldAndPerRegionWithTheLastOneWinning() {
+        McvHost h = new McvHost();
+        int w = world(h, 8, 4, 8);
+        assertEquals(null, call(h, "{\"cmd\":\"getBiome\",\"world\":" + w + ",\"x\":1,\"y\":1,\"z\":1}").get("value"), "정하기 전에는 없다");
+        assertTrue(!h.world(w).hasBiomes());
+        assertTrue((Boolean) call(h, "{\"cmd\":\"setBiome\",\"world\":" + w + ",\"biome\":\"desert\"}").get("ok"));
+        assertEquals("minecraft:desert", call(h, "{\"cmd\":\"getBiome\",\"world\":" + w + ",\"x\":1,\"y\":1,\"z\":1}").get("value"), "네임스페이스가 붙는다");
+        call(h, "{\"cmd\":\"fillBiome\",\"world\":" + w + ",\"x1\":4,\"y1\":0,\"z1\":4,\"x2\":7,\"y2\":3,\"z2\":7,\"biome\":\"swamp\"}");
+        call(h, "{\"cmd\":\"fillBiome\",\"world\":" + w + ",\"x1\":6,\"y1\":0,\"z1\":6,\"x2\":7,\"y2\":3,\"z2\":7,\"biome\":\"minecraft:jungle\"}");
+        McvWorld mw = h.world(w);
+        assertEquals("minecraft:desert", mw.biomeAt(0, 0, 0), "영역 밖은 월드 기본");
+        assertEquals("minecraft:swamp", mw.biomeAt(4, 1, 4));
+        assertEquals("minecraft:jungle", mw.biomeAt(7, 3, 7), "겹치면 나중에 정한 것이 이긴다");
+        assertEquals("minecraft:swamp", mw.biomeAt(5, 1, 5));
+        assertTrue(mw.hasBiomes());
+        call(h, "{\"cmd\":\"setBiome\",\"world\":" + w + ",\"biome\":null}");
+        assertEquals(null, mw.biomeAt(0, 0, 0), "null 이면 월드 기본을 해제");
+        assertEquals("minecraft:swamp", mw.biomeAt(5, 1, 5), "영역은 남는다");
+        for (String bad : new String[] {"", "Bad Id", "a:b:c", "x".repeat(200)}) {
+            assertFalse((Boolean) call(h, "{\"cmd\":\"setBiome\",\"world\":" + w + ",\"biome\":\"" + bad + "\"}").get("ok"), bad);
+        }
+        assertFalse((Boolean) call(h, "{\"cmd\":\"fillBiome\",\"world\":" + w + ",\"x1\":0,\"y1\":0,\"z1\":0,\"x2\":9,\"y2\":0,\"z2\":0,\"biome\":\"plains\"}").get("ok"), "월드 밖 영역");
+        for (int i = 0; i < 80; i++) call(h, "{\"cmd\":\"fillBiome\",\"world\":" + w + ",\"x1\":0,\"y1\":0,\"z1\":0,\"x2\":0,\"y2\":0,\"z2\":0,\"biome\":\"plains\"}");
+        assertTrue(mw.biomeAt(0, 0, 0) != null);
+    }
 }

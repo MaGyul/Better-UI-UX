@@ -223,6 +223,17 @@ public final class McvHost {
                 return loadStructure(w, str(r, "name"), r.get("x") == null ? 0 : integer(r, "x"),
                         r.get("y") == null ? 0 : integer(r, "y"), r.get("z") == null ? 0 : integer(r, "z"));
             }
+            case "setBiome" -> {
+                w.setBiome(r.get("biome") instanceof String b ? b : null);
+                return null;
+            }
+            case "fillBiome" -> {
+                w.fillBiome(integer(r, "x1"), integer(r, "y1"), integer(r, "z1"), integer(r, "x2"), integer(r, "y2"), integer(r, "z2"), str(r, "biome"));
+                return null;
+            }
+            case "getBiome" -> {
+                return w.biomeAt(integer(r, "x"), integer(r, "y"), integer(r, "z"));
+            }
             case "blockEvent" -> {
                 w.blockEvent(integer(r, "x"), integer(r, "y"), integer(r, "z"), integer(r, "id"), integer(r, "param"));
                 return null;

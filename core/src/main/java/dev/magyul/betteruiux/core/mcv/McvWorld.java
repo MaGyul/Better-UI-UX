@@ -181,6 +181,58 @@ public final class McvWorld {
         return (int) volume;
     }
 
+    // ---- 바이옴(잔디·잎·물 같은 블록의 색조에 쓰인다) ----
+
+    /** 직육면체 영역(양 끝 포함)의 바이옴. */
+    public record BiomeBox(int x1, int y1, int z1, int x2, int y2, int z2, String biome) {
+        boolean contains(int x, int y, int z) {
+            return x >= x1 && x <= x2 && y >= y1 && y <= y2 && z >= z1 && z <= z2;
+        }
+    }
+
+    public static final int MAX_BIOME_BOXES = 64;
+    private static final java.util.regex.Pattern BIOME_ID = java.util.regex.Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
+
+    private volatile String defaultBiome;                       // null = 바이옴 없음(기본 색)
+    private volatile List<BiomeBox> biomeBoxes = List.of();      // 바뀔 때마다 통째로 교체하는 불변 목록(렌더 스레드가 읽는다)
+
+    /** {@code plains} 나 {@code minecraft:plains} 를 {@code minecraft:plains} 로. 올바르지 않으면 {@link IllegalArgumentException}. */
+    public static String normalizeBiome(String raw) {
+        if (raw == null || raw.isBlank() || raw.length() > 128) throw new IllegalArgumentException("바이옴 id 가 없거나 너무 깁니다");
+        String id = raw.trim();
+        if (!id.contains(":")) id = "minecraft:" + id;
+        if (!BIOME_ID.matcher(id).matches()) throw new IllegalArgumentException("바이옴 id 가 올바르지 않습니다: " + raw);
+        return id;
+    }
+
+    /** 월드 전체의 바이옴을 정한다(영역으로 따로 정한 곳은 그대로). {@code null} 이면 바이옴 없음(기본 색)으로 되돌린다. */
+    public void setBiome(String biome) {
+        this.defaultBiome = biome == null ? null : normalizeBiome(biome);
+    }
+
+    /** 영역(양 끝 포함)의 바이옴을 정한다. 겹치면 나중에 정한 것이 이긴다. 영역은 최대 {@value #MAX_BIOME_BOXES}개. */
+    public void fillBiome(int x1, int y1, int z1, int x2, int y2, int z2, String biome) {
+        String id = normalizeBiome(biome);
+        BiomeBox box = new BiomeBox(Math.min(x1, x2), Math.min(y1, y2), Math.min(z1, z2), Math.max(x1, x2), Math.max(y1, y2), Math.max(z1, z2), id);
+        if (box.x1() < 0 || box.y1() < 0 || box.z1() < 0 || box.x2() >= sizeX || box.y2() >= sizeY || box.z2() >= sizeZ) {
+            throw new IllegalArgumentException("바이옴 영역이 월드 밖입니다");
+        }
+        List<BiomeBox> next = new ArrayList<>(biomeBoxes);
+        if (next.size() >= MAX_BIOME_BOXES) next.remove(0);        // 가장 오래된 것부터 밀어낸다
+        next.add(box);
+        this.biomeBoxes = List.copyOf(next);
+    }
+
+    /** 이 칸의 바이옴 id(영역 > 월드 기본). 정한 적이 없으면 null. */
+    public String biomeAt(int x, int y, int z) {
+        List<BiomeBox> boxes = biomeBoxes;
+        for (int i = boxes.size() - 1; i >= 0; i--) if (boxes.get(i).contains(x, y, z)) return boxes.get(i).biome();
+        return defaultBiome;
+    }
+
+    /** 바이옴을 하나라도 정했는지(안 정했으면 렌더러는 바이옴 계산 없이 기본 색을 쓴다). */
+    public boolean hasBiomes() { return defaultBiome != null || !biomeBoxes.isEmpty(); }
+
     // ---- 블록 이벤트 ----
 
     /**

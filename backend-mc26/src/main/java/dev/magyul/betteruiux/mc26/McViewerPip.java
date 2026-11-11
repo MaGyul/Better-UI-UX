@@ -25,7 +25,15 @@ import net.minecraft.client.renderer.block.BlockStateModelSet;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.biome.Biome;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.RandomSource;
@@ -41,8 +49,10 @@ import net.minecraft.world.level.block.state.properties.Property;
  */
 public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderState> {
     /** 블록 하나(상태 문자열)를 그릴 때 필요한 것들. 리소스가 다시 불러와지면 버린다. */
-    private record Resolved(List<BlockStateModelPart> parts, boolean translucent, boolean solid, int[] tints, BlockState state) { }
+    private record Resolved(List<BlockStateModelPart> parts, boolean translucent, boolean solid, int[] tints, BlockState state,
+                            List<net.minecraft.client.color.block.BlockTintSource> tintSources) { }
 
+    private static final Logger LOG = LoggerFactory.getLogger("better_uiux");
     private final McViewerEntities entities = new McViewerEntities();
     private final McViewerBlockEntities blockEntities = new McViewerBlockEntities();
     private final Map<String, Resolved> cache = new HashMap<>();
@@ -84,6 +94,7 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
         }
 
         Map<Long, McvBlock> blocks = w.blockSnapshot();
+        McViewerTintGetter tintGetter = w.hasBiomes() ? tintGetter(w) : null;      // 바이옴을 정하지 않은 월드는 계산 없이 기본 색
         boolean beReady = blockEntities.begin(w, billboard);
         for (Map.Entry<Long, McvBlock> e : blocks.entrySet()) {
             int[] p = McvWorld.unkey(e.getKey());
@@ -94,7 +105,7 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
                 stack.pushPose();
                 stack.translate(p[0], p[1], p[2]);
                 collector.submitBlockModel(stack, r.translucent() ? Sheets.translucentBlockItemSheet() : Sheets.cutoutBlockItemSheet(),
-                        r.parts(), r.tints(), LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+                        r.parts(), biomeTints(r, tintGetter, w, p[0], p[1], p[2]), LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
                 stack.popPose();
             }
             if (beReady) blockEntities.render(w, r.state(), e.getValue(), p[0], p[1], p[2], stack, collector);   // 상자·표지판 같은 블록 엔티티
@@ -171,13 +182,63 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
             List<BlockStateModelPart> parts = new ArrayList<>();
             model.collectParts(RandomSource.create(42L), parts);
             r = new Resolved(parts, model.hasMaterialFlag(net.minecraft.client.resources.model.geometry.BakedQuad.FLAG_TRANSLUCENT),
-                    state.isSolidRender(), tints(state), state);
+                    state.isSolidRender(), tints(state), state,
+                    Minecraft.getInstance().getBlockColors().getTintSources(state));
         }
         cache.put(key, r);
         return r;
     }
 
-    /** 잔디/잎/물 같은 블록의 색조(틴트). 월드의 바이옴이 없으므로 기본 색을 쓴다. */
+    // ---- 바이옴 색조 ----
+
+    private final Map<String, Holder<Biome>> biomeHolders = new HashMap<>();
+    private Object biomeRegistryFor;                                  // biomeHolders 를 만든 레지스트리(레벨이 바뀌면 다시 만든다)
+    private final java.util.Set<String> warnedBiomes = new java.util.HashSet<>();
+
+    /**
+     * 이 월드의 바이옴(월드 기본 + 영역)을 위치마다 돌려주는 틴트 getter. 바이옴 레지스트리가 아직 준비 중이면(가상 레벨을 불러오는 동안) null 이라
+     * 그 프레임은 기본 색으로 그린다.
+     */
+    private McViewerTintGetter tintGetter(McvWorld w) {
+        Level level = McViewerFakeWorld.current();
+        if (level == null) return null;
+        var lookup = level.registryAccess().lookup(Registries.BIOME);
+        if (lookup.isEmpty()) return null;
+        if (biomeRegistryFor != lookup.get()) {
+            biomeHolders.clear();
+            biomeRegistryFor = lookup.get();
+        }
+        var registry = lookup.get();
+        return new McViewerTintGetter(pos -> {
+            String id = w.biomeAt(pos.getX(), pos.getY(), pos.getZ());
+            if (id == null) return null;
+            Holder<Biome> h = biomeHolders.get(id);
+            if (h == null && !biomeHolders.containsKey(id)) {
+                try {
+                    h = registry.get(ResourceKey.create(Registries.BIOME, Identifier.parse(id))).orElse(null);
+                } catch (RuntimeException e) {
+                    h = null;
+                }
+                if (h == null && warnedBiomes.add(id)) LOG.warn("[better-uiux] <mc-viewer> 알 수 없는 바이옴: {}", id);
+                biomeHolders.put(id, h);
+            }
+            return h;
+        }, level instanceof McViewerFakeLevel fl ? fl.getLightEngine() : level.getLightEngine());
+    }
+
+    /**
+     * 블록의 색조. 바이옴이 정해진 위치의 틴트 블록(잔디, 잎 ...)은 그 바이옴의 색을 쓰고, 그 밖에는 기본 색을 쓴다.
+     * 틴트 소스는 바닐라 것({@code BlockTintSource.colorInWorld})을 그대로 쓰므로 잔디 색 변형(늪, 어두운 숲)과 모드의 틴트도 따라간다.
+     */
+    private static int[] biomeTints(Resolved r, McViewerTintGetter getter, McvWorld w, int x, int y, int z) {
+        if (getter == null || r.tintSources().isEmpty() || w.biomeAt(x, y, z) == null) return r.tints();
+        BlockPos pos = new BlockPos(x, y, z);
+        int[] out = new int[r.tintSources().size()];
+        for (int i = 0; i < out.length; i++) out[i] = 0xFF000000 | r.tintSources().get(i).colorInWorld(r.state(), getter, pos);
+        return out;
+    }
+
+    /** 잔디/잎/물 같은 블록의 색조(틴트). 바이옴이 없으면 이 기본 색을 쓴다. */
     private static int[] tints(BlockState state) {
         List<net.minecraft.client.color.block.BlockTintSource> sources = Minecraft.getInstance().getBlockColors().getTintSources(state);
         int[] out = new int[sources.size()];

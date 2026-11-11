@@ -250,6 +250,16 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                     }
                     function onBlockClick(e) { ui.setText('#c', e.block ? 'click ' + e.x + ',' + e.y + ',' + e.z : 'click none'); }
                     """);
+            for (String[] v : new String[][] {
+                    {"gt_mcv15a", ""},
+                    {"gt_mcv15b", "w.setBiome('desert');"},
+                    {"gt_mcv15c", "w.fillBiome(0, 0, 0, 3, 1, 3, 'desert');\n  w.fillBiome(4, 0, 0, 7, 1, 3, 'jungle');"}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"240\" height=\"180\"/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(8, 2, 4);\n  w.fill(0, 0, 0, 7, 0, 3, 'grass_block');\n  " + v[1] + "\n"
+                        + "  var cam = w.getCamera();\n  cam.setYaw(0);\n  cam.setPitch(90);\n}\n");
+            }
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -491,6 +501,17 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             check(text(ctx, "#c").equals("click 2,1,2"), "원근 투영에서 project 좌표를 클릭하면 그 블록이 맞아야 한다: " + text(ctx, "#c"));
             ctx.getInput().setCursorPos(2, 2);
 
+            // 바이옴 색조: 같은 잔디 바닥이 바이옴에 따라 다른 색이 된다(기본=초록, 사막=누런 갈색, 정글=짙은 초록). 영역으로 반반 나눌 수도 있다.
+            BufferedImage grassDefault = openAndShoot(ctx, "gt_mcv15a", "mc-viewer-biome-default");
+            BufferedImage grassDesert = openAndShoot(ctx, "gt_mcv15b", "mc-viewer-biome-desert");
+            BufferedImage grassSplit = openAndShoot(ctx, "gt_mcv15c", "mc-viewer-biome-split");
+            LayoutBox gv = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            double rgDefault = grassRatio(grassDefault, gv, 0, 1, s, sx), rgDesert = grassRatio(grassDesert, gv, 0, 1, s, sx);
+            double rgLeft = grassRatio(grassSplit, gv, 0, 0.5, s, sx), rgRight = grassRatio(grassSplit, gv, 0.5, 1, s, sx);
+            System.out.println("[mc-viewer test] biome r/g default=" + rgDefault + " desert=" + rgDesert + " split left=" + rgLeft + " right=" + rgRight);
+            check(rgDesert > rgDefault + 0.03, "사막의 잔디는 기본(초록)보다 누렇다(r/g 기본 " + rgDefault + ", 사막 " + rgDesert + ")");
+            check(Math.abs(rgLeft - rgRight) > 0.08, "영역으로 나눈 바이옴(사막|정글)은 좌우 잔디 색이 달라야 한다(" + rgLeft + " vs " + rgRight + ")");
+
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));
             ctx.waitTicks(40);
@@ -568,6 +589,27 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             }
         }
         return n;
+    }
+
+    /**
+     * 뷰어 영역의 가로 구간([from, to] 비율)에서 "잔디색" 픽셀(초록기가 있는 색: 흰 바닥·파란 하늘은 제외)의 평균 r/g 비.
+     * 위에서 내려다본(어두운) 장면에서 기본 잔디는 약 0.77, 사막은 약 0.82(누런), 정글은 약 0.68(짙은 초록)로 측정된다.
+     */
+    private static double grassRatio(BufferedImage img, LayoutBox v, double from, double to, int guiScale, double sx) {
+        double sum = 0;
+        int n = 0;
+        for (int gy = v.y; gy < v.y + v.h; gy++) {
+            for (int gx = (int) (v.x + v.w * from); gx < v.x + v.w * to; gx++) {
+                int x = (int) Math.min(img.getWidth() - 1, Math.round(gx * guiScale * sx)), y = (int) Math.min(img.getHeight() - 1, Math.round(gy * guiScale * sx));
+                int p = img.getRGB(x, y), r = p >> 16 & 0xFF, g = p >> 8 & 0xFF, b = p & 0xFF;
+                if (g > b + 30 && g > 60) {
+                    sum += (double) r / g;
+                    n++;
+                }
+            }
+        }
+        if (n < 100) throw new AssertionError("잔디색 픽셀이 너무 적다(" + n + ")");
+        return sum / n;
     }
 
     /** 스크린샷의 뷰어 영역에서 빨간 픽셀 수(빨간 콘크리트). */
