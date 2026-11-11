@@ -61,6 +61,11 @@ final class McViewerFakeLevel extends Level {
         this.respawn = levelData.getRespawnData();
     }
 
+    /** 가상 레벨의 게임 시간을 맞춘다(블록 엔티티의 틱이 {@code level.getGameTime()} 을 읽는다). 렌더 스레드에서만 쓰므로 월드마다 바꿔 가며 써도 된다. */
+    void setTime(long gameTime) {
+        if (levelData instanceof ClientLevel.ClientLevelData d) d.setGameTime(gameTime);
+    }
+
     /** 모든 칸이 공기인 청크만 돌려주는 청크 공급자. */
     private final class FakeChunkSource extends ChunkSource {
         private final McViewerFakeLevel level;

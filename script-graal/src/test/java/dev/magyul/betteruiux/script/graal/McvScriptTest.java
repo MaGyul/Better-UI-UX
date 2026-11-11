@@ -237,6 +237,26 @@ class McvScriptTest {
     }
 
     @Test
+    void ringBellSendsTheBlockEventWithTheDirection() throws Exception {
+        rt.load("t.uijs", """
+                function go() {
+                  var w = mcv.createWorld(4, 4, 4);
+                  w.setBlock(1, 1, 1, 'bell[attachment=floor,facing=north]');
+                  w.ringBell(1, 1, 1);                 // 기본 north
+                  w.ringBell(1, 1, 1, 'east');
+                  try { w.ringBell(1, 1, 1, 'sideways'); } catch (e) { ui.log('err:' + e.message); }
+                }
+                """);
+        String out = call("go");
+        assertTrue(out.contains("err:"), out);
+        var log = host.world(1).blockEventsAt(1, 1, 1);
+        assertEquals(2, log.size(), "잘못된 방향은 이벤트를 남기지 않는다");
+        assertEquals(1, log.get(0).id());
+        assertEquals(2, log.get(0).param(), "north = 2");
+        assertEquals(5, log.get(1).param(), "east = 5");
+    }
+
+    @Test
     void tickMessageCallsOnTick() throws Exception {
         rt.load("t.uijs", "function onTick(n, w) { ui.log('tick ' + n + ' world ' + w); }");
         assertTrue(rt.call("{\"type\":\"tick\",\"tick\":7,\"world\":2}").contains("tick 7 world 2"));

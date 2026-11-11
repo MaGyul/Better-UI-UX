@@ -209,6 +209,16 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                 Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
                         + "  var w = mcv.createWorld(5, 3, 3);\n  w.fill(0, 0, 0, 4, 0, 2, 'white_concrete');\n  " + v[1] + "\n}\n");
             }
+            for (String[] v : new String[][] {
+                    {"gt_mcv12a", "w.setBlock(2, 1, 1, 'shulker_box');"},
+                    {"gt_mcv12b", "w.setBlock(2, 1, 1, 'shulker_box');\n  w.setOpen(2, 1, 1, true);"},
+                    {"gt_mcv13a", "w.setBlock(2, 1, 1, 'bell[attachment=floor,facing=north]');"},
+                    {"gt_mcv13b", "w.setBlock(2, 1, 1, 'bell[attachment=floor,facing=north]');\n  w.ringBell(2, 1, 1, 'east');"}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"240\" height=\"180\"/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(5, 3, 3);\n  w.fill(0, 0, 0, 4, 0, 2, 'white_concrete');\n  " + v[1] + "\n}\n");
+            }
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -385,6 +395,19 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             System.out.println("[mc-viewer test] chest lid diff=" + lidDiff);
             check(lidDiff > 300, "setOpen 으로 뚜껑이 열리면 화면이 달라져야 한다(달라진 픽셀 " + lidDiff + ")");
 
+            // 셜커 상자: 열면 뚜껑이 올라간다. 종: 울리면 흔들린다(흔들림은 50틱이라 울린 직후 짧게 기다렸다 찍는다).
+            BufferedImage shulkerClosed = openAndShoot(ctx, "gt_mcv12a", "mc-viewer-shulker-closed", 40);
+            BufferedImage shulkerOpen = openAndShoot(ctx, "gt_mcv12b", "mc-viewer-shulker-open", 40);
+            LayoutBox shulkerView = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            int shulkerDiff = diff(shulkerClosed, shulkerOpen, shulkerView, s, sx);
+            System.out.println("[mc-viewer test] shulker diff=" + shulkerDiff);
+            check(shulkerDiff > 150, "setOpen 으로 셜커 상자가 열리면 화면이 달라져야 한다(달라진 픽셀 " + shulkerDiff + ")");
+            BufferedImage bellIdle = openAndShoot(ctx, "gt_mcv13a", "mc-viewer-bell-idle", 14);
+            BufferedImage bellRung = openAndShoot(ctx, "gt_mcv13b", "mc-viewer-bell-rung", 14);
+            int bellDiff = diff(bellIdle, bellRung, shulkerView, s, sx);
+            System.out.println("[mc-viewer test] bell diff=" + bellDiff);
+            check(bellDiff > 20, "ringBell 로 종이 울리면 흔들려서 화면이 달라져야 한다(달라진 픽셀 " + bellDiff + ")");
+
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));
             ctx.waitTicks(40);
@@ -492,9 +515,13 @@ public class McViewerClientGameTest implements FabricClientGameTest {
     }
 
     private BufferedImage openAndShoot(ClientGameTestContext ctx, String id, String shotName) {
+        return openAndShoot(ctx, id, shotName, 40);
+    }
+
+    private BufferedImage openAndShoot(ClientGameTestContext ctx, String id, String shotName, int waitTicks) {
         ctx.runOnClient(mc -> UiOpener.open(id, base, false));
         ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals(id));
-        ctx.waitTicks(40);
+        ctx.waitTicks(waitTicks);
         return read(ctx.takeScreenshot(shotName));
     }
 

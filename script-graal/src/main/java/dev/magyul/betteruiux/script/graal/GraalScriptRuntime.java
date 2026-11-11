@@ -115,6 +115,11 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                   },
                   blockEvent: function (x, y, z, id, param) { H({cmd: 'blockEvent', world: w, x: x, y: y, z: z, id: id, param: param == null ? 0 : param}); },
                   setOpen: function (x, y, z, open) { H({cmd: 'blockEvent', world: w, x: x, y: y, z: z, id: 1, param: open === false ? 0 : 1}); },
+                  ringBell: function (x, y, z, dir) {                      // 종을 울린다: dir = 맞은 쪽(down up north south west east, 기본 north)
+                    var d = {down: 0, up: 1, north: 2, south: 3, west: 4, east: 5}[dir == null ? 'north' : String(dir)];
+                    if (d === undefined) throw new Error('방향은 down up north south west east 중 하나입니다: ' + dir);
+                    H({cmd: 'blockEvent', world: w, x: x, y: y, z: z, id: 1, param: d});
+                  },
                   getBlock: function (x, y, z) { return H({cmd: 'getBlock', world: w, x: x, y: y, z: z}); },
                   fill: function (x1, y1, z1, x2, y2, z2, block, nbt) {
                     return H({cmd: 'fill', world: w, x1: x1, y1: y1, z1: z1, x2: x2, y2: y2, z2: z2, block: String(block), nbt: nbt == null ? null : String(nbt)});
