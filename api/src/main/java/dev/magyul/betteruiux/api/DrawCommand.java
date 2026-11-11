@@ -4,6 +4,8 @@ package dev.magyul.betteruiux.api;
 public sealed interface DrawCommand {
     record FillRect(int x, int y, int w, int h, int argb) implements DrawCommand {}
 
+    record DrawStyledText(String text, int x, int y, int argb, boolean shadow, boolean italic, String font) implements DrawCommand {}
+
     record FillGradient(int x, int y, int w, int h, int topArgb, int bottomArgb) implements DrawCommand {}
 
     record DrawTexture(String texture, int x, int y, int w, int h,

@@ -63,6 +63,19 @@ public final class McGfx implements UiGfx {
     }
 
     @Override
+    public void drawStyledText(String text, int x, int y, int argb, boolean shadow, boolean italic, String fontId) {
+        g.text(font, styled(text, italic, fontId), x, y, argb, shadow);
+    }
+
+    /** 기울임/글꼴 스타일을 입힌 글자. 글꼴 id 가 올바르지 않으면 기본 글꼴. */
+    static net.minecraft.network.chat.Component styled(String text, boolean italic, String fontId) {
+        net.minecraft.network.chat.Style style = net.minecraft.network.chat.Style.EMPTY.withItalic(italic ? Boolean.TRUE : null);
+        Identifier id = fontId == null ? null : Identifier.tryParse(fontId);
+        if (id != null) style = style.withFont(new net.minecraft.network.chat.FontDescription.Resource(id));
+        return net.minecraft.network.chat.Component.literal(text).withStyle(style);
+    }
+
+    @Override
     public void pushClip(int x, int y, int w, int h) {
         g.enableScissor(x, y, x + w, y + h);
     }

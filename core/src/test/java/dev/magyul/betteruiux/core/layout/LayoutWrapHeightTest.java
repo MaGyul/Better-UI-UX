@@ -21,6 +21,7 @@ class LayoutWrapHeightTest {
         UiDocument d = doc("<screen><column id='c' width='60'><label id='l' " + WRAP + ">aaaa bbbb cccc</label></column></screen>");
         assertEquals(18, d.findById("l").h);
         assertEquals(18, d.findById("c").h, "컨테이너 높이도 두 줄만큼");
+        assertEquals(60, d.findById("l").w, "줄바꿈하는 글자의 상자 폭은 컨테이너 폭을 넘지 않는다(그래야 그릴 때도 같은 폭에서 줄바꿈된다)");
     }
 
     @Test

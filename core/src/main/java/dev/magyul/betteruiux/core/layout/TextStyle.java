@@ -25,9 +25,14 @@ public final class TextStyle {
     private final boolean bold;
     private final String whiteSpace, transform;
     private final boolean ellipsis;
+    private final boolean italic;
+    private final String fontId;
 
     private TextStyle(TextMetrics tm, StyleMap s) {
         this.tm = tm;
+        String fs = s.get("font-style", "normal").trim().toLowerCase(Locale.ROOT);
+        this.italic = fs.equals("italic") || fs.startsWith("oblique");
+        this.fontId = fontId(s.get("font-family"));
         float px = number(s.get("font-size"), BASE);
         this.fontPx = Math.max(2f, Math.min(64f, px));
         this.scale = fontPx / BASE;
@@ -49,6 +54,35 @@ public final class TextStyle {
     }
 
     public static TextStyle of(StyleMap s, TextMetrics tm) { return new TextStyle(tm, s); }
+
+    public boolean italic() { return italic; }
+
+    /** 쓰는 글꼴 id(기본 글꼴이면 null). */
+    public String fontId() { return fontId; }
+
+    /**
+     * {@code font-family} 목록에서 처음으로 알아볼 수 있는 글꼴: 마인크래프트 글꼴 별칭({@code uniform}, {@code alt}/{@code enchanting},
+     * {@code illageralt}, {@code default}) 또는 {@code namespace:path} 형태의 글꼴 id. 그 밖의 이름(serif, Arial …)은 건너뛴다.
+     * 기본 글꼴이거나 알 수 없으면 null.
+     */
+    public static String fontId(String family) {
+        if (family == null || family.isBlank()) return null;
+        for (String part : family.split(",")) {
+            String t = part.trim().replace("\"", "").replace("'", "").toLowerCase(Locale.ROOT);
+            switch (t) {
+                case "default", "minecraft", "mc", "inherit", "initial" -> { return null; }
+                case "uniform", "unifont" -> { return "minecraft:uniform"; }
+                case "alt", "enchanting", "galactic" -> { return "minecraft:alt"; }
+                case "illageralt", "illager" -> { return "minecraft:illageralt"; }
+                default -> {
+                    if (t.matches("[a-z0-9_.-]+:[a-z0-9_./-]+")) return t;
+                }
+            }
+        }
+        return null;
+    }
+
+    private int rawWidth(String s) { return fontId == null ? tm.width(s) : tm.width(s, fontId); }
 
     private static float number(String v, float def) {
         if (v == null) return def;
@@ -98,20 +132,26 @@ public final class TextStyle {
     /** 폭에 맞춰 줄바꿈하는 white-space 값인가(normal, pre-wrap, pre-line). */
     public boolean wraps() { return whiteSpace.equals("normal") || whiteSpace.equals("pre-wrap") || whiteSpace.equals("pre-line"); }
 
-    private boolean plain() { return scale == 1f && letterSpacing == 0 && !bold; }
+    private boolean plain() { return scale == 1f && letterSpacing == 0 && !bold && !italic && fontId == null; }
+
+    /** 글자를 그린다: 기울임/글꼴이 있으면 스타일 글자 명령으로, 아니면 기본 글자 명령으로. */
+    private void put(UiGfx g, String text, int x, int y, int argb, boolean shadow) {
+        if (italic || fontId != null) g.drawStyledText(text, x, y, argb, shadow, italic, fontId);
+        else g.drawText(text, x, y, argb, shadow);
+    }
 
     /** 한 줄의 폭(px): 배율, 자간, 굵게(+1px)를 반영. */
     public int width(String line) {
         if (plain()) return tm.width(line);
         int w;
         if (letterSpacing == 0) {
-            w = Math.round(tm.width(line) * scale);
+            w = Math.round(rawWidth(line) * scale);
         } else {
             float sum = 0;
             for (int i = 0; i < line.length(); ) {
                 int cp = line.codePointAt(i);
                 String ch = new String(Character.toChars(cp));
-                sum += tm.width(ch) * scale + letterSpacing;
+                sum += rawWidth(ch) * scale + letterSpacing;
                 i += ch.length();
             }
             w = Math.round(sum);
@@ -213,19 +253,23 @@ public final class TextStyle {
             g.drawText(line, x, y, argb, shadow);
             return;
         }
+        if (scale == 1f && letterSpacing == 0 && !bold) {            // 기울임/글꼴만 바뀐 경우
+            put(g, line, x, y, argb, shadow);
+            return;
+        }
         boolean scaled = scale != 1f;
         if (scaled) g.pushTransform(0, 0, scale, 0, x, y);
         int dx = bold ? 1 : 0;
         for (int pass = 0; pass <= dx; pass++) {
             if (letterSpacing == 0) {
-                g.drawText(line, x + pass, y, argb, shadow && pass == 0);
+                put(g, line, x + pass, y, argb, shadow && pass == 0);
             } else {
                 int cx = x + pass;
                 for (int i = 0; i < line.length(); ) {
                     int cp = line.codePointAt(i);
                     String ch = new String(Character.toChars(cp));
-                    g.drawText(ch, cx, y, argb, shadow && pass == 0);
-                    cx += tm.width(ch) + Math.round(letterSpacing / scale);
+                    put(g, ch, cx, y, argb, shadow && pass == 0);
+                    cx += rawWidth(ch) + Math.round(letterSpacing / scale);
                     i += ch.length();
                 }
             }

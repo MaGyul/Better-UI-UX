@@ -388,6 +388,16 @@ public final class LayoutEngine {
         return clamp(c, false, h, 0);
     }
 
+    /**
+     * 줄바꿈하는 글자(label/button, white-space: normal 등)의 상자 폭은 쓸 수 있는 폭을 넘지 않게 한다. 그래야 높이를 센 폭과
+     * 그릴 때 줄바꿈하는 폭(상자 폭)이 같아져 글자가 상자 밖으로 한 줄로 삐져나오지 않는다. 그 밖의 요소는 {@code w} 그대로.
+     */
+    private int wrapCap(LayoutBox c, int w, int avail) {
+        if (c.widget != null || !(c.tag().equals("label") || c.tag().equals("button"))) return w;
+        if (c.style.size("width", Size.AUTO).kind() != Size.Kind.AUTO || avail <= 0) return w;
+        return TextStyle.of(c.style, text).wraps() ? Math.min(w, avail) : w;
+    }
+
     private int outerW(LayoutBox b) { return prefW(b) + margin(b).horizontal(); }
 
     private int outerH(LayoutBox b) { return prefH(b) + margin(b).vertical(); }
@@ -765,7 +775,7 @@ public final class LayoutEngine {
             int r0 = p.row()[i], r1 = Math.min(rowY.length, r0 + p.rspan()[i]);
             int cellW = colX[c1 - 1] + p.colW()[c1 - 1] - colX[c0];
             int cellH = rowY[r1 - 1] + p.rowH()[r1 - 1] - rowY[r0];
-            int w = clamp(c, true, resolve(c.style.size("width", Size.AUTO), cellW - mg.horizontal(), prefW(c), adj(c, true)), cellW - mg.horizontal());
+            int w = wrapCap(c, clamp(c, true, resolve(c.style.size("width", Size.AUTO), cellW - mg.horizontal(), prefW(c), adj(c, true)), cellW - mg.horizontal()), cellW - mg.horizontal());
             int h = clamp(c, false, resolve(c.style.size("height", Size.AUTO), cellH - mg.vertical(), prefHFor(c, w), adj(c, false)), cellH - mg.vertical());
             String js = norm(c.style.get("justify-self", "start"));
             String as = norm(c.style.get("align-self", "start"));
@@ -1026,7 +1036,7 @@ public final class LayoutEngine {
                 case FILL -> Math.max(0, crossAvail - mCrossLead - mCrossTrail);
                 case AUTO -> a.equals("stretch") && !autoCrossLead && !autoCrossTrail
                         ? Math.max(0, crossAvail - mCrossLead - mCrossTrail)
-                        : (horiz ? prefHFor(c, main[i]) : prefW(c));
+                        : (horiz ? prefHFor(c, main[i]) : wrapCap(c, prefW(c), crossAvail - mCrossLead - mCrossTrail));
             };
             double ar = ratio(c);
             if (ar > 0 && cs.kind() == Size.Kind.AUTO) {
@@ -1056,6 +1066,7 @@ public final class LayoutEngine {
         for (LayoutBox c : visibleChildren(b)) {
             Insets m = margin(c);
             int w = clamp(c, true, resolve(c.style.size("width", Size.AUTO), cw - m.horizontal(), prefW(c), adj(c, true)), cw - m.horizontal());
+            w = wrapCap(c, w, cw - m.horizontal());
             int h = clamp(c, false, resolve(c.style.size("height", Size.AUTO), ch - m.vertical(), prefHFor(c, w), adj(c, false)), ch - m.vertical());
             double ar = ratio(c);
             if (ar > 0) {

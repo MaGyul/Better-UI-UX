@@ -17,6 +17,14 @@ public interface UiGfx {
 
     void drawText(String text, int x, int y, int argb, boolean shadow);
 
+    /**
+     * 기울임/글꼴을 바꿔 그리는 글자. 지원하지 않는 구현은 기본 {@link #drawText} 로 대신 그린다.
+     * @param font {@code minecraft:uniform} 같은 글꼴 id(null 이면 기본)
+     */
+    default void drawStyledText(String text, int x, int y, int argb, boolean shadow, boolean italic, String font) {
+        drawText(text, x, y, argb, shadow);
+    }
+
     /** 이후 그리기를 사각형 안으로 제한한다. 중첩 가능, {@link #popClip()} 으로 복원. */
     void pushClip(int x, int y, int w, int h);
 

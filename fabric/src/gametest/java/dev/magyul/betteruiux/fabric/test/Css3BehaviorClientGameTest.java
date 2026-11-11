@@ -44,6 +44,7 @@ public class Css3BehaviorClientGameTest implements FabricClientGameTest {
             hoverChangesLayout(ctx);
             wrappedTextGrowsContainer(ctx);
             styledTextfield(ctx);
+            fontFamilyAndItalic(ctx);
         }
     }
 
@@ -70,6 +71,20 @@ public class Css3BehaviorClientGameTest implements FabricClientGameTest {
         LayoutBox box = box(ctx, "wrapbox"), one = box(ctx, "oneline");
         check(box.h > one.h, "여러 줄로 줄바꿈되면 컨테이너가 한 줄짜리보다 높아야 한다: " + box.h + " vs " + one.h);
         check(box.h >= box(ctx, "wraptext").h, "컨테이너가 글자를 다 담아야 한다: " + box.h + " / " + box(ctx, "wraptext").h);
+        check(box(ctx, "wraptext").w <= box.w, "줄바꿈 글자 상자가 컨테이너 폭을 넘지 않아야 한다(그려질 때도 같은 폭에서 줄바꿈): " + box(ctx, "wraptext").w + " vs " + box.w);
+    }
+
+    /** font-family 로 다른 글꼴(minecraft:uniform)을 쓰면 실제 글꼴 폭으로 배치되고, 기울임·글꼴이 실제로 그려진다(충돌 없이). */
+    private void fontFamilyAndItalic(ClientGameTestContext ctx) {
+        LayoutBox base = box(ctx, "famBase"), uni = box(ctx, "famUni");
+        check(uni.w != base.w, "uniform 글꼴은 기본 글꼴과 폭이 달라야 한다(글꼴별 측정): " + base.w + " vs " + uni.w);
+        List<DrawCommand> cmds = paint(ctx);
+        boolean uniform = cmds.stream().anyMatch(x -> x instanceof DrawCommand.DrawStyledText t && "minecraft:uniform".equals(t.font()) && t.text().equals("Hello World"));
+        boolean italic = cmds.stream().anyMatch(x -> x instanceof DrawCommand.DrawStyledText t && t.italic() && t.text().equals("Slanted"));
+        check(uniform, "font-family: uniform 글자가 스타일 글자 명령으로 나와야 한다");
+        check(italic, "font-style: italic 글자가 스타일 글자 명령으로 나와야 한다");
+        ctx.waitTicks(5);
+        ctx.takeScreenshot("beh-5-fonts");                          // 실제 렌더링에서 예외 없이 그려지는지(스크린샷으로도 확인)
     }
 
     /** 입력칸 글자가 font-size 를 따른다(확대 변환으로 그려진다). */
@@ -177,6 +192,9 @@ public class Css3BehaviorClientGameTest implements FabricClientGameTest {
                         <column id="wrapbox" class="wrapbox"><label id="wraptext" text="aaaa bbbb cccc dddd eeee ffff gggg hhhh"/></column>
                         <column id="oneline" class="wrapbox"><label text="a"/></column>
                         <textfield id="tf" width="100" height="24" value="hello" style="font-size: 16px"/>
+                        <label id="famBase" text="Hello World"/>
+                        <label id="famUni" text="Hello World" style="font-family: uniform"/>
+                        <label id="itl" text="Slanted" style="font-style: italic"/>
                       </column>
                     </screen>
                     """);

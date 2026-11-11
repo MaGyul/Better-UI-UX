@@ -21,6 +21,7 @@ public final class DrawList implements UiGfx {
                 case DrawCommand.DrawTexture t -> target.drawTexture(t.texture(), t.x(), t.y(), t.w(), t.h(),
                         t.u(), t.v(), t.regionW(), t.regionH(), t.texW(), t.texH(), t.argb());
                 case DrawCommand.DrawText t -> target.drawText(t.text(), t.x(), t.y(), t.argb(), t.shadow());
+                case DrawCommand.DrawStyledText t -> target.drawStyledText(t.text(), t.x(), t.y(), t.argb(), t.shadow(), t.italic(), t.font());
                 case DrawCommand.PushClip p -> target.pushClip(p.x(), p.y(), p.w(), p.h());
                 case DrawCommand.PopClip p -> target.popClip();
                 case DrawCommand.PushTransform t ->
@@ -31,6 +32,10 @@ public final class DrawList implements UiGfx {
                 case DrawCommand.DrawItem di -> target.drawItem(di.itemId(), di.x(), di.y(), di.count());
             }
         }
+    }
+
+    @Override public void drawStyledText(String text, int x, int y, int argb, boolean shadow, boolean italic, String font) {
+        commands.add(new DrawCommand.DrawStyledText(text, x, y, argb, shadow, italic, font));
     }
 
     @Override public void fillRect(int x, int y, int w, int h, int argb) {

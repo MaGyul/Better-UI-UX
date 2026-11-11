@@ -97,7 +97,10 @@ View 메뉴의 상태 미리보기로 `:hover :active :focus` 를 선택한 요�
 
 - `radial-gradient([모양,] 색, ...)`: 가운데 기준 타원(farthest-corner)을 최대 6개 띠로 근사한다. 모양/크기/위치 인자는 읽고 무시한다. 띠마다 행 단위로 그려 명령 수가 많아 큰 상자에 여럿 쓰는 것은 피한다.
 
+- **둥근 클립**: `overflow: hidden` 과 `border-radius` 를 같이 쓰면 자식이 둥근 모양으로 잘린다. 모서리 행 묶음(최대 12개)마다 자식을 다시 그리므로 자식이 많고 무거우면 비용이 든다.
+- **글꼴**: `font-style: italic`, `font-family: uniform | alt | illageralt | 네임스페이스:경로`(목록의 첫 알려진 값; serif 같은 이름은 건너뜀). 글꼴별 폭으로 배치된다. 둘 다 상속된다.
+
 ## 아직 없는 것
 
-`font-family`/italic, `conic` 그라디언트(첫 색 단색으로 대체), 자식을 둥글게 잘라내는 클립, `filter`/`backdrop-filter`, 3D 변환,
+`conic` 그라디언트(첫 색 단색으로 대체), `filter`/`backdrop-filter`, 3D 변환,
 모든 속성에 대한 값 타입 검증(길이/숫자/색/열거형 속성만 검사한다).

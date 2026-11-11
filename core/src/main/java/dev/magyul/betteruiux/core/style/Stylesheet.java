@@ -49,7 +49,7 @@ public final class Stylesheet {
             "outline-offset", "opacity", "cursor", "backdrop", "tint", "src", "uv", "tex", "item", "count", "size",
             "translate-x", "translate-y", "scale", "rotate", "transition", "animation", "animation-play-state",
             // 글자
-            "color", "shadow", "text-shadow", "text-align", "font-size", "font-weight", "line-height", "letter-spacing",
+            "color", "shadow", "text-shadow", "text-align", "font-size", "font-style", "font-family", "font-weight", "line-height", "letter-spacing",
             "vertical-align", "white-space", "text-transform", "text-overflow", "text-decoration", "text-decoration-line",
             "text", "content",
             // 상태·위젯

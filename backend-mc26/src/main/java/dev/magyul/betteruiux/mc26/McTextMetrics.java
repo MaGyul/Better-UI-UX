@@ -13,5 +13,11 @@ public final class McTextMetrics implements TextMetrics {
     public int width(String text) { return font.width(text); }
 
     @Override
+    public int width(String text, String fontId) {
+        if (fontId == null) return font.width(text);
+        return font.width(McGfx.styled(text, false, fontId));
+    }
+
+    @Override
     public int lineHeight() { return font.lineHeight; }
 }

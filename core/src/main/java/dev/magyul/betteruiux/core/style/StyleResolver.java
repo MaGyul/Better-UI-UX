@@ -27,7 +27,7 @@ public final class StyleResolver {
 
     private record Applied(Stylesheet.Declaration decl, int specificity, int ordinal) {}
 
-    private static final Set<String> INHERITED = Set.of("color", "shadow", "text-align", "cursor",
+    private static final Set<String> INHERITED = Set.of("color", "shadow", "text-align", "cursor", "font-style", "font-family",
             "font-size", "line-height", "letter-spacing", "font-weight", "white-space", "text-transform");
     private static final Map<String, String> ALIASES = Map.of("background-color", "background",
             "justify-content", "justify", "align-items", "align", "flex-grow", "grow");

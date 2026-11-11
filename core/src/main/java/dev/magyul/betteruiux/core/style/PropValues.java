@@ -46,6 +46,7 @@ final class PropValues {
         enumOf("text-align", "left", "right", "center", "start", "end", "justify");
         enumOf("white-space", "normal", "nowrap", "pre", "pre-wrap", "pre-line", "break-spaces");
         enumOf("text-transform", "none", "uppercase", "lowercase", "capitalize");
+        enumOf("font-style", "normal", "italic", "oblique");
         enumOf("animation-play-state", "running", "paused");
         enumOf("vertical-align", "top", "middle", "center", "bottom", "baseline");
         enumOf("border-style", "none", "solid", "dashed", "dotted", "double", "hidden");

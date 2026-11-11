@@ -84,13 +84,12 @@
 
 ## 남은 일 (2026-11 기준)
 
-구현됨(최근): `row-reverse`/`column-reverse`, `align-content`, absolute 의 기준 조상·`fixed` 는 화면 기준, 이미지 둥근 모서리, `inset` 그림자, 여러 `animation`·`animation-play-state`, `:has()`,
+구현됨(최근): 자식 둥근 클립(`overflow:hidden` + `border-radius`: 모서리 행 묶음마다 사각형 클립을 걸고 자식을 다시 그림, 묶음은 12개 이하로 합침), `font-style: italic`·`font-family`(마인크래프트 글꼴: `uniform`/`alt`/`illageralt` 또는 `ns:path`; `UiGfx.drawStyledText` 추가), 줄바꿈 글자 상자 폭을 컨테이너 폭으로 제한(그릴 때 같은 폭에서 줄바꿈), `row-reverse`/`column-reverse`, `align-content`, absolute 의 기준 조상·`fixed` 는 화면 기준, 이미지 둥근 모서리, `inset` 그림자, 여러 `animation`·`animation-play-state`, `:has()`,
 줄바꿈 글자의 높이가 auto 높이 컨테이너·grid 행·scroll 내용에 반영, `textfield`/`select` 입력 글자 스타일(`text-transform` 은 편집 위치가 어긋나지 않게 textfield 에서 제외),
 `radial-gradient`(가운데 기준 타원, 최대 6띠), 속성 값 타입 경고(`PropValues`: 길이/숫자/색/열거형, 명백히 잘못된 값만; 값은 그대로 저장), 에디터 규칙 머리글에 `@media` 조건의 `[적용 중]/[꺼짐]` 표시,
 **레이아웃에 영향을 주는 상태 규칙**(`:hover/:active/:focus` 의 width/margin/padding/gap/font-size 등 → 상태가 바뀌면 다시 배치, `transition` 과도 함께 동작).
 
-- 렌더링: 안티앨리어싱, 둥근 클립(자식 잘라내기 — 지금 프리미티브로는 모서리 뒤 배경을 복원할 수 없어 보류), conic, 필요하면 `UiGfx` 프리미티브(rounded rect 등) 추가
-- 텍스트: `font-family`/italic
+- 렌더링: 안티앨리어싱, conic, 필요하면 `UiGfx` 프리미티브(rounded rect 등) 추가
 - 도구: 새 문법에 대한 규칙 편집기 안내(자동 완성 등), 값 타입 검증의 확대(지금은 길이/숫자/색/열거형 속성만)
 
 ## 실기 검증 (GameTest / 스모크)
