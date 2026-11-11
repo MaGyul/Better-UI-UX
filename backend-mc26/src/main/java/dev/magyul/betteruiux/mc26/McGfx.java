@@ -26,6 +26,28 @@ public final class McGfx implements UiGfx {
         this.font = font;
     }
 
+    private static java.lang.reflect.Field renderStateField;
+    private static boolean renderStateFieldFailed;
+
+    /**
+     * 위젯이 GUI 의 Picture-in-Picture(오프스크린으로 그려 GUI 에 붙이는 3D) 상태를 올린다.
+     * {@link GuiGraphicsExtractor} 가 이를 위한 공개 메서드를 주지 않아(엔티티/책/배너 전용만 있다) 비공개 필드 {@code guiRenderState} 를
+     * 이름으로 읽는다. 26.x 는 난독화가 없어 이름이 고정이고, 실패하면 한 번만 경고하고 그리지 않는다.
+     */
+    void addPictureInPicture(net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState state) {
+        if (renderStateFieldFailed) return;
+        try {
+            if (renderStateField == null) {
+                renderStateField = GuiGraphicsExtractor.class.getDeclaredField("guiRenderState");
+                renderStateField.setAccessible(true);
+            }
+            ((net.minecraft.client.renderer.state.gui.GuiRenderState) renderStateField.get(g)).addPicturesInPictureState(state);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            renderStateFieldFailed = true;
+            LOG.warn("[better-uiux] <mc-viewer> 를 그릴 수 없습니다(GuiGraphicsExtractor.guiRenderState 를 읽지 못함): {}", e.toString());
+        }
+    }
+
     @Override
     public void fillRect(int x, int y, int w, int h, int argb) {
         g.fill(x, y, x + w, y + h, argb);

@@ -42,6 +42,7 @@ public final class UiApi {
         ExternalImages.init(configBaseDir);
         ExternalVideos.init(configBaseDir);
         BackendBuiltins.register();
+        UiWidgets.register("mc-viewer", McViewerWidget::new);        // 가상 마인크래프트 월드 뷰어(스크립트의 mcv 로 만든 월드)
         ScriptBridge.prewarm(configBaseDir);
     }
 

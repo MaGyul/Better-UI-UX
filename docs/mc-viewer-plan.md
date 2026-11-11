@@ -83,7 +83,13 @@ world.setTickRate(~);
   - `GraalScriptRuntime(long statements, long millis)` 생성자, `ScriptBridge`가 `<mc-viewer>` 문서에만 5,000,000 문장 / 1,500ms 적용
   - `ScriptHost.setThreading(script, main)`: 스크립트는 전용 스레드, 문서 변경은 `mc.execute`로 렌더 스레드. `tick(n)`은 바쁘면 드롭, `onTick(tick)` 메시지
   - 남은 것(후속): `config.toml [scripting]`의 `maxCallMillis/maxStatements/maxHostCalls` 노출, `UiScreen.tick()`에서 `Attached.tick` 호출(6단계 틱 시뮬레이션과 함께), 스크립트 문서 전체가 비동기 적용(한 프레임 지연)이 되어 기존 데모 인게임 확인 필요
-- [ ] 3단계: 위젯 골격
+- [x] 3단계: 위젯 골격 + 렌더 경로 (`McViewerClientGameTest`: 실제 클라이언트에서 스크린샷 픽셀로 확인, 등각 시점 육안 확인)
+  - **렌더 방식 확정: 바닐라 GUI Picture-in-Picture**(`PictureInPictureRenderer`, 엔티티/책/배너를 GUI에 그리는 것과 같은 경로). 오프스크린 텍스처·깊이·라이팅은 마인크래프트가 맡고 `renderToTexture`에서 `SubmitNodeCollector`로 블록 모델(`submitBlockModel`)을 제출한다. 직접 RenderTarget을 만들 필요가 없다.
+  - 로더별 등록: Fabric `PictureInPictureRendererRegistry.register`, NeoForge `RegisterPictureInPictureRenderersEvent`(각 진입점에 한 줄)
+  - `McViewerWidget`(입력: 드래그 회전·휠 줌), `McViewerRenderState`, `McViewerPip`, `McViewerRegistry`(문서 → `McvHost`), `McGfx.addPictureInPicture`(비공개 필드 `guiRenderState`를 이름으로 읽음: 공개 메서드가 없음)
+  - **한계/계획 변경**: PiP 투영은 정사영 고정이라 **원근(perspective)은 이 경로에서 불가**. 등각(ortho)만 지원(Ponder 방식). 원근이 필요하면 별도 렌더 타깃 경로가 필요하다(후속, 우선순위 낮음).
+  - 알려진 미구현: 바이옴 틴트(잔디 색), 반투명 정렬, 숨은 면 컬링(사방이 솔리드로 막힌 블록만 건너뜀), 블록 엔티티/엔티티 렌더(5단계)
+  - 데모: `/uiux open mc-viewer`(config.toml `[scripting] enabled = true` 필요), 게임 테스트 `McViewerClientGameTest`
 - [ ] 4단계: 가상 Level + 블록 렌더(스파이크 포함)
 - [ ] 5단계: 엔티티
 - [ ] 6단계: 틱 시뮬레이션

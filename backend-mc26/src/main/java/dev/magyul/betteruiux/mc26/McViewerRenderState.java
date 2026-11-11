@@ -1,0 +1,18 @@
+package dev.magyul.betteruiux.mc26;
+
+import dev.magyul.betteruiux.core.mcv.McvWorld;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
+import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
+
+/**
+ * {@code <mc-viewer>} 한 프레임의 그리기 정보(GUI 의 Picture-in-Picture 상태). 좌표는 GUI 좌표(스케일 적용 전)이고,
+ * {@code scale} 은 월드 한 칸이 GUI 좌표로 몇 픽셀인지다. {@code scissorArea}, {@code bounds} 는 null 일 수 있다.
+ */
+public record McViewerRenderState(McvWorld world, float yaw, float pitch, int x0, int y0, int x1, int y1, float scale,
+                                  ScreenRectangle scissorArea, ScreenRectangle bounds)
+        implements PictureInPictureRenderState {
+    public McViewerRenderState(McvWorld world, float yaw, float pitch, int x0, int y0, int x1, int y1, float scale,
+                               ScreenRectangle scissorArea) {
+        this(world, yaw, pitch, x0, y0, x1, y1, scale, scissorArea, PictureInPictureRenderState.getBounds(x0, y0, x1, y1, scissorArea));
+    }
+}

@@ -1,0 +1,23 @@
+// mc-viewer 데모: 하얀 바닥 위의 작은 장면. 월드는 Java 에 있고 여기서는 mcv 로 조작만 한다.
+// 필요: config.toml 의 [scripting] enabled = true
+function onInit() {
+  var world = mcv.createWorld(9, 6, 9);
+
+  // 체커 무늬 바닥
+  for (var x = 0; x < 9; x++) {
+    for (var z = 0; z < 9; z++) {
+      world.setBlock(x, 0, z, (x + z) % 2 === 0 ? 'white_concrete' : 'light_gray_concrete');
+    }
+  }
+
+  // 작은 구조물
+  world.fill(2, 1, 2, 4, 1, 4, 'oak_planks');
+  world.setBlock(3, 2, 3, 'red_concrete');
+  world.setBlock(2, 2, 2, 'oak_stairs[facing=east,half=bottom]');
+  world.setBlock(6, 1, 6, 'grass_block');
+  world.setBlock(7, 1, 2, 'chest[facing=south]');
+
+  var cam = world.getCamera();
+  cam.setYaw(225);
+  cam.setPitch(30);
+}

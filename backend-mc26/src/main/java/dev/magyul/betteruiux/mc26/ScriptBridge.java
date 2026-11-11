@@ -58,9 +58,11 @@ final class ScriptBridge {
         });
         /** {@code <mc-viewer>} 가 있는 문서에서만 만들어진다. 위젯이 이 월드들을 그린다. */
         volatile McvHost mcv;
+        volatile UiDocument doc;
 
         void close() {
             closed = true;
+            if (doc != null) McViewerRegistry.remove(doc);
             ScriptHost h = host;
             host = null;
             if (h != null) h.close();
@@ -103,6 +105,8 @@ final class ScriptBridge {
         boolean hasViewer = !doc.queryAll("mc-viewer").isEmpty();
         McvHost mcvHost = hasViewer ? new McvHost() : null;
         handle.mcv = mcvHost;
+        handle.doc = doc;
+        if (mcvHost != null) McViewerRegistry.put(doc, mcvHost);
         LOADER.execute(() -> {
             ScriptRuntime runtime;
             try {

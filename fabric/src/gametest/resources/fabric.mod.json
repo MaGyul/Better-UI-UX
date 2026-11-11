@@ -10,7 +10,8 @@
       "dev.magyul.betteruiux.fabric.test.Css3ClientGameTest",
       "dev.magyul.betteruiux.fabric.test.Css3AdvancedClientGameTest",
       "dev.magyul.betteruiux.fabric.test.Css3VisualClientGameTest",
-      "dev.magyul.betteruiux.fabric.test.Css3BehaviorClientGameTest"
+      "dev.magyul.betteruiux.fabric.test.Css3BehaviorClientGameTest",
+      "dev.magyul.betteruiux.fabric.test.McViewerClientGameTest"
     ]
   },
   "depends": {

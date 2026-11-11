@@ -35,6 +35,11 @@ public final class McvHost {
 
     public java.util.Collection<McvWorld> worlds() { return List.copyOf(worlds.values()); }
 
+    /** 가장 먼저 만든 월드(핸들이 가장 작은 것). 없으면 null. */
+    public McvWorld primaryWorld() {
+        return worlds.entrySet().stream().min(Map.Entry.comparingByKey()).map(Map.Entry::getValue).orElse(null);
+    }
+
     /** 월드를 버린다(문서가 닫힐 때). */
     public void clear() { worlds.clear(); }
 

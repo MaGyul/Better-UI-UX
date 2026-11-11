@@ -1,0 +1,15 @@
+<screen use="blur,dim">
+  <script src="mc-viewer.uijs"/>
+  <style>
+    .card { background: #181A24E0; border: 1; border-color: #3A3F55FF; padding: 8; }
+  </style>
+
+  <panel class="card" anchor="center" width="300" height="240">
+    <column gap="4" width="fill" height="fill">
+      <label text="mc-viewer 데모 (드래그: 회전, 휠: 확대)" />
+      <separator />
+      <mc-viewer id="view" width="fill" height="fill" />
+      <button text="닫기" onClick="close" />
+    </column>
+  </panel>
+</screen>

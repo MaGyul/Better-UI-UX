@@ -26,6 +26,8 @@ public final class BetterUiuxFabricClient implements ClientModInitializer {
     public void onInitializeClient() {
         Path baseDir = FabricLoader.getInstance().getConfigDir().resolve("better-uiux");
         UiApi.init(baseDir);
+        // <mc-viewer>: 가상 월드를 GUI Picture-in-Picture 로 그리는 렌더러를 등록한다.
+        net.fabricmc.fabric.api.client.rendering.v1.PictureInPictureRendererRegistry.register(ctx -> new dev.magyul.betteruiux.mc26.McViewerPip());
         // 서버 동기화(채널은 공통 진입점이 등록): 접속하면 인사를 보내고, 서버 메시지는 렌더 스레드에서 처리한다.
         ClientSync.init(baseDir);
         ClientSync.setSender(ClientPlayNetworking::send);

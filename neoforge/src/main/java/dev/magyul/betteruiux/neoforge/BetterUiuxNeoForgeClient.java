@@ -30,6 +30,9 @@ public final class BetterUiuxNeoForgeClient {
     public BetterUiuxNeoForgeClient(IEventBus modBus) {
         Path baseDir = FMLPaths.CONFIGDIR.get().resolve("better-uiux");
         UiApi.init(baseDir);
+        // <mc-viewer>: 가상 월드를 GUI Picture-in-Picture 로 그리는 렌더러를 등록한다.
+        modBus.addListener((net.neoforged.neoforge.client.event.RegisterPictureInPictureRenderersEvent e) ->
+                e.register(dev.magyul.betteruiux.mc26.McViewerRenderState.class, dev.magyul.betteruiux.mc26.McViewerPip::new));
         // 서버 동기화(채널은 공통 진입점이 등록): 접속하면 인사를 보내고, 서버가 보낸 것은 렌더 스레드에서 처리한다.
         ClientSync.init(baseDir);
         ClientSync.setSender(p -> ClientPacketDistributor.sendToServer(p));
