@@ -36,7 +36,7 @@ public final class Stylesheet {
             "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
             "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
             "gap", "row-gap", "column-gap", "grid-gap", "justify", "justify-content", "align", "align-items", "align-self",
-            "justify-self", "grow", "flex-grow", "flex-shrink", "flex-basis", "flex", "flex-wrap", "flex-direction", "order",
+            "justify-self", "grow", "flex-grow", "flex-shrink", "flex-basis", "flex", "flex-wrap", "flex-direction", "align-content", "order",
             "anchor", "x", "y", "position", "top", "right", "bottom", "left", "z-index", "display", "visible", "overflow",
             "columns", "grid-template-columns", "grid-template-rows", "grid-column", "grid-row",
             // 모양

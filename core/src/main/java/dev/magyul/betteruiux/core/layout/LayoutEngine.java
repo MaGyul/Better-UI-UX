@@ -208,10 +208,38 @@ public final class LayoutEngine {
         return r;
     }
 
+    /**
+     * {@code b} 를 기준 상자로 삼는 absolute/fixed 후손. 기준 상자는 {@code fixed} 면 최상위(화면) 상자, 아니면 가장 가까운
+     * {@code position} 이 지정된(relative/absolute/fixed) 조상이고, 그런 조상이 없으면 바로 위 부모다.
+     */
     private static List<LayoutBox> absoluteChildren(LayoutBox b) {
         List<LayoutBox> r = new ArrayList<>();
-        for (LayoutBox c : b.children) if (c.visible() && isAbsolute(c)) r.add(c);
+        collectAbsolutes(b, b, r);
         return r;
+    }
+
+    private static void collectAbsolutes(LayoutBox cb, LayoutBox at, List<LayoutBox> out) {
+        for (LayoutBox c : at.children) {
+            if (!c.visible()) continue;
+            if (isAbsolute(c)) {
+                if (containingBlock(c) == cb) out.add(c);
+            } else {
+                collectAbsolutes(cb, c, out);
+            }
+        }
+    }
+
+    private static LayoutBox containingBlock(LayoutBox c) {
+        if (c.style.get("position", "").equalsIgnoreCase("fixed")) {
+            LayoutBox root = c;
+            while (root.parent != null) root = root.parent;
+            return root;
+        }
+        for (LayoutBox a = c.parent; a != null; a = a.parent) {
+            String p = a.style.get("position", "");
+            if (p.equalsIgnoreCase("relative") || p.equalsIgnoreCase("absolute") || p.equalsIgnoreCase("fixed")) return a;
+        }
+        return c.parent;
     }
 
     /** 1 = 가로 흐름(row, display:flex), 2 = 세로 흐름(column, flex-direction:column), 0 = 흐름 아님. */
@@ -691,6 +719,7 @@ public final class LayoutEngine {
     private void flow(LayoutBox b, boolean horiz, int cx, int cy, int cw, int ch) {
         List<LayoutBox> items = visibleChildren(b);
         if (items.isEmpty()) return;
+        if (reversed(b)) java.util.Collections.reverse(items);            // row-reverse / column-reverse
         int gap = b.style.integer("gap", 0);
         int mainGap = b.style.integer(horiz ? "column-gap" : "row-gap", gap);
         int crossGap = b.style.integer(horiz ? "row-gap" : "column-gap", gap);
@@ -730,13 +759,36 @@ public final class LayoutEngine {
             }
         }
         boolean reverse = b.style.get("flex-wrap", "").equalsIgnoreCase("wrap-reverse");
-        int offset = 0;
+        int total = crossGap * (lines.size() - 1);
+        for (int v : lineCross) total += v;
+        int free = Math.max(0, crossAvail - total), offset = 0, between = 0;
+        int nl = lines.size();
+        switch (norm(b.style.get("align-content", "start"))) {                  // 줄들이 교차축에서 남는 공간을 나누는 방식
+            case "center" -> offset = free / 2;
+            case "end" -> offset = free;
+            case "space-between" -> {
+                if (nl > 1) between = free / (nl - 1);
+            }
+            case "space-around" -> {
+                between = free / nl;
+                offset = between / 2;
+            }
+            case "space-evenly" -> {
+                between = free / (nl + 1);
+                offset = between;
+            }
+            default -> { }
+        }
         for (int k = 0; k < lines.size(); k++) {
             int i = reverse ? lines.size() - 1 - k : k;
             if (horiz) flowLine(b, lines.get(i), true, cx, cy + offset, cw, lineCross[i], mainGap);
             else flowLine(b, lines.get(i), false, cx + offset, cy, lineCross[i], ch, mainGap);
-            offset += lineCross[i] + crossGap;
+            offset += lineCross[i] + crossGap + between;
         }
+    }
+
+    private static boolean reversed(LayoutBox b) {
+        return b.style.get("flex-direction", "").toLowerCase().endsWith("-reverse");
     }
 
     /** 줄바꿈 판단용 기본 주축 크기(basis/지정 크기/내용). */
@@ -863,6 +915,7 @@ public final class LayoutEngine {
         }
 
         String justify = norm(b.style.get("justify", "start"));
+        if (reversed(b)) justify = justify.equals("start") ? "end" : justify.equals("end") ? "start" : justify;   // 시작/끝이 뒤바뀐다
         int cursor = 0, betweenExtra = 0, autoShare = 0;
         if (autoMainCount > 0 && free > 0) {
             autoShare = free / autoMainCount;                 // auto 여백이 남는 공간을 나눠 가진다
