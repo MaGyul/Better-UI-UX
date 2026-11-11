@@ -30,6 +30,7 @@ final class ScriptBridge {
      * 낮은 우선순위의 데몬 스레드라 게임 로딩을 거의 방해하지 않고, 스크립트를 안 쓰면 아무 일도 하지 않는다.
      */
     static void prewarm(Path baseDir) {
+        configBaseDir = baseDir;
         try {
             if (!dev.magyul.betteruiux.core.doc.UiConfig.load(baseDir.resolve("config.toml")).bool("scripting.enabled", false)) return;
             Class.forName(RUNTIME_CLASS, false, ScriptBridge.class.getClassLoader());   // 설치되어 있는지만 확인(초기화는 하지 않는다)
@@ -83,7 +84,23 @@ final class ScriptBridge {
     }
 
     // mc-viewer 문서의 스크립트 한도: 큰 월드를 만들 수 있게 기본(300ms/50만 문장)보다 넉넉하게. 전용 스레드라 프레임은 멈추지 않는다.
-    private static final long MCV_STATEMENT_LIMIT = 5_000_000L, MCV_TIME_LIMIT_MS = 1_500L;
+    // config.toml 의 [scripting] maxCallMillis / maxStatements / maxHostCalls 로 바꿀 수 있고, 범위를 벗어난 값은 가까운 한계로 맞춘다.
+    static final long DEFAULT_MCV_STATEMENTS = 5_000_000L, DEFAULT_MCV_MILLIS = 1_500L, DEFAULT_MCV_HOST_CALLS = 200_000L;
+    private static volatile Path configBaseDir;
+
+    /** config.toml 의 숫자 설정. 없거나 숫자가 아니면 기본값, 범위 밖이면 {min,max} 로 맞춘다. */
+    static long configNumber(String key, long def, long min, long max) {
+        Path dir = configBaseDir;
+        if (dir == null) return def;
+        String v = dev.magyul.betteruiux.core.doc.UiConfig.load(dir.resolve("config.toml")).get(key);
+        if (v == null) return def;
+        try {
+            return Math.max(min, Math.min(max, Long.parseLong(v.trim())));
+        } catch (NumberFormatException e) {
+            LOG.warn("[better-uiux] config {} 은(는) 숫자여야 합니다: {}", key, v);
+            return def;
+        }
+    }
 
     private static final java.util.concurrent.ExecutorService LOADER = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "better-uiux-script-loader");
@@ -108,7 +125,10 @@ final class ScriptBridge {
         Minecraft mc = Minecraft.getInstance();
         CommandPolicy policy = options.scriptCommands().isEmpty() ? CommandPolicy.denyAll() : CommandPolicy.allowing(Set.copyOf(options.scriptCommands()));
         boolean hasViewer = !doc.queryAll("mc-viewer").isEmpty();
-        McvHost mcvHost = hasViewer ? new McvHost() : null;
+        long mcvStatements = configNumber("scripting.maxStatements", DEFAULT_MCV_STATEMENTS, 10_000L, 100_000_000L);
+        long mcvMillis = configNumber("scripting.maxCallMillis", DEFAULT_MCV_MILLIS, 100L, 30_000L);
+        int mcvCalls = (int) configNumber("scripting.maxHostCalls", DEFAULT_MCV_HOST_CALLS, 100L, 5_000_000L);
+        McvHost mcvHost = hasViewer ? new McvHost(mcvCalls) : null;
         handle.mcv = mcvHost;
         handle.doc = doc;
         if (mcvHost != null) McViewerRegistry.put(doc, mcvHost, new McViewerRegistry.ScriptEvents() {
@@ -121,7 +141,7 @@ final class ScriptBridge {
             try {
                 Class<?> cls = Class.forName(RUNTIME_CLASS);
                 runtime = (ScriptRuntime) (hasViewer
-                        ? cls.getDeclaredConstructor(long.class, long.class).newInstance(MCV_STATEMENT_LIMIT, MCV_TIME_LIMIT_MS)
+                        ? cls.getDeclaredConstructor(long.class, long.class).newInstance(mcvStatements, mcvMillis)
                         : cls.getDeclaredConstructor().newInstance());
                 if (mcvHost != null) runtime.setHostCallback(mcvHost::invoke);
             } catch (ReflectiveOperationException | LinkageError e) {

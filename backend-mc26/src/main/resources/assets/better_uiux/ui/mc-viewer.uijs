@@ -1,7 +1,9 @@
-// mc-viewer 데모: 하얀 바닥 위의 작은 장면. 월드는 Java 에 있고 여기서는 mcv 로 조작만 한다.
-// 필요: config.toml 의 [scripting] enabled = true
+// mc-viewer 데모: 체커 바닥 위의 작은 장면. 월드는 Java 에 있고 여기서는 mcv 로 조작만 한다.
+// 필요: config.toml 의 [scripting] enabled = true. 소(엔티티)는 월드에 접속한 상태에서만 보인다.
+var world, pig;
+
 function onInit() {
-  var world = mcv.createWorld(9, 6, 9);
+  world = mcv.createWorld(9, 6, 9);
 
   // 체커 무늬 바닥
   for (var x = 0; x < 9; x++) {
@@ -11,13 +13,42 @@ function onInit() {
   }
 
   // 작은 구조물
-  world.fill(2, 1, 2, 4, 1, 4, 'oak_planks');
-  world.setBlock(3, 2, 3, 'red_concrete');
-  world.setBlock(2, 2, 2, 'oak_stairs[facing=east,half=bottom]');
-  world.setBlock(6, 1, 6, 'grass_block');
-  world.setBlock(7, 1, 2, 'chest[facing=south]');
+  world.fill(3, 1, 3, 5, 1, 5, 'oak_planks');
+  world.setBlock(4, 2, 4, 'red_concrete');
+  world.setBlock(3, 2, 3, 'oak_stairs[facing=east,half=bottom]');
+  world.setBlock(7, 1, 1, 'grass_block');
+
+  pig = world.spawnEntity(4.5, 1, 1.5, 'pig');
+  world.setTickRate(20);
 
   var cam = world.getCamera();
   cam.setYaw(225);
   cam.setPitch(30);
+}
+
+// 돼지가 구조물 둘레를 돈다(틱마다 호출된다).
+function onTick(tick) {
+  var a = tick * 0.04;
+  pig.methods.setPosition(4.5 + Math.cos(a) * 3.2, 1, 4.5 + Math.sin(a) * 3.2);
+  pig.methods.setRotation(a * 180 / Math.PI + 90, 0);
+}
+
+function onBlockHover(e) {
+  ui.setText('#info', e.block ? e.id + '  (' + e.x + ', ' + e.y + ', ' + e.z + ') ' + e.face : '블록 위에 마우스를 올려 보세요');
+}
+
+var NEIGHBOR = {up: [0, 1, 0], down: [0, -1, 0], north: [0, 0, -1], south: [0, 0, 1], west: [-1, 0, 0], east: [1, 0, 0]};
+
+function onBlockClick(e) {
+  if (!e.block) return;
+  try {
+    if (e.button === 0) {                              // 좌클릭: 맞힌 면 쪽에 블록 놓기
+      var n = NEIGHBOR[e.face];
+      world.setBlock(e.x + n[0], e.y + n[1], e.z + n[2], 'oak_planks');
+    } else if (e.button === 2 && e.y > 0) {            // 우클릭: 부수기(바닥은 남긴다)
+      world.setBlock(e.x, e.y, e.z, 'air');
+    }
+  } catch (err) {
+    ui.setText('#info', String(err.message));          // 월드 밖 같은 오류는 JS 예외로 온다
+  }
 }

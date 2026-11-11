@@ -29,6 +29,7 @@
 | `separator` | | 구분선. column 안에서는 가로선, row 안에서는 세로선 |
 | `item` | `item`(예: `minecraft:diamond`) `count` `size`/`width`/`height` | 아이템 아이콘. 상자 크기에 맞춰 커지고 가운데에 놓인다(기본 16). 2개 이상이면 개수 표시 |
 | `dialog` | `modal`(기본 true) | 화면 중앙의 대화상자. 뒤를 어둡게 하고 바깥 클릭을 막는다 |
+| `mc-viewer` | `world`(월드 번호, 생략하면 가장 먼저 만든 월드) `width`/`height` | 스크립트가 만든 **가상 마인크래프트 월드**를 등각 시점으로 보여 준다. 드래그로 회전, 휠로 확대. 자세한 내용과 스크립트 API 는 [scripting.md](scripting.md#mc-viewer-가상-마인크래프트-월드) |
 
 ## 모든 요소
 
@@ -48,4 +49,4 @@ doc.setVariable("accent", "#55FF55FF");         // CSS 변수(var(--accent)) 바
 
 ## 아직 없는 것
 
-`list`(데이터 바인딩 반복), `icon`, `video`, `entity-preview`, `block-model`, 슬롯 UI(`slot`).
+`list`(데이터 바인딩 반복), `icon`, 슬롯 UI(`slot`). (블록/엔티티 3D 표시는 `mc-viewer` 로 할 수 있다.)

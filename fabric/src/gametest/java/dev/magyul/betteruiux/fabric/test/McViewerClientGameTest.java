@@ -181,6 +181,26 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             in.setCursorPos(px * guiScale, (py - 90) * guiScale);                 // 월드 바깥(위쪽)
             ctx.waitTicks(5);
             check(text(ctx, "#h").equals("hover none"), "빈 곳에서는 호버가 풀려야 한다: " + text(ctx, "#h"));
+
+            // 기본 제공 데모(mc-viewer.uiml/.uijs)가 경고 없이 열리고 그려진다.
+            ctx.runOnClient(mc -> UiOpener.open("mc-viewer", base, false));
+            ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("mc-viewer"));
+            ctx.waitTicks(60);
+            BufferedImage demo = read(ctx.takeScreenshot("mc-viewer-demo"));
+            java.util.List<String> warnings = ctx.computeOnClient(mc -> ((UiScreen) mc.gui.screen()).document().warnings());
+            check(warnings.isEmpty(), "데모 문서에 경고가 없어야 한다: " + warnings);
+            LayoutBox dv = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            int demoRed = 0;
+            for (int gy = dv.y; gy < dv.y + dv.h; gy++) {
+                for (int gx = dv.x; gx < dv.x + dv.w; gx++) {
+                    int x = (int) Math.min(demo.getWidth() - 1, Math.round(gx * s * sx)), y = (int) Math.min(demo.getHeight() - 1, Math.round(gy * s * sx));
+                    int p = demo.getRGB(x, y), r = p >> 16 & 0xFF, g = p >> 8 & 0xFF, b = p & 0xFF;
+                    if (r > 110 && r > g * 2.2 && r > b * 2.2) demoRed++;
+                }
+            }
+            System.out.println("[mc-viewer test] demo red=" + demoRed);
+            check(demoRed > 50, "데모의 빨간 블록이 그려져야 한다(" + demoRed + ")");
+
         }
     }
 

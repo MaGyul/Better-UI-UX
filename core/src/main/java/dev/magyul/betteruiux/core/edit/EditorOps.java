@@ -108,6 +108,7 @@ public final class EditorOps {
             case "dialog" -> "<dialog width=\"140\" height=\"70\"/>";
             case "video" -> "<video src=\"file:video.mp4\" width=\"96\" height=\"54\"/>";
             case "stack" -> "<stack width=\"80\" height=\"40\"/>";
+            case "mc-viewer" -> "<mc-viewer width=\"160\" height=\"120\"/>";
             default -> throw new IllegalArgumentException("추가할 수 없는 요소: " + tag);
         };
     }
