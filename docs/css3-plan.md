@@ -91,3 +91,10 @@
 - 선택자: `:has()`, 레이아웃에 영향을 주는 상태 규칙
 - 도구: `@media` 조건 평가 표시, 새 문법에 대한 규칙 편집기 안내, 프로퍼티 레지스트리(타입 검증)
 - 검증: 이 작업 전체는 core 단위/골든 테스트로만 확인했다. Fabric/NeoForge 실기(Vulkan·OpenGL)와 에디터 UI 조작은 직접 확인하지 못했다.
+
+## 실기 검증 (GameTest)
+
+`./gradlew :fabric:runClientGameTest` 의 `Css3ClientGameTest` 가 실제 Fabric 클라이언트(26.x, 월드 안, GUI 배율 1)에서 확인한다:
+둥근 모서리·그라디언트·그림자·아웃라인이 실제로 그려짐, `flex-wrap` 줄바꿈, `grid` 의 `1fr 2fr` 트랙, `::before` 글자,
+진짜 마우스 이동으로 `:hover` 규칙 켜짐/꺼짐, `width` 전환(레이아웃 애니메이션)에서 옆 요소가 밀리고 최종값에 멈춤, 스타일 경고 없음. 스크린샷은 `fabric/build/run/clientGameTest/screenshots/css-*.png`.
+아직 GameTest 로 확인하지 못한 것: NeoForge, 에디터 패널의 새 구역/출처 툴팁, 위젯 글자 스타일, `@media`, 다른 해상도/GUI 배율, 성능.

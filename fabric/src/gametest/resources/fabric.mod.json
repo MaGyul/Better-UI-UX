@@ -5,7 +5,10 @@
   "name": "Better UI/UX GameTest",
   "environment": "client",
   "entrypoints": {
-    "fabric-client-gametest": ["dev.magyul.betteruiux.fabric.test.EditorClientGameTest"]
+    "fabric-client-gametest": [
+      "dev.magyul.betteruiux.fabric.test.EditorClientGameTest",
+      "dev.magyul.betteruiux.fabric.test.Css3ClientGameTest"
+    ]
   },
   "depends": {
     "better_uiux": "*"
