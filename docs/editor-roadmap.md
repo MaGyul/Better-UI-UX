@@ -108,5 +108,6 @@ M4 완료: HUD(`<hud>` + 읽기 전용 데이터 소스), 외부 이미지(png/j
 - **리소스 선택기**: image/video 의 `src` 칸 끝의 ▦ 를 누르면 `config/better-uiux/images/` 의 파일 목록(검색 가능)에서 고른다.
 - **스타일 규칙 편집**: 속성 패널 맨 아래 "스타일 규칙" 구역에 선택한 요소에 맞는 문서 안 `<style>` 규칙이 선택자별로 나온다(접을 수 있음). 값 칸을 눌러 고치고, 비우면 선언을 지우고, `+ 추가` 에 `속성: 값` 을 쓰면 규칙에 덧붙인다. 주석·들여쓰기는 그대로 유지된다. 외부 `<link>` 스타일시트와 `@keyframes` 는 아직 편집하지 않는다.
 - **외부 스타일시트 편집**: `<link href="x.uicss"/>` 로 불러온 파일의 규칙도 속성 패널 "스타일시트: 파일" 구역에서 같은 방식(값 고치기·비우면 삭제·`+ 추가`·`+ 새 규칙`)으로 고친다. 파일에 바로 저장되며(기본 제공 파일은 사용자 폴더에 복사본으로), Ctrl+Z/Y 는 문서 편집과 시간 순서를 맞춰 파일 편집도 되돌린다.
+- **인게임 GameTest**: `./gradlew :fabric:runClientGameTest` 가 실제 창/월드/마우스/키보드로 외부 스타일시트 편집(+Ctrl+Z/Y), File 메뉴 전환, 크기 미리보기, 자동 저장 복구 대화상자를 확인하고 스크린샷을 `fabric/build/run/clientGameTest/screenshots` 에 남긴다(`fabric/src/gametest`). 26.x 는 SDL 입력이라 키/마우스 번호는 `InputConstants` 상수를 쓴다.
 - 정리: `FieldText`(칸 안 글자 편집 상태)와 `LayoutQueries`(상자 트리 조회 함수)를 `EditorController` 에서 분리했다(3,257 → 3,149줄, 동작 변화 없음).
 - 남은 것: `EditorController` 추가 분리(트리/메뉴/툴바 그리기), 나머지 태그, `@keyframes` 편집.
