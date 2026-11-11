@@ -35,6 +35,12 @@ public final class McvHost {
 
     public java.util.Collection<McvWorld> worlds() { return List.copyOf(worlds.values()); }
 
+    /** 월드의 핸들(스크립트가 쓰는 번호). 이 호스트의 월드가 아니면 -1. */
+    public int handleOf(McvWorld w) {
+        for (Map.Entry<Integer, McvWorld> e : worlds.entrySet()) if (e.getValue() == w) return e.getKey();
+        return -1;
+    }
+
     /** 가장 먼저 만든 월드(핸들이 가장 작은 것). 없으면 null. */
     public McvWorld primaryWorld() {
         return worlds.entrySet().stream().min(Map.Entry.comparingByKey()).map(Map.Entry::getValue).orElse(null);

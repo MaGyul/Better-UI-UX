@@ -94,8 +94,8 @@ class McvScriptTest {
 
     @Test
     void tickMessageCallsOnTick() throws Exception {
-        rt.load("t.uijs", "function onTick(n) { ui.log('tick ' + n); }");
-        assertTrue(rt.call("{\"type\":\"tick\",\"tick\":7,\"state\":{}}").contains("tick 7"));
+        rt.load("t.uijs", "function onTick(n, w) { ui.log('tick ' + n + ' world ' + w); }");
+        assertTrue(rt.call("{\"type\":\"tick\",\"tick\":7,\"world\":2}").contains("tick 7 world 2"));
     }
 
     @Test

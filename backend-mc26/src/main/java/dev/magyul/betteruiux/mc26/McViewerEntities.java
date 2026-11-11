@@ -67,7 +67,7 @@ final class McViewerEntities {
             if (slot.isEmpty()) continue;
             Entity e = slot.get();
             sync(e, me, w);
-            EntityRenderState state = dispatcher.extractEntity(e, 1f);
+            EntityRenderState state = dispatcher.extractEntity(e, w.partialTick());   // 틱 사이를 보간해 부드럽게(ageInTicks = tickCount + partial)
             state.lightCoords = LightCoordsUtil.FULL_BRIGHT;
             pose.pushPose();
             pose.translate(me.x(), me.y(), me.z());

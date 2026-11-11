@@ -104,11 +104,15 @@ public final class ScriptHost {
      * 월드 틱 같은 주기적 신호를 스크립트의 {@code onTick(tick)} 으로 보낸다. 스크립트가 아직 이전 틱을 처리 중이면
      * 이번 틱은 버린다(밀린 틱을 쌓지 않는다).
      */
-    public void tick(long tick) {
+    public void tick(long tick) { tick(tick, 0); }
+
+    /** 월드 {@code world}(mcv 핸들)의 틱을 {@code onTick(tick, world)} 로 보낸다. */
+    public void tick(long tick, int world) {
         if (broken || !tickQueued.compareAndSet(false, true)) return;
         Map<String, Object> msg = new LinkedHashMap<>();
         msg.put("type", "tick");
         msg.put("tick", tick);
+        msg.put("world", world);
         msg.put("state", Map.of());
         scriptThread.execute(() -> {
             try {

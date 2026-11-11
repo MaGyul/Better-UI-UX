@@ -52,6 +52,21 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                       sheep.fields.customName = 'Dolly';
                     }
                     """);
+            Files.writeString(base.resolve("ui/gt_mcv3.uiml"), """
+                    <screen>
+                      <script src="gt_mcv3.uijs"/>
+                      <label id="t" anchor="top-left" x="4" y="4" text="0"/>
+                      <mc-viewer id="view" anchor="center" width="160" height="120"/>
+                    </screen>
+                    """);
+            Files.writeString(base.resolve("ui/gt_mcv3.uijs"), """
+                    function onInit() {
+                      var w = mcv.createWorld(3, 2, 3);
+                      w.fill(0, 0, 0, 2, 0, 2, 'stone');
+                      w.setTickRate(20);
+                    }
+                    function onTick(n, worldId) { ui.setText('#t', String(n)); }
+                    """);
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -108,6 +123,14 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             }
             System.out.println("[mc-viewer test] entity diff=" + diff);
             check(diff > 400, "소와 잔디가 더해진 장면은 달라 보여야 한다(달라진 픽셀 " + diff + ")");
+
+            // 틱 시뮬레이션: 위젯이 그려지는 동안 월드 틱이 흐르고, 스크립트의 onTick 이 불려 문서가 바뀐다(위젯 → 스크립트 스레드 → 렌더 스레드).
+            ctx.runOnClient(mc -> UiOpener.open("gt_mcv3", base, false));
+            ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv3"));
+            ctx.waitTicks(80);
+            String shown = ctx.computeOnClient(mc -> ((UiScreen) mc.gui.screen()).document().query("#t").text());
+            System.out.println("[mc-viewer test] onTick label=" + shown);
+            check(Integer.parseInt(shown.trim()) > 20, "onTick 이 계속 불려야 한다(레이블 " + shown + ")");
         }
     }
 

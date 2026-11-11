@@ -111,7 +111,7 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                 if (msg.type === 'init') {
                   if (typeof globalThis.onInit === 'function') globalThis.onInit(msg.state);
                 } else if (msg.type === 'tick') {
-                  if (typeof globalThis.onTick === 'function') globalThis.onTick(msg.tick, msg.state);
+                  if (typeof globalThis.onTick === 'function') globalThis.onTick(msg.tick, msg.world);
                 } else if (msg.type === 'call') {
                   var f = globalThis[msg.fn];
                   if (typeof f === 'function') f(msg.event, msg.state);

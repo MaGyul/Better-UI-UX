@@ -12,6 +12,7 @@ import dev.magyul.betteruiux.core.mcv.McvWorld;
  * 마우스 드래그로 카메라를 돌리고, 휠로 확대/축소한다. 그리기는 {@link McViewerPip}(GUI Picture-in-Picture)가 맡는다.
  */
 final class McViewerWidget implements UiWidget {
+    private static final int MAX_TICKS_PER_FRAME = 5;
     private final UiElement el;
     private int lastX, lastY;
     private boolean dragging;
@@ -43,6 +44,7 @@ final class McViewerWidget implements UiWidget {
             gfx.fillRect(x, y, w, h, 0x55000000);                       // 아직 월드가 없다(스크립트가 만들기 전)
             return;
         }
+        advanceTicks(world);
         if (!(gfx instanceof McGfx mc)) return;
         McvCamera cam = world.camera();
         int[] va = world.viewArea();
@@ -52,6 +54,21 @@ final class McViewerWidget implements UiWidget {
         double diag = Math.sqrt(dx * dx + dy * dy + dz * dz);          // 월드가 어느 각도에서도 들어오도록 대각선에 맞춘다
         float scale = (float) (Math.min(w, h) / diag) * cam.zoom();
         mc.addPictureInPicture(new McViewerRenderState(world, cam.yaw(), cam.pitch(), x, y, x + w, y + h, scale, null));
+    }
+
+    /**
+     * 이 위젯이 그려질 때마다 월드 시계를 돌린다(안 보이는 월드는 멈춘다). 진행된 틱마다 스크립트의 onTick 을 부른다.
+     * 한 월드를 위젯 여러 개가 그려도 {@link McvWorld#advance} 가 시간 기준이라 두 번 진행되지 않는다.
+     */
+    private void advanceTicks(McvWorld world) {
+        int n = world.advance(System.nanoTime(), MAX_TICKS_PER_FRAME);
+        if (n == 0) return;
+        var sink = McViewerRegistry.tickSink(el.document());
+        McvHost host = McViewerRegistry.get(el.document());
+        if (sink == null || host == null) return;
+        int handle = host.handleOf(world);
+        long last = world.tickCount();
+        for (int i = n - 1; i >= 0; i--) sink.accept(handle, last - i);
     }
 
     // ---- 입력: 드래그로 돌리고 휠로 확대 ----

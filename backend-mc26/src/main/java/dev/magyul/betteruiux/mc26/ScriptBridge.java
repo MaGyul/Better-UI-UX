@@ -71,9 +71,9 @@ final class ScriptBridge {
         }
 
         /** 월드 틱 같은 주기 신호를 스크립트의 onTick 으로 보낸다(스크립트가 바쁘면 그 틱은 버려진다). */
-        void tick(long tick) {
+        void tick(int world, long tick) {
             ScriptHost h = host;
-            if (h != null) h.tick(tick);
+            if (h != null) h.tick(tick, world);
         }
     }
 
@@ -106,7 +106,7 @@ final class ScriptBridge {
         McvHost mcvHost = hasViewer ? new McvHost() : null;
         handle.mcv = mcvHost;
         handle.doc = doc;
-        if (mcvHost != null) McViewerRegistry.put(doc, mcvHost);
+        if (mcvHost != null) McViewerRegistry.put(doc, mcvHost, (world, tick) -> handle.tick(world, tick));
         LOADER.execute(() -> {
             ScriptRuntime runtime;
             try {

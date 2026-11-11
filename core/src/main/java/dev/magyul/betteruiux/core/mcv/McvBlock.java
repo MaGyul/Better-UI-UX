@@ -17,7 +17,7 @@ public record McvBlock(String id, Map<String, String> state, String nbt) {
     private static final Pattern VALUE = Pattern.compile("[a-zA-Z0-9_.-]+");
 
     public McvBlock {
-        state = Map.copyOf(new TreeMap<>(state));
+        state = java.util.Collections.unmodifiableSortedMap(new TreeMap<>(state));   // Map.copyOf 는 순서를 잃는다: 이름순을 유지해야 문자열이 늘 같다
     }
 
     public boolean isAir() {

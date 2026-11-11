@@ -48,7 +48,7 @@ public final class McvWorld {
     private final McvCamera camera = new McvCamera();
     private volatile int[] viewArea;               // null 이면 월드 전체
     private volatile float tickRate = 20f;
-    private volatile long tickCount;
+    private volatile long tickCount;                  // 쓰기는 advance()(synchronized)만 한다
 
     public McvWorld(int sizeX, int sizeY, int sizeZ) {
         if (sizeX < 1 || sizeY < 1 || sizeZ < 1 || sizeX > MAX_AXIS || sizeY > MAX_AXIS || sizeZ > MAX_AXIS) {
@@ -71,8 +71,33 @@ public final class McvWorld {
 
     public long tickCount() { return tickCount; }
 
-    /** 렌더 스레드가 월드 틱을 한 번 진행했을 때 부른다. */
-    public void advanceTick() { tickCount++; }
+    private long lastNanos = -1;
+    private double tickFraction;
+
+    /**
+     * 시계를 {@code nowNanos} 까지 돌려 지난 만큼 틱을 진행한다(렌더 스레드가 위젯을 그릴 때 부른다). 몇 틱 진행했는지 돌려준다.
+     * 틱 속도 0 이면 멈춘다. 한 번에 {@code maxTicks} 를 넘겨 따라잡지 않고, 1초 넘게 안 불렸다면(위젯이 안 보였다면) 그 시간은 건너뛴다.
+     */
+    public synchronized int advance(long nowNanos, int maxTicks) {
+        float rate = tickRate;
+        if (rate <= 0f || lastNanos < 0) {
+            lastNanos = nowNanos;
+            if (rate <= 0f) tickFraction = 0;
+            return 0;
+        }
+        double dt = (nowNanos - lastNanos) / 1e9;
+        lastNanos = nowNanos;
+        if (dt < 0 || dt > 1.0) dt = 0;
+        tickFraction += dt * rate;
+        int n = (int) tickFraction;
+        tickFraction -= n;
+        if (n > maxTicks) n = Math.max(0, maxTicks);
+        tickCount += n;
+        return n;
+    }
+
+    /** 지금 틱이 얼마나 진행됐는지(0 이상 1 미만). 애니메이션 보간에 쓴다. */
+    public synchronized float partialTick() { return (float) tickFraction; }
 
     /** 렌더 스레드가 전체 재동기화를 하려고 읽는다(스냅샷, 순서 없음). */
     public Map<Long, McvBlock> blockSnapshot() { return Map.copyOf(blocks); }
