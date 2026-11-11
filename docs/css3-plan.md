@@ -98,6 +98,8 @@
 - `Css3ClientGameTest`: 둥근 모서리·그라디언트·그림자·아웃라인이 실제로 그려짐, `flex-wrap`, grid `1fr 2fr`, `::before`, 진짜 마우스로 `:hover` 켜짐/꺼짐, `width` 전환(레이아웃 애니메이션)에서 옆 요소가 밀림, 경고 없음.
 - `Css3AdvancedClientGameTest`: 위젯 글자 스타일(`text-transform`/`letter-spacing`/`font-weight`), `@media (max-width)` 가 GUI 배율을 바꾸면 켜지고 꺼짐, 에디터 패널의 새 구역(크기·배치/글자/효과)과 값 칸 "출처:" 툴팁, 렌더링 비용 측정(`[PERF]` 로그).
 
+- `Css3VisualClientGameTest`: 스크린샷의 **실제 픽셀**로 확인(GUI 배율 1·2; 창 854x480 에서는 최대 2) — 둥근 모서리 끝 픽셀은 비고 위쪽 변·가운데는 차며, 그라디언트 위는 빨강/아래는 파랑 쪽, 배율이 달라도 같은 모양. View 메뉴의 상태 미리보기(hover/active/focus/없음)를 마우스로 눌러 규칙 색이 바뀌는 것까지.
+
 **NeoForge** — `./gradlew :neoforge:runSmokeClient`: NeoForge 에는 클라이언트 GameTest 가 없어 `NeoSmoke`(`-Dbetteruiux.smoke=true` 일 때만 동작)가 타이틀 화면에서 CSS3 데모를 열어
 실제 렌더링 경로로 그리고, 그리기 명령(합성된 사각형, `::before`, flex-wrap, 경고 없음)을 확인한 뒤 `[SMOKE] PASS/FAIL` 을 찍고 종료한다.
 
@@ -105,4 +107,4 @@
 그래서 둥근 그라디언트는 가운데 구간을 `fillGradient` 한 번으로 그리고(키가 커도 명령 수 불변), 번진 그림자는 층 수를 줄이고 층의 모서리를 거칠게 해서 상자당 명령을 56 → 약 20 으로 줄였다(`DrawCostTest` 가 지킨다).
 남은 큰 비용은 둥근 테두리(상자당 ~17): 모서리 행마다 사각형이 필요해서다. 한 화면에 장식 상자를 수백 개 쓰지 않는 것이 좋다.
 
-아직 확인하지 못한 것: 다른 해상도, `:hover` 상태 미리보기 메뉴(수동 조작), Vulkan/OpenGL 구분 비교, 스크린샷의 시각적 정밀 비교.
+아직 확인하지 못한 것: 더 큰 창/해상도(GUI 배율 3 이상), Vulkan/OpenGL 구분 비교, NeoForge 의 스크린샷 픽셀 검사.
