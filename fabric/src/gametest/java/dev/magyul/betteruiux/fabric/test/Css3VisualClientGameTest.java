@@ -18,7 +18,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.fabricmc.loader.api.FabricLoader;
 
 /**
- * 스크린샷의 실제 픽셀로 렌더링을 확인한다(GUI 배율 1·2; 창 854x480 에서는 최대 2): 둥근 모서리의 모서리 픽셀이 비어 있고 가운데는 채워지며,
+ * 스크린샷의 실제 픽셀로 렌더링을 확인한다(창 1920x1080 — build.gradle.kts 의 --width/--height — 에서 GUI 배율 1~4): 둥근 모서리의 모서리 픽셀이 비어 있고 가운데는 채워지며,
  * 그라디언트의 위/아래 색이 다르고, 배율이 달라도 같은 모양으로 그려진다. 그리고 View 메뉴의 상태 미리보기(hover/active/focus)를 실제로 눌러 본다.
  */
 @SuppressWarnings("UnstableApiUsage")
@@ -31,7 +31,7 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
         writeFixtures();
         try (TestSingleplayerContext world = ctx.worldBuilder().create()) {
             world.getConnection().waitForChunksRender();
-            for (int scale : new int[] {1, 2}) pixels(ctx, scale);
+                        for (int scale : new int[] {1, 2, 3, 4}) pixels(ctx, scale);
             ctx.runOnClient(mc -> {
                 mc.options.guiScale().set(1);
                 mc.resizeGui();

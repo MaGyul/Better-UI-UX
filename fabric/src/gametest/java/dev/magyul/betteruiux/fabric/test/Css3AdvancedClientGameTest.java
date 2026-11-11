@@ -59,10 +59,10 @@ public class Css3AdvancedClientGameTest implements FabricClientGameTest {
         check(hasFill(paint(ctx), box(ctx, "m"), 0xFF00AA00), "넓은 화면에서는 기본(초록)이어야 한다");
         ctx.takeScreenshot("adv-2-media-wide");
 
-        setGuiScale(ctx, 2);                                          // GUI 폭이 절반 → max-width: 600 규칙이 켜진다
+        setGuiScale(ctx, 4);                                          // 1920 → 480: GUI 폭이 1/4 → max-width: 600 규칙이 켜진다
         ctx.waitTicks(5);
         int[] vp2 = ctx.computeOnClient(mc -> new int[] {mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight()});
-        check(vp2[0] <= 600, "배율 2 에서 GUI 폭이 600 이하여야 한다: " + vp2[0]);
+        check(vp2[0] <= 600, "배율 4 에서 GUI 폭이 600 이하여야 한다: " + vp2[0]);
         ctx.takeScreenshot("adv-3-media-narrow");
         check(hasFill(paint(ctx), box(ctx, "m"), 0xFFFF0000), "좁은 화면에서는 @media 규칙(빨강)이 적용돼야 한다");
 
