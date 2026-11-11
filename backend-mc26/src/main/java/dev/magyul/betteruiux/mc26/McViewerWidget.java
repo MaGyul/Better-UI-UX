@@ -104,7 +104,12 @@ final class McViewerWidget implements UiWidget {
         advanceTicks(world);
         updateHover(world, viewer, frame);
         if (!(gfx instanceof McGfx mc)) return;
-        mc.addPictureInPicture(new McViewerRenderState(world, cam.yaw(), cam.pitch(), el.attr("light"), x, y, x + w, y + h, scale, null));
+        McViewerRenderState.Perspective persp = null;
+        if (cam.projection() == McvCamera.Projection.PERSPECTIVE) {
+            double[] eye = McvView.eye(world, viewer);                  // 뷰포트(가로세로 비)를 정한 뒤에 계산한다
+            persp = new McViewerRenderState.Perspective(cam.fov(), eye[0], eye[1], eye[2]);
+        }
+        mc.addPictureInPicture(new McViewerRenderState(world, cam.yaw(), cam.pitch(), el.attr("light"), persp, x, y, x + w, y + h, scale, null));
     }
 
     /** 문서에 attach 가 있는데 이 뷰어에는 연결된 월드가 없으면 한 번 알려 준다(id 를 잘못 썼을 때 빈 상자만 보이는 것을 막는다). */

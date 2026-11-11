@@ -51,7 +51,7 @@ final class McViewerEntities {
     private final Set<String> warned = new HashSet<>();
     private Level cachedLevel;
 
-    void render(McvWorld w, float yaw, float pitch, PoseStack pose, SubmitNodeCollector collector) {
+    void render(McvWorld w, Quaternionf orientation, PoseStack pose, SubmitNodeCollector collector) {
         Minecraft mc = Minecraft.getInstance();
         Level level = McViewerFakeWorld.current();                          // 접속 중이면 진짜 클라이언트 레벨, 아니면 가상 레벨(준비되기 전에는 null)
         if (level != cachedLevel) {
@@ -62,7 +62,7 @@ final class McViewerEntities {
         Map<Integer, Optional<Entity>> entities = live.computeIfAbsent(w, k -> new HashMap<>());
         Set<Integer> present = new HashSet<>();
         EntityRenderDispatcher dispatcher = mc.getEntityRenderDispatcher();
-        CameraRenderState camera = camera(yaw, pitch);
+        CameraRenderState camera = camera(orientation);
         for (McvEntity me : w.entities()) {
             present.add(me.id());
             if (!w.inView(me.x(), me.y(), me.z())) continue;
@@ -106,9 +106,13 @@ final class McViewerEntities {
      * (바닐라가 GUI 엔티티에서 쓰는 rotateY(π) 와 같은 보정).
      */
     static CameraRenderState camera(float yaw, float pitch) {
+        return camera(new Quaternionf().rotateY((float) Math.toRadians(-yaw)).rotateX((float) Math.toRadians(pitch)).rotateY((float) Math.PI));
+    }
+
+    /** 이미 계산한 방향(정사영/원근마다 다르다)으로 만든 카메라 상태. */
+    static CameraRenderState camera(Quaternionf orientation) {
         CameraRenderState camera = new CameraRenderState();
-        camera.orientation = new Quaternionf().rotateY((float) Math.toRadians(-yaw)).rotateX((float) Math.toRadians(pitch))
-                .rotateY((float) Math.PI);
+        camera.orientation = orientation;
         return camera;
     }
 

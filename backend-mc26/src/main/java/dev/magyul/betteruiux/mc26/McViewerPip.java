@@ -1,6 +1,12 @@
 package dev.magyul.betteruiux.mc26;
 
+import com.mojang.blaze3d.ProjectionType;
 import com.mojang.blaze3d.platform.Lighting;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.renderer.Projection;
+import net.minecraft.client.renderer.ProjectionMatrixBuffer;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import dev.magyul.betteruiux.core.mcv.McvBlock;
@@ -61,32 +67,71 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
             cachedFor = models;
         }
         McvWorld w = s.world();
-        // 화면 y 는 아래로 자라고 월드 y 는 위로 자란다: 바닐라 GUI 엔티티와 같게 Z 로 뒤집은 뒤 카메라 회전을 건다.
-        pose.rotate(Axis.ZP.rotationDegrees(180f));
-        pose.rotate(Axis.XP.rotationDegrees(-s.pitch()));          // pitch 양수 = 위에서 내려다봄
-        pose.rotate(Axis.YP.rotationDegrees(s.yaw()));
-        double[] c = McvView.center(w);                              // 투영/레이캐스트(McvView)와 같은 중심
-        double cx = c[0], cy = c[1], cz = c[2];
-        pose.translate((float) -cx, (float) -cy, (float) -cz);
+        Quaternionf billboard;                                       // 이름표처럼 화면을 향하는 것들이 쓰는 방향
+        PoseStack stack;
+        if (s.perspective() != null) {
+            stack = new PoseStack();                                 // 기본 클래스의 변환은 정사영용 픽셀 변환이라 쓰지 않고 직접 만든다
+            billboard = setupPerspective(s, stack);
+        } else {
+            stack = pose;
+            // 화면 y 는 아래로 자라고 월드 y 는 위로 자란다: 바닐라 GUI 엔티티와 같게 Z 로 뒤집은 뒤 카메라 회전을 건다.
+            stack.rotate(Axis.ZP.rotationDegrees(180f));
+            stack.rotate(Axis.XP.rotationDegrees(-s.pitch()));       // pitch 양수 = 위에서 내려다봄
+            stack.rotate(Axis.YP.rotationDegrees(s.yaw()));
+            double[] c = McvView.center(w);                          // 투영/레이캐스트(McvView)와 같은 중심
+            stack.translate((float) -c[0], (float) -c[1], (float) -c[2]);
+            billboard = new Quaternionf().rotateY((float) Math.toRadians(-s.yaw())).rotateX((float) Math.toRadians(s.pitch())).rotateY((float) Math.PI);
+        }
 
         Map<Long, McvBlock> blocks = w.blockSnapshot();
-        boolean beReady = blockEntities.begin(w, s.yaw(), s.pitch());
+        boolean beReady = blockEntities.begin(w, billboard);
         for (Map.Entry<Long, McvBlock> e : blocks.entrySet()) {
             int[] p = McvWorld.unkey(e.getKey());
             if (!w.inView(p[0] + 0.5, p[1] + 0.5, p[2] + 0.5)) continue;
             Resolved r = resolve(models, e.getValue());
             if (r == null) continue;
             if (!r.parts().isEmpty() && !(r.solid() && enclosed(w, blocks, p[0], p[1], p[2], models))) {   // 사방이 막힌 블록은 보이지 않는다
-                pose.pushPose();
-                pose.translate(p[0], p[1], p[2]);
-                collector.submitBlockModel(pose, r.translucent() ? Sheets.translucentBlockItemSheet() : Sheets.cutoutBlockItemSheet(),
+                stack.pushPose();
+                stack.translate(p[0], p[1], p[2]);
+                collector.submitBlockModel(stack, r.translucent() ? Sheets.translucentBlockItemSheet() : Sheets.cutoutBlockItemSheet(),
                         r.parts(), r.tints(), LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
-                pose.popPose();
+                stack.popPose();
             }
-            if (beReady) blockEntities.render(w, r.state(), e.getValue(), p[0], p[1], p[2], pose, collector);   // 상자·표지판 같은 블록 엔티티
+            if (beReady) blockEntities.render(w, r.state(), e.getValue(), p[0], p[1], p[2], stack, collector);   // 상자·표지판 같은 블록 엔티티
         }
         if (beReady) blockEntities.end();
-        entities.render(w, s.yaw(), s.pitch(), pose, collector);
+        entities.render(w, billboard, stack, collector);
+    }
+
+    // 원근 투영용(정사영은 기본 클래스가 쓰는 것을 그대로 쓴다)
+    private final Projection perspectiveProjection = new Projection();
+    private final ProjectionMatrixBuffer perspectiveBuffer = new ProjectionMatrixBuffer("better_uiux mc-viewer perspective");
+
+    @Override
+    public void close() {
+        super.close();
+        perspectiveBuffer.close();
+    }
+
+    /**
+     * 원근 카메라를 건다: 투영 행렬을 시야각/가로세로 비로 다시 설정하고(렌더 패스가 시작되기 전이라 이 값이 쓰인다),
+     * 뷰 행렬은 {@code lookAt(눈, 눈 + 앞, 위)} 로 PoseStack 에 넣는다. 눈과 기저는 core 의 {@link McvView} 와 같은 식이다(그래야 project/raycast 가 맞는다).
+     * 돌려주는 값은 이름표 같은 것이 화면을 향하도록 하는 방향(뷰 회전의 역)이다.
+     */
+    private Quaternionf setupPerspective(McViewerRenderState s, PoseStack stack) {
+        McViewerRenderState.Perspective p = s.perspective();
+        double[][] b = McvView.basis(s.yaw(), s.pitch());           // {오른쪽, 위, 앞}
+        float ex = (float) p.eyeX(), ey = (float) p.eyeY(), ez = (float) p.eyeZ();
+        Matrix4f view = new Matrix4f().lookAt(ex, ey, ez, ex + (float) b[2][0], ey + (float) b[2][1], ez + (float) b[2][2],
+                (float) b[1][0], (float) b[1][1], (float) b[1][2]);
+        // 바닐라 조명 방향은 GUI 의 "y 가 아래로 자라는" 뷰 공간 기준이라, 보통(y 위) 뷰 행렬을 그대로 쓰면 위아래 조명이 뒤집힌다.
+        // 정사영 경로가 하는 것처럼 뷰에 Z 180° 회전을 넣고, 투영 행렬에 같은 회전을 곱해 화면은 그대로 두고 조명만 바로잡는다.
+        stack.rotate(Axis.ZP.rotationDegrees(180f));
+        stack.mulPose(view);
+        perspectiveProjection.setupPerspective(0.05f, 4000f, p.fov(), Math.max(1, s.x1() - s.x0()), Math.max(1, s.y1() - s.y0()));
+        Matrix4f projection = perspectiveProjection.getMatrix(new Matrix4f()).rotateZ((float) Math.PI);
+        RenderSystem.setProjectionMatrix(perspectiveBuffer.getBuffer(projection), ProjectionType.PERSPECTIVE);
+        return view.getUnnormalizedRotation(new Quaternionf()).conjugate();
     }
 
     /**

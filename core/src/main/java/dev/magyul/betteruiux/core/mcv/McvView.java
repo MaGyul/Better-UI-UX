@@ -5,6 +5,7 @@ package dev.magyul.betteruiux.core.mcv;
  * 렌더러({@code McViewerPip})의 변환과 <b>같은 식</b>이어야 한다:
  * 화면 = 위젯 중심 + scale × (−x″, −y″),  (x″,y″,z″) = Rx(−pitch) · Ry(yaw) · (p − 중심).
  * 정사영이라 깊이(z″)는 화면 위치에 영향이 없고, 보는 사람은 z″ 가 작은 쪽에 있다.
+ * 카메라가 원근({@link McvCamera.Projection#PERSPECTIVE})이면 같은 회전으로 기저(오른쪽·위·앞)를 만들고 눈 위치에서 시야각(fov)으로 투영한다.
  */
 public final class McvView {
     private McvView() { }
@@ -20,6 +21,7 @@ public final class McvView {
     public static double[] project(McvWorld w, McvViewer v, double x, double y, double z) {
         McvViewer.Viewport vp = v.viewport();
         if (vp == null) return null;
+        if (v.camera().projection() == McvCamera.Projection.PERSPECTIVE) return projectPerspective(w, v, vp, x, y, z);
         double[] c = center(w);
         double[] q = rotate(v.camera(), x - c[0], y - c[1], z - c[2]);
         return new double[] {vp.x() + vp.w() / 2 - vp.scale() * q[0], vp.y() + vp.h() / 2 - vp.scale() * q[1], q[2]};
@@ -35,9 +37,73 @@ public final class McvView {
         return new double[] {x1, y2, z2};
     }
 
+    // ---- 원근(perspective) ----
+
+    /** 카메라 기저(월드 좌표): {오른쪽, 위, 앞(보는 방향)}. 정사영과 같은 회전을 쓴다: 화면 오른쪽 = −X″, 위 = Y″, 앞 = Z″. */
+    private static double[][] basis(McvCamera cam) { return basis(cam.yaw(), cam.pitch()); }
+
+    /** {@link #basis(McvCamera)} 를 yaw/pitch(도)로 직접 구한다(렌더러가 카메라 객체 없이 쓴다). */
+    public static double[][] basis(float yaw, float pitch) {
+        double[] x = unrotate(yaw, pitch, 1, 0, 0), y = unrotate(yaw, pitch, 0, 1, 0), z = unrotate(yaw, pitch, 0, 0, 1);
+        return new double[][] {{-x[0], -x[1], -x[2]}, y, z};
+    }
+
+    /** 위젯 영역의 가로/세로 비(영역을 모르면 1). */
+    private static double aspect(McvViewer.Viewport vp) {
+        return vp == null || vp.h() <= 0 ? 1.0 : vp.w() / vp.h();
+    }
+
+    /** 월드(또는 보기 영역)를 감싸는 구의 반지름. */
+    public static double radius(McvWorld w) {
+        int[] va = w.viewArea();
+        double dx = va == null ? w.sizeX() : va[3] - va[0] + 1, dy = va == null ? w.sizeY() : va[4] - va[1] + 1, dz = va == null ? w.sizeZ() : va[5] - va[2] + 1;
+        return 0.5 * Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    /**
+     * 원근 카메라의 눈 위치. 스크립트가 {@code camera.setPosition} 으로 정했으면 그 자리(yaw/pitch 는 보는 방향),
+     * 아니면 중심을 둘러싼 구가 화면에 꼭 들어오도록 중심에서 보는 방향의 반대쪽으로 물러난 자리다(zoom 이 클수록 가깝다).
+     */
+    public static double[] eye(McvWorld w, McvViewer v) {
+        McvCamera cam = v.camera();
+        if (cam.positioned()) return new double[] {cam.x(), cam.y(), cam.z()};
+        double[] f = basis(cam)[2], c = center(w);
+        double half = Math.toRadians(cam.fov()) / 2;
+        double tanHalf = Math.tan(half) * Math.min(1.0, aspect(v.viewport()));        // 좁은 쪽 시야에 구가 들어오게
+        double dist = radius(w) / Math.sin(Math.atan(tanHalf)) / cam.zoom();
+        return new double[] {c[0] - f[0] * dist, c[1] - f[1] * dist, c[2] - f[2] * dist};
+    }
+
+    private static double[] projectPerspective(McvWorld w, McvViewer v, McvViewer.Viewport vp, double x, double y, double z) {
+        McvCamera cam = v.camera();
+        double[][] b = basis(cam);
+        double[] e = eye(w, v);
+        double rx = x - e[0], ry = y - e[1], rz = z - e[2];
+        double depth = rx * b[2][0] + ry * b[2][1] + rz * b[2][2];
+        if (depth <= 1e-6) return null;                                 // 카메라 뒤(또는 바로 위): 화면에 없다
+        double t = Math.tan(Math.toRadians(cam.fov()) / 2), a = aspect(vp);
+        double ndcX = (rx * b[0][0] + ry * b[0][1] + rz * b[0][2]) / (depth * t * a), ndcY = (rx * b[1][0] + ry * b[1][1] + rz * b[1][2]) / (depth * t);
+        return new double[] {vp.x() + vp.w() / 2 + ndcX * vp.w() / 2, vp.y() + vp.h() / 2 - ndcY * vp.h() / 2, depth};
+    }
+
+    private static double[] rayPerspective(McvWorld w, McvViewer v, McvViewer.Viewport vp, double sx, double sy) {
+        McvCamera cam = v.camera();
+        if (vp.w() <= 0 || vp.h() <= 0) return null;
+        double[][] b = basis(cam);
+        double[] e = eye(w, v);
+        double t = Math.tan(Math.toRadians(cam.fov()) / 2), a = aspect(vp);
+        double ndcX = (sx - (vp.x() + vp.w() / 2)) / (vp.w() / 2), ndcY = -(sy - (vp.y() + vp.h() / 2)) / (vp.h() / 2);
+        double[] d = new double[3];
+        for (int i = 0; i < 3; i++) d[i] = b[2][i] + b[0][i] * ndcX * t * a + b[1][i] * ndcY * t;
+        double len = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        return new double[] {e[0], e[1], e[2], d[0] / len, d[1] / len, d[2] / len};
+    }
+
     /** 카메라 좌표 → 월드 방향(회전의 역). */
-    private static double[] unrotate(McvCamera cam, double x, double y, double z) {
-        double yaw = Math.toRadians(-cam.yaw()), pitch = Math.toRadians(cam.pitch());
+    private static double[] unrotate(McvCamera cam, double x, double y, double z) { return unrotate(cam.yaw(), cam.pitch(), x, y, z); }
+
+    private static double[] unrotate(float yawDeg, float pitchDeg, double x, double y, double z) {
+        double yaw = Math.toRadians(-yawDeg), pitch = Math.toRadians(pitchDeg);
         double cp = Math.cos(pitch), sp = Math.sin(pitch);
         double y1 = y * cp - z * sp, z1 = y * sp + z * cp;             // Rx(pitch)
         double cy = Math.cos(yaw), sy = Math.sin(yaw);
@@ -47,7 +113,9 @@ public final class McvView {
     /** 화면의 한 점을 지나는 광선: {원점 x,y,z, 방향 x,y,z}. 방향은 길이 1, 원점은 월드 밖 먼 곳(보는 사람 쪽)이다. */
     public static double[] ray(McvWorld w, McvViewer v, double sx, double sy) {
         McvViewer.Viewport vp = v.viewport();
-        if (vp == null || vp.scale() <= 0) return null;
+        if (vp == null) return null;
+        if (v.camera().projection() == McvCamera.Projection.PERSPECTIVE) return rayPerspective(w, v, vp, sx, sy);
+        if (vp.scale() <= 0) return null;
         double[] c = center(w);
         double qx = -(sx - (vp.x() + vp.w() / 2)) / vp.scale();
         double qy = -(sy - (vp.y() + vp.h() / 2)) / vp.scale();

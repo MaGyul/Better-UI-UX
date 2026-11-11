@@ -68,14 +68,14 @@ final class McViewerBlockEntities {
     private CameraRenderState camera;
 
     /** 한 프레임의 시작. 월드에 접속하지 않았으면 false(그릴 수 없다). */
-    boolean begin(McvWorld w, float yaw, float pitch) {
+    boolean begin(McvWorld w, org.joml.Quaternionf orientation) {
         Level now = McViewerFakeWorld.current();                     // 접속 중이면 진짜 클라이언트 레벨, 아니면 가상 레벨(준비되기 전에는 null)
         if (now != level) live.clear();                              // 진짜 ↔ 가상 레벨이 바뀌면 옛 레벨에 묶인 것들은 버린다
         level = now;
         if (level == null) return false;
         current = live.computeIfAbsent(w, k -> new HashMap<>());
         seen = new HashSet<>();
-        camera = McViewerEntities.camera(yaw, pitch);
+        camera = McViewerEntities.camera(orientation);
         return true;
     }
 

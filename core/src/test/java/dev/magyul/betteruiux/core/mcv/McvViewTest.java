@@ -175,4 +175,93 @@ class McvViewTest {
         viewer.show(a);                                                     // 다시 붙어도 덮어쓰지 않는다
         assertEquals(10f, viewer.camera().yaw());
     }
+
+    // ---- 원근(perspective) ----
+
+    private McvWorld perspectiveWorld() {
+        McvWorld w = world();
+        v.camera().setProjection(McvCamera.Projection.PERSPECTIVE);
+        return w;
+    }
+
+    @Test
+    void perspectiveOrbitCameraKeepsTheWorldCenterAtTheViewportCenter() {
+        McvWorld w = perspectiveWorld();
+        double[] p = McvView.project(w, v, 3, 2, 3);
+        assertEquals(100 + 120, p[0], 1e-6);
+        assertEquals(50 + 90, p[1], 1e-6);
+        assertTrue(p[2] > 0, "앞에 있다(깊이 > 0)");
+    }
+
+    @Test
+    void perspectiveMakesNearThingsLargerAndFarThingsSmaller() {
+        McvWorld w = perspectiveWorld();
+        v.camera().setYaw(0);
+        v.camera().setPitch(0);                                         // 수평: 보는 방향은 +z
+        double[] e = McvView.eye(w, v);
+        assertTrue(e[2] < 0, "눈은 월드 앞(−z 쪽)에 있다: " + e[2]);
+        double[] nearA = McvView.project(w, v, 4.5, 2, 0.5), nearB = McvView.project(w, v, 1.5, 2, 0.5);    // 가까운 두 점(같은 z)
+        double[] farA = McvView.project(w, v, 4.5, 2, 5.5), farB = McvView.project(w, v, 1.5, 2, 5.5);      // 먼 두 점
+        assertTrue(Math.abs(nearA[0] - nearB[0]) > Math.abs(farA[0] - farB[0]) + 1, "같은 간격이라도 가까울수록 화면에서 더 벌어진다");
+    }
+
+    @Test
+    void perspectiveProjectThenRaycastFindsTheSameBlock() {
+        for (float yaw : new float[] {0, 45, 135, 225, 300}) {
+            for (float pitch : new float[] {10, 30, 60}) {
+                McvWorld w = perspectiveWorld();
+                v.camera().setYaw(yaw);
+                v.camera().setPitch(pitch);
+                w.setBlock(2, 1, 3, stone());
+                double[] s = McvView.project(w, v, 2.5, 1.5, 3.5);
+                assertNotNull(s, "yaw " + yaw + " pitch " + pitch);
+                McvView.Hit hit = McvView.raycast(w, v, s[0], s[1]);
+                assertNotNull(hit, "yaw " + yaw + " pitch " + pitch);
+                assertEquals(2, hit.x());
+                assertEquals(1, hit.y());
+                assertEquals(3, hit.z());
+            }
+        }
+    }
+
+    @Test
+    void perspectivePositionedCameraLooksAlongYawAndPitchFromItsPosition() {
+        McvWorld w = perspectiveWorld();
+        v.camera().setPosition(2.5, 1.5, -5);
+        v.camera().setYaw(0);
+        v.camera().setPitch(0);                                         // +z 를 본다
+        double[] ahead = McvView.project(w, v, 2.5, 1.5, 3);
+        assertEquals(220, ahead[0], 1e-6, "정면의 점은 화면 가운데");
+        assertEquals(140, ahead[1], 1e-6);
+        assertNull(McvView.project(w, v, 2.5, 1.5, -8), "카메라 뒤의 점은 화면에 없다(null)");
+        double[] left = McvView.project(w, v, 3.5, 1.5, 3), right = McvView.project(w, v, 1.5, 1.5, 3);
+        assertTrue(right[0] > ahead[0] && left[0] < ahead[0], "월드 −x 쪽이 화면 오른쪽(정사영과 같은 방향 규칙)");
+        double[] up = McvView.project(w, v, 2.5, 2.5, 3);
+        assertTrue(up[1] < ahead[1], "위쪽 점은 화면 위");
+    }
+
+    @Test
+    void perspectiveZoomMovesTheOrbitCameraCloser() {
+        McvWorld w = perspectiveWorld();
+        double[] far = McvView.eye(w, v);
+        v.camera().setZoom(2f);
+        double[] near = McvView.eye(w, v);
+        double[] c = McvView.center(w);
+        double dFar = Math.sqrt(Math.pow(far[0] - c[0], 2) + Math.pow(far[1] - c[1], 2) + Math.pow(far[2] - c[2], 2));
+        double dNear = Math.sqrt(Math.pow(near[0] - c[0], 2) + Math.pow(near[1] - c[1], 2) + Math.pow(near[2] - c[2], 2));
+        assertEquals(dFar / 2, dNear, 1e-6, "zoom 2 = 거리 절반");
+    }
+
+    @Test
+    void perspectivePicksEntitiesAndTheNearerOfEntityAndBlock() {
+        McvWorld w = perspectiveWorld();
+        McvEntity cow = w.spawnEntity(3, 1, 3, "cow");
+        cow.setBounds(0.9, 1.4);
+        double[] s = McvView.project(w, v, 3, 1.5, 3);
+        McvView.Hit hit = McvView.raycast(w, v, s[0], s[1]);
+        assertNotNull(hit);
+        assertTrue(hit.isEntity());
+        w.setBlock(3, 1, 3, stone());                                   // 같은 자리에 블록: 소가 블록 안에 있으니 가까운 쪽(눈에서 먼저 닿는 면)이 이긴다
+        assertNotNull(McvView.raycast(w, v, s[0], s[1]));
+    }
 }

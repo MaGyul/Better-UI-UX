@@ -88,7 +88,7 @@ world.setTickRate(~);
   - **렌더 방식 확정: 바닐라 GUI Picture-in-Picture**(`PictureInPictureRenderer`, 엔티티/책/배너를 GUI에 그리는 것과 같은 경로). 오프스크린 텍스처·깊이·라이팅은 마인크래프트가 맡고 `renderToTexture`에서 `SubmitNodeCollector`로 블록 모델(`submitBlockModel`)을 제출한다. 직접 RenderTarget을 만들 필요가 없다.
   - 로더별 등록: Fabric `PictureInPictureRendererRegistry.register`, NeoForge `RegisterPictureInPictureRenderersEvent`(각 진입점에 한 줄)
   - `McViewerWidget`(입력: 드래그 회전·휠 줌), `McViewerRenderState`, `McViewerPip`, `McViewerRegistry`(문서 → `McvHost`), `McGfx.addPictureInPicture`(비공개 필드 `guiRenderState`를 이름으로 읽음: 공개 메서드가 없음)
-  - **한계/계획 변경**: PiP 투영은 정사영 고정이라 **원근(perspective)은 이 경로에서 불가**. 등각(ortho)만 지원(Ponder 방식). 원근이 필요하면 별도 렌더 타깃 경로가 필요하다(후속, 우선순위 낮음).
+  - ~~한계/계획 변경: PiP 투영은 정사영 고정이라 원근은 이 경로에서 불가.~~ (원근은 아래 "원근 투영" 항목에서 해결됨) 등각(ortho)만 지원(Ponder 방식). 원근이 필요하면 별도 렌더 타깃 경로가 필요하다(후속, 우선순위 낮음).
   - 알려진 미구현: 바이옴 틴트(잔디 색), 반투명 정렬, 숨은 면 컬링(사방이 솔리드로 막힌 블록만 건너뜀), 블록 엔티티/엔티티 렌더(5단계)
   - 데모: `/uiux open mc-viewer`(config.toml `[scripting] enabled = true` 필요), 게임 테스트 `McViewerClientGameTest`
 - [x] 4단계: 블록 렌더(스파이크 결과: **가상 Level 없이 PiP + 블록 모델 제출로 충분**). 숨은 블록 건너뛰기, 잔디/잎 기본 틴트, 반투명 시트 선택까지.
@@ -169,8 +169,14 @@ world.setTickRate(~);
 - 테스트: 게임 테스트(셜커 상자 열림 diff 1228, 종 흔들림 diff 44 + 스크린샷 확인, 기존 렌더 결과는 숫자까지 동일), `McvScriptTest`(ringBell 방향/오류)
 - 알려진 한계: 소리는 안 난다(가상 레벨이 소리를 무시)
 
+## 후속 완료: 원근 투영
+- 기본 클래스의 투영은 정사영(pixel) 고정이지만, **`renderToTexture` 안에서 `RenderSystem.setProjectionMatrix` 를 다시 부르면** 이후 렌더 패스(`renderAllFeatures`)가 그 투영을 쓴다. 기본 클래스가 준 PoseStack(정사영용 픽셀 변환)은 버리고 새 PoseStack 에 `lookAt` 뷰를 넣는다.
+- core `McvView`: `eye`(1인칭이면 지정 위치, 궤도면 중심을 감싸는 구가 들어오는 거리 `radius / sin(atan(tan(fov/2)·min(1, 가로세로비))) / zoom`), 기저 `basis`(오른쪽=−X″, 위=Y″, 앞=Z″: 정사영과 같은 회전), `project`/`ray` 의 원근 분기. 카메라 뒤는 `null`.
+- **조명 뒤집힘**: 바닐라 조명 방향(`ITEMS_3D` 등)은 GUI 의 y-아래 뷰 공간 기준이라 y-위 `lookAt` 을 그대로 쓰면 윗면이 어둡고 옆면이 밝았다. 정사영 경로처럼 PoseStack 에 Z 180° 를 넣고 투영 행렬에 같은 회전을 곱해(`ProjectionMatrixBuffer.getBuffer(Matrix4f)`) 화면은 그대로 두고 조명만 바로잡았다. 이름표 방향은 `lookAt` 회전의 역(Z 보정은 투영이 상쇄).
+- 테스트: `McvViewTest`(원근 궤도 중심, 가까울수록 크게, 왕복 투영/레이캐스트, 1인칭 위치, 줌=거리, 엔티티 맞히기), 게임 테스트(큐브: `project` 좌표 = 화면 빨간 픽셀 무게중심 (480,270)=(480,270); **중심에서 벗어난 돼지**: (437,259) vs (436,254) → 좌우/상하 반전 없음; project 좌표 클릭 → 그 블록, 스크린샷 확인)
+- 알려진 한계: 원근에서 큰 월드는 먼 블록이 작게 보이는 것 외에 별도 LOD/컬링이 없다(시야각 밖 컬링 없음)
+
 ## 완료 후 남은 과제 (후속, 우선순위 순)
 - 블록 엔티티 소리(종 소리 등), 비콘 빔·스포너 같은 월드 의존 블록 엔티티 확인
-- **원근 투영**(별도 렌더 타깃 경로 필요)
 - 바이옴별 틴트, 반투명 블록 정렬, 면 단위 컬링(큰 월드 성능), 월드 스냅샷을 프레임마다 복사하는 비용 줄이기
 - NeoForge 실행 확인(컴파일만 확인됨)

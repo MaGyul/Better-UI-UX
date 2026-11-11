@@ -219,6 +219,37 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                 Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
                         + "  var w = mcv.createWorld(5, 3, 3);\n  w.fill(0, 0, 0, 4, 0, 2, 'white_concrete');\n  " + v[1] + "\n}\n");
             }
+            Files.writeString(base.resolve("ui/gt_mcv14.uiml"), """
+                    <screen>
+                      <script src="gt_mcv14.uijs"/>
+                      <column anchor="top-left" x="4" y="4" gap="2">
+                        <label id="p" text="p"/>
+                        <label id="q" text="q"/>
+                        <label id="c" text="c"/>
+                      </column>
+                      <mc-viewer id="view" anchor="center" width="240" height="180"/>
+                    </screen>
+                    """);
+            Files.writeString(base.resolve("ui/gt_mcv14.uijs"), """
+                    var w;
+                    function onInit() {
+                      w = mcv.createWorld(5, 3, 5, '#view');
+                      w.fill(0, 0, 0, 4, 0, 4, 'white_concrete');
+                      w.setBlock(2, 1, 2, 'red_concrete');
+                      w.spawnEntity(0.5, 1, 0.5, 'pig');
+                      var cam = w.getCamera();
+                      cam.setProjection('perspective');
+                      cam.setYaw(200);
+                      cam.setPitch(35);
+                    }
+                    function onTick() {
+                      var p = w.project(2.5, 1.5, 2.5);
+                      if (p) ui.setText('#p', Math.round(p.x) + ',' + Math.round(p.y));
+                      var q = w.project(0.5, 1.45, 0.5);                         // 돼지(중심에서 벗어난 점): 좌우/상하 반전을 잡아낸다
+                      if (q) ui.setText('#q', Math.round(q.x) + ',' + Math.round(q.y));
+                    }
+                    function onBlockClick(e) { ui.setText('#c', e.block ? 'click ' + e.x + ',' + e.y + ',' + e.z : 'click none'); }
+                    """);
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -407,6 +438,58 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             int bellDiff = diff(bellIdle, bellRung, shulkerView, s, sx);
             System.out.println("[mc-viewer test] bell diff=" + bellDiff);
             check(bellDiff > 20, "ringBell 로 종이 울리면 흔들려서 화면이 달라져야 한다(달라진 픽셀 " + bellDiff + ")");
+
+            // 원근 투영: 스크립트의 project 가 알려 준 큐브 중심이 실제 화면에서 빨간 픽셀의 무게중심과 맞아야 하고(렌더러와 수식이 같다),
+            // 그 점을 클릭하면 그 블록이 맞는다(원근 레이캐스트).
+            BufferedImage persp = openAndShoot(ctx, "gt_mcv14", "mc-viewer-perspective");
+            LayoutBox pv = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            String[] pxy = text(ctx, "#p").split(",");
+            double projX = Double.parseDouble(pxy[0].trim()), projY = Double.parseDouble(pxy[1].trim());
+            double sumX = 0, sumY = 0;
+            int nRed = 0;
+            for (int gy = pv.y; gy < pv.y + pv.h; gy++) {
+                for (int gx = pv.x; gx < pv.x + pv.w; gx++) {
+                    int x = (int) Math.min(persp.getWidth() - 1, Math.round(gx * s * sx)), y = (int) Math.min(persp.getHeight() - 1, Math.round(gy * s * sx));
+                    int pp = persp.getRGB(x, y), r = pp >> 16 & 0xFF, g = pp >> 8 & 0xFF, b = pp & 0xFF;
+                    if (r > 55 && r > g * 2.2 && r > b * 2.2) {
+                        sumX += gx;
+                        sumY += gy;
+                        nRed++;
+                    }
+                }
+            }
+            check(nRed > 200, "원근 투영에서도 빨간 큐브가 그려져야 한다(빨간 픽셀 " + nRed + ")");
+            double cenX = sumX / nRed, cenY = sumY / nRed;
+            System.out.println("[mc-viewer test] perspective project=" + projX + "," + projY + " red centroid=" + Math.round(cenX) + "," + Math.round(cenY) + " n=" + nRed);
+            check(Math.abs(cenX - projX) < 14 && Math.abs(cenY - projY) < 14, "project 좌표(" + projX + "," + projY + ")와 화면의 빨간 큐브 무게중심(" + Math.round(cenX) + "," + Math.round(cenY) + ")이 맞아야 한다");
+            // 중심에서 벗어난 돼지: project 좌표와 분홍 픽셀 무게중심이 맞으면 좌우/상하가 뒤집히지 않았다는 뜻이다.
+            String[] qxy = text(ctx, "#q").split(",");
+            double qx = Double.parseDouble(qxy[0].trim()), qy = Double.parseDouble(qxy[1].trim()), pinkX = 0, pinkY = 0;
+            int nPink = 0;
+            for (int gy = pv.y; gy < pv.y + pv.h; gy++) {
+                for (int gx = pv.x; gx < pv.x + pv.w; gx++) {
+                    int x = (int) Math.min(persp.getWidth() - 1, Math.round(gx * s * sx)), y = (int) Math.min(persp.getHeight() - 1, Math.round(gy * s * sx));
+                    int pp = persp.getRGB(x, y), r = pp >> 16 & 0xFF, g = pp >> 8 & 0xFF, b = pp & 0xFF;
+                    if (r > 170 && r - g > 40 && r - b > 40 && g > 90 && b > 90 && Math.abs(g - b) < 40) {
+                        pinkX += gx;
+                        pinkY += gy;
+                        nPink++;
+                    }
+                }
+            }
+            check(nPink > 30, "원근 투영에서 돼지(분홍색)가 그려져야 한다(" + nPink + ")");
+            pinkX /= nPink;
+            pinkY /= nPink;
+            System.out.println("[mc-viewer test] perspective pig project=" + qx + "," + qy + " pink centroid=" + Math.round(pinkX) + "," + Math.round(pinkY) + " n=" + nPink);
+            check(Math.abs(pinkX - qx) < 16 && Math.abs(pinkY - qy) < 16, "돼지의 project 좌표(" + qx + "," + qy + ")와 화면의 분홍 무게중심(" + Math.round(pinkX) + "," + Math.round(pinkY) + ")이 맞아야 한다(좌우/상하 반전 확인)");
+            double gs14 = ctx.computeOnClient(mc -> (double) mc.getWindow().getGuiScale());
+            ctx.getInput().setCursorPos(projX * gs14, projY * gs14);
+            ctx.waitTicks(5);
+            ctx.getInput().pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
+            ctx.waitTicks(10);
+            System.out.println("[mc-viewer test] perspective " + text(ctx, "#c"));
+            check(text(ctx, "#c").equals("click 2,1,2"), "원근 투영에서 project 좌표를 클릭하면 그 블록이 맞아야 한다: " + text(ctx, "#c"));
+            ctx.getInput().setCursorPos(2, 2);
 
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));
