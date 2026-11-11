@@ -398,6 +398,15 @@ public final class UiDocument {
 
     LayoutBox boxOf(UiNode node) { return boxes.get(node); }
 
+    /** {@code @media} 조건 글자(예: {@code (max-width: 600)})가 지금 화면 크기에서 맞는지. 해석할 수 없으면 false. */
+    public boolean mediaMatches(String condition) {
+        try {
+            return dev.magyul.betteruiux.core.style.MediaQuery.parse(condition).matches(viewW, viewH);
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
     /** 요소의 스타일 값이 어디서 왔는지(inline / 어느 규칙 / 속성 / 기본값 / 상속) 설명한다. 에디터 툴팁용. */
     public String explainStyle(LayoutBox box, String prop) { return resolver.explain(box, prop); }
 

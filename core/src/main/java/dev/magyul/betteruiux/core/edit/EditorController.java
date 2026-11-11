@@ -2196,13 +2196,13 @@ public final class EditorController {
     private List<PropRow> rowsFor(LayoutBox b) {
         List<PropRow> rows = PropertyModel.rows(b, sourceElement(b.node.sourceIndex()), srcSource);
         if (b.node.sourceIndex() >= 0 && srcSource != null) {                    // 이 요소에 적용되는 <style> 규칙(고칠 수 있다)
-            List<PropRow> extra = StyleText.propRows(b, srcSource);
+            List<PropRow> extra = StyleText.propRows(b, srcSource, doc::mediaMatches);
             List<StyleText.Sheet> sheets = new ArrayList<>();
             for (String href : StyleText.linkedSheets(srcSource)) {
                 String css = sheetText(href);
                 if (css != null) sheets.add(new StyleText.Sheet(href, css));
             }
-            extra.addAll(StyleText.externalRows(b, sheets));
+            extra.addAll(StyleText.externalRows(b, sheets, doc::mediaMatches));
             String animation = b.style.get("animation");                       // 이 요소가 쓰는 @keyframes (쉼표로 여러 개 가능)
             for (String part : animation == null ? List.<String>of() : dev.magyul.betteruiux.core.style.Selector.splitList(animation)) {
                 var spec = dev.magyul.betteruiux.core.anim.AnimationSpec.parse(part);

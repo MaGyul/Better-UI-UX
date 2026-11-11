@@ -18,7 +18,9 @@ final class StyleText {
     record Decl(String prop, int valueStart, int valueEnd, int declStart, int declEnd) {}
 
     /** 규칙 하나: 선택자 글자, 본문({@code { }} 안쪽) 범위, 선언들. */
-    record Rule(String selector, int bodyStart, int bodyEnd, List<Decl> decls) {}
+    record Rule(String selector, int bodyStart, int bodyEnd, List<Decl> decls, String media) {
+        Rule(String selector, int bodyStart, int bodyEnd, List<Decl> decls) { this(selector, bodyStart, bodyEnd, decls, null); }
+    }
 
     /** 문서의 모든 {@code <style>} 규칙을 문서 순서로(@keyframes 등 @규칙 제외). */
     static List<Rule> rules(XmlSource src) {
@@ -47,28 +49,28 @@ final class StyleText {
                 from = s;
                 to = e;
             }
-            scan(src.text(), from, to, out, kfOut);
+            scan(src.text(), from, to, out, kfOut, null);
         }
     }
 
     /** 외부 스타일시트(.uicss) 글 전체의 규칙들. */
     static List<Rule> cssRules(String css) {
         List<Rule> out = new ArrayList<>();
-        scan(css, 0, css.length(), out, null);
+        scan(css, 0, css.length(), out, null, null);
         return out;
     }
 
     /** 외부 스타일시트 글 전체의 {@code @keyframes} 블록들. */
     static List<Kf> cssKeyframes(String css) {
         List<Kf> out = new ArrayList<>();
-        scan(css, 0, css.length(), null, out);
+        scan(css, 0, css.length(), null, out, null);
         return out;
     }
 
     /** {@code @keyframes 이름 { ... }}: 본문({@code { }} 안쪽) 범위와 지점들(from / 50% / to 를 선택자로 가진 규칙). */
     record Kf(String name, int bodyStart, int bodyEnd, List<Rule> stops) {}
 
-    private static void scan(String text, int from, int to, List<Rule> out, List<Kf> kfOut) {
+    private static void scan(String text, int from, int to, List<Rule> out, List<Kf> kfOut, String media) {
         char[] m = mask(text, from, to);
         int i = from;
         while (i < to) {
@@ -78,12 +80,13 @@ final class StyleText {
             if (close < 0) break;
             String selector = new String(m, i, open - i).trim();
             if (!selector.isEmpty() && !selector.startsWith("@")) {
-                if (out != null) out.add(new Rule(selector, open + 1, close, decls(m, open + 1, close)));
+                if (out != null) out.add(new Rule(selector, open + 1, close, decls(m, open + 1, close), media));
             } else if (selector.startsWith("@media") || selector.startsWith("@supports")) {
-                scan(text, open + 1, close, out, kfOut);      // 조건 블록 안의 규칙도 편집 대상(조건은 평가하지 않는다)
+                // 조건 블록 안의 규칙도 편집 대상. @media 의 조건은 규칙에 붙여 두었다가 패널에서 지금 켜져 있는지 보여 준다.
+                scan(text, open + 1, close, out, kfOut, selector.startsWith("@media") ? selector.substring(6).trim() : media);
             } else if (kfOut != null && selector.startsWith("@keyframes")) {
                 List<Rule> stops = new ArrayList<>();
-                scan(text, open + 1, close, stops, null);
+                scan(text, open + 1, close, stops, null, null);
                 kfOut.add(new Kf(selector.substring("@keyframes".length()).trim(), open + 1, close, stops));
             }
             i = close + 1;
@@ -182,18 +185,24 @@ final class StyleText {
     static final String KEY = "css:", ADD_KEY = "css+:";
 
     /** 속성 패널에 붙일 "스타일 규칙" 구역의 행들(맞는 규칙이 없으면 빈 목록). */
-    static List<PropRow> propRows(LayoutBox box, XmlSource src) {
+    static List<PropRow> propRows(LayoutBox box, XmlSource src) { return propRows(box, src, c -> true); }
+
+    /** {@code mediaActive}: {@code @media} 조건 글자가 지금 화면 크기에서 맞는지(패널에 켜짐/꺼짐으로 표시한다). */
+    static List<PropRow> propRows(LayoutBox box, XmlSource src, java.util.function.Predicate<String> mediaActive) {
         List<Rule> rules = rules(src);
         List<PropRow> rows = new ArrayList<>();
         List<Integer> hits = matching(src, box);
         rows.add(PropertyModel.header("스타일 규칙"));
-        for (int n : hits) ruleRows(rows, src.text(), rules.get(n), "§rule" + n, KEY + n + ":", ADD_KEY + n);
+        for (int n : hits) ruleRows(rows, src.text(), rules.get(n), "§rule" + n, KEY + n + ":", ADD_KEY + n, mediaActive);
         rows.add(new PropRow("+ 새 규칙",NEW_KEY + selectorFor(box), "", true));   // 맞는 규칙이 없어도 첫 규칙을 만들 수 있다
         return rows;
     }
 
-    private static void ruleRows(List<PropRow> rows, String text, Rule r, String headerKey, String declPrefix, String addKey) {
-        rows.add(new PropRow(r.selector(), headerKey, "", false, Kind.HEADER, List.of()));
+    private static void ruleRows(List<PropRow> rows, String text, Rule r, String headerKey, String declPrefix, String addKey,
+                                 java.util.function.Predicate<String> mediaActive) {
+        String label = r.selector();
+        if (r.media() != null) label += "  @media " + r.media() + (mediaActive.test(r.media()) ? "  [적용 중]" : "  [꺼짐]");
+        rows.add(new PropRow(label, headerKey, "", false, Kind.HEADER, List.of()));
         for (Decl d : r.decls()) rows.add(new PropRow(d.prop(), declPrefix + d.prop(), text.substring(d.valueStart(), d.valueEnd()), true));
         rows.add(new PropRow("+ 추가", addKey, "", true));
     }
@@ -222,13 +231,15 @@ final class StyleText {
     }
 
     /** 외부 스타일시트마다 "스타일시트: 파일" 구역(맞는 규칙이 없으면 새 규칙 칸만). */
-    static List<PropRow> externalRows(LayoutBox box, List<Sheet> sheets) {
+    static List<PropRow> externalRows(LayoutBox box, List<Sheet> sheets) { return externalRows(box, sheets, c -> true); }
+
+    static List<PropRow> externalRows(LayoutBox box, List<Sheet> sheets, java.util.function.Predicate<String> mediaActive) {
         List<PropRow> rows = new ArrayList<>();
         for (Sheet sh : sheets) {
             List<Rule> rules = cssRules(sh.text());
             rows.add(PropertyModel.header("스타일시트: " + sh.href()));
             for (int n : matchingIn(rules, box)) {
-                ruleRows(rows, sh.text(), rules.get(n), "§xrule" + sh.href() + ":" + n, X_KEY + sh.href() + ":" + n + ":", X_ADD_KEY + sh.href() + ":" + n);
+                ruleRows(rows, sh.text(), rules.get(n), "§xrule" + sh.href() + ":" + n, X_KEY + sh.href() + ":" + n + ":", X_ADD_KEY + sh.href() + ":" + n, mediaActive);
             }
             rows.add(new PropRow("+ 새 규칙", X_NEW_KEY + sh.href() + ":" + selectorFor(box), "", true));
         }
@@ -295,7 +306,7 @@ final class StyleText {
             rows.add(PropertyModel.header("키프레임: " + name + (INLINE_SHEET.equals(sheet) ? "" : " (" + sheet + ")")));
             for (int i = 0; i < kf.stops().size(); i++) {
                 String at = sheet + ":" + k + ":" + i;
-                ruleRows(rows, text, kf.stops().get(i), "§kf" + at, KF_KEY + at + ":", KF_ADD_KEY + at);
+                ruleRows(rows, text, kf.stops().get(i), "§kf" + at, KF_KEY + at + ":", KF_ADD_KEY + at, c -> true);
             }
             rows.add(new PropRow("+ 새 지점", KF_NEW_KEY + sheet + ":" + k, "", true));
         }
