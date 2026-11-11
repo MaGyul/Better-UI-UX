@@ -162,7 +162,9 @@ final class BoxPainter {
     // ---- 그라디언트 ----
 
     /** @param vertical 세로(위→아래)인지, @param colors/pos 정지점(pos 는 0..1, 오름차순) */
-    record Gradient(boolean vertical, int[] colors, float[] pos) {
+    record Gradient(boolean vertical, int[] colors, float[] pos, boolean radial) {
+        Gradient(boolean vertical, int[] colors, float[] pos) { this(vertical, colors, pos, false); }
+
         int at(float t) {
             if (t <= pos[0]) return colors[0];
             for (int i = 1; i < pos.length; i++) {
@@ -202,10 +204,15 @@ final class BoxPainter {
         int open = s.indexOf('(');
         if (open < 0 || !s.endsWith(")")) return null;
         boolean linear = low.startsWith("linear-gradient(") || low.startsWith("repeating-linear-gradient(");
+        boolean radial = low.startsWith("radial-gradient(");
         List<String> args = Selector.splitList(s.substring(open + 1, s.length() - 1));
         if (args.isEmpty()) return null;
         boolean vertical = true, reversed = false;
         int first = 0;
+        if (radial) {                                       // 모양/크기/위치(circle, ellipse, at center ...)는 읽고 건너뛰며, 가운데 기준 타원(farthest-corner)만 쓴다
+            List<String> t0 = CssMath.tokens(args.get(0));
+            if (!t0.isEmpty() && Colors.tryParse(t0.get(0)) == null) first = 1;
+        }
         if (linear) {
             String a = args.get(0).trim().toLowerCase(Locale.ROOT);
             if (a.startsWith("to ")) {
@@ -248,10 +255,10 @@ final class BoxPainter {
             pos.add(p);
         }
         if (cols.isEmpty()) return null;
-        if (!linear) {                                      // radial/conic: 첫 색 단색으로 근사
+        if (!linear && !radial) {                           // conic: 첫 색 단색으로 근사
             return new Gradient(true, new int[] {cols.get(0), cols.get(0)}, new float[] {0, 1});
         }
-        if (cols.size() == 1) return new Gradient(vertical, new int[] {cols.get(0), cols.get(0)}, new float[] {0, 1});
+        if (cols.size() == 1) return new Gradient(vertical, new int[] {cols.get(0), cols.get(0)}, new float[] {0, 1}, radial);
         int n = cols.size();
         float[] p = new float[n];
         for (int i = 0; i < n; i++) p[i] = pos.get(i) == null ? Float.NaN : pos.get(i);
@@ -277,7 +284,7 @@ final class BoxPainter {
             c = rc;
             p = rp;
         }
-        return new Gradient(vertical, c, p);
+        return new Gradient(vertical, c, p, radial);
     }
 
     private static double angle(String a) {
@@ -297,7 +304,11 @@ final class BoxPainter {
         if (w <= 0 || h <= 0) return;
         int[] cs = new int[gr.colors().length];
         for (int i = 0; i < cs.length; i++) cs[i] = scaleAlpha(gr.colors()[i], opacity);
-        Gradient o = new Gradient(gr.vertical(), cs, gr.pos());
+        Gradient o = new Gradient(gr.vertical(), cs, gr.pos(), gr.radial());
+        if (o.radial()) {
+            radialFill(g, x, y, w, h, r, o);
+            return;
+        }
         if (r.none()) {
             if (o.vertical()) {
                 for (int i = 1; i < o.pos().length; i++) {
@@ -336,6 +347,43 @@ final class BoxPainter {
             }
         } else {
             strips(g, x, y, w, h, o, spans(h, w, r.transposed()));
+        }
+    }
+
+    /**
+     * 방사형 그라디언트: 가운데 기준 타원(farthest-corner). 같은 가운데를 쓰는 타원 띠를 바깥에서 안쪽으로 겹쳐 칠한다(최대 6띠).
+     * 명령 수가 띠 수 x 높이에 비례하므로 큰 상자에 많이 쓰면 비싸다.
+     */
+    private static void radialFill(UiGfx g, int x, int y, int w, int h, Radii r, Gradient o) {
+        int bands = Math.max(3, Math.min(6, Math.min(w, h) / 4));
+        int[][] sp = spans(w, h, r);
+        double cx = w / 2.0, cy = h / 2.0, rx = cx * Math.sqrt(2), ry = cy * Math.sqrt(2);
+        fillShape(g, x, y, w, h, r, o.at(1f - 0.5f / bands));
+        for (int k = bands - 2; k >= 0; k--) {
+            double f = (k + 1) / (double) bands, erx = rx * f, ery = ry * f;
+            int color = o.at((float) (f - 0.5 / bands));
+            int start = -1, sl = 0, sr = 0;
+            for (int row = 0; row <= h; row++) {
+                int l = 0, rr = -1;
+                if (row < h) {
+                    double dy = row + 0.5 - cy;
+                    if (Math.abs(dy) < ery) {
+                        double hw = erx * Math.sqrt(1 - (dy / ery) * (dy / ery));
+                        l = Math.max(sp[0][row], (int) Math.round(cx - hw));
+                        rr = Math.min(w - sp[1][row], (int) Math.round(cx + hw));
+                    }
+                }
+                boolean has = rr > l;
+                if (start >= 0 && (!has || l != sl || rr != sr)) {      // 같은 폭이 이어진 행을 묶어서 그린다
+                    rect(g, x + sl, y + start, sr - sl, row - start, color);
+                    start = -1;
+                }
+                if (has && start < 0) {
+                    start = row;
+                    sl = l;
+                    sr = rr;
+                }
+            }
         }
     }
 
