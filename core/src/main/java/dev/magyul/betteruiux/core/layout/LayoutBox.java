@@ -38,6 +38,16 @@ public final class LayoutBox {
 
     public boolean enabled() { return style.bool("enabled", true); }
 
+    /** 그리기(와 히트 테스트의 역순) 순서: {@code z-index} 오름차순, 같으면 문서 순서. */
+    public List<LayoutBox> paintOrder() {
+        boolean any = false;
+        for (LayoutBox c : children) if (c.style.has("z-index")) { any = true; break; }
+        if (!any) return children;
+        List<LayoutBox> r = new ArrayList<>(children);
+        r.sort(java.util.Comparator.comparingInt(c -> c.style.integer("z-index", 0)));
+        return r;
+    }
+
     /** 호버/눌림 상태를 반영한 그리기용 스타일. 오버레이가 없으면 {@link #style} 그대로. */
     public StyleMap effective(boolean hovered, boolean active) {
         if (overlays.isEmpty() || (!hovered && !active)) return style;

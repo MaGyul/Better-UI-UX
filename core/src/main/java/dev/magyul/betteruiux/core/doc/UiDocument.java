@@ -477,8 +477,9 @@ public final class UiDocument {
 
     private LayoutBox hit(LayoutBox b, int x, int y) {
         if (!b.visible() || !b.contains(x, y)) return null;
-        for (int i = b.children.size() - 1; i >= 0; i--) {
-            LayoutBox r = hit(b.children.get(i), x, y);
+        java.util.List<LayoutBox> order = b.paintOrder();
+        for (int i = order.size() - 1; i >= 0; i--) {
+            LayoutBox r = hit(order.get(i), x, y);
             if (r != null) return r;
         }
         return b;

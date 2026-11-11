@@ -28,7 +28,8 @@ public final class StyleResolver {
     private record Applied(Stylesheet.Declaration decl, int specificity, int ordinal) {}
 
     private static final Set<String> INHERITED = Set.of("color", "shadow", "text-align", "cursor");
-    private static final Map<String, String> ALIASES = Map.of("background-color", "background");
+    private static final Map<String, String> ALIASES = Map.of("background-color", "background",
+            "justify-content", "justify", "align-items", "align", "flex-grow", "grow");
     private static final int MAX_VAR_DEPTH = 8;
 
     private final List<Entry> entries = new ArrayList<>();

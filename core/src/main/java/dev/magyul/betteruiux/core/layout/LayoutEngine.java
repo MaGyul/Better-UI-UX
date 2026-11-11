@@ -116,17 +116,93 @@ public final class LayoutEngine {
     /** 바인딩({@code {이름}})까지 치환된 표시용 텍스트. */
     public String textOf(LayoutBox b) { return interpolator.apply(rawText(b)); }
 
+    /** 안쪽 여백 + 테두리 두께(테두리는 이제 레이아웃 공간을 차지한다). */
     private Insets padding(LayoutBox b) {
         Insets def = b.tag().equals("button") ? new Insets(4, 8, 4, 8) : Insets.ZERO;
-        return b.style.insets("padding", def);
+        Insets p = b.style.insets("padding", def);
+        int bw = Math.max(0, b.style.integer("border", 0));
+        return bw == 0 ? p : new Insets(p.top() + bw, p.right() + bw, p.bottom() + bw, p.left() + bw);
     }
 
     private Insets margin(LayoutBox b) { return b.style.insets("margin", Insets.ZERO); }
 
+    /** {@code margin} 의 각 변이 {@code auto} 인지 {top,right,bottom,left}. auto 가 없으면 null. */
+    private static boolean[] autoMargins(LayoutBox c) {
+        String m = c.style.get("margin");
+        if (m == null || !m.toLowerCase().contains("auto")) return null;
+        List<String> t = dev.magyul.betteruiux.core.style.CssMath.tokens(m);
+        String[] f = switch (t.size()) {
+            case 1 -> new String[] {t.get(0), t.get(0), t.get(0), t.get(0)};
+            case 2 -> new String[] {t.get(0), t.get(1), t.get(0), t.get(1)};
+            case 3 -> new String[] {t.get(0), t.get(1), t.get(2), t.get(1)};
+            case 4 -> new String[] {t.get(0), t.get(1), t.get(2), t.get(3)};
+            default -> null;
+        };
+        if (f == null) return null;
+        boolean[] r = new boolean[4];
+        boolean any = false;
+        for (int i = 0; i < 4; i++) any |= r[i] = f[i].equalsIgnoreCase("auto");
+        return any ? r : null;
+    }
+
+    private static boolean isAbsolute(LayoutBox c) {
+        String p = c.style.get("position", "");
+        return p.equalsIgnoreCase("absolute") || p.equalsIgnoreCase("fixed");
+    }
+
+    /** 흐름에 참여하는 보이는 자식(absolute 제외), {@code order} 순(안정 정렬). */
     private List<LayoutBox> visibleChildren(LayoutBox b) {
         List<LayoutBox> r = new ArrayList<>();
-        for (LayoutBox c : b.children) if (c.visible()) r.add(c);
+        boolean ordered = false;
+        for (LayoutBox c : b.children) {
+            if (!c.visible() || isAbsolute(c)) continue;
+            r.add(c);
+            ordered |= c.style.has("order");
+        }
+        if (ordered) r.sort(java.util.Comparator.comparingInt(c -> c.style.integer("order", 0)));
         return r;
+    }
+
+    private static List<LayoutBox> absoluteChildren(LayoutBox b) {
+        List<LayoutBox> r = new ArrayList<>();
+        for (LayoutBox c : b.children) if (c.visible() && isAbsolute(c)) r.add(c);
+        return r;
+    }
+
+    /** 1 = 가로 흐름(row, display:flex), 2 = 세로 흐름(column, flex-direction:column), 0 = 흐름 아님. */
+    private static int axisOf(LayoutBox b) {
+        switch (b.tag()) {
+            case "row": return 1;
+            case "column": return 2;
+            case "scroll": case "grid": case "tabs": return 0;
+            default: break;
+        }
+        String d = b.style.get("display", "");
+        if (!d.equalsIgnoreCase("flex") && !d.equalsIgnoreCase("inline-flex")) return 0;
+        return b.style.get("flex-direction", "row").toLowerCase().startsWith("column") ? 2 : 1;
+    }
+
+    /** {@code aspect-ratio}: {@code 16/9}, {@code 1.5}, {@code auto 4/3}. 없으면 0. */
+    private static double ratio(LayoutBox c) {
+        String v = c.style.get("aspect-ratio");
+        if (v == null) return 0;
+        v = v.toLowerCase().replace("auto", "").trim();
+        try {
+            int slash = v.indexOf('/');
+            double r = slash < 0 ? Double.parseDouble(v)
+                    : Double.parseDouble(v.substring(0, slash).trim()) / Double.parseDouble(v.substring(slash + 1).trim());
+            return r > 0 && Double.isFinite(r) ? r : 0;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static String norm(String v) {
+        return switch (v) {
+            case "flex-start", "baseline", "first baseline", "normal" -> "start";
+            case "flex-end" -> "end";
+            default -> v;
+        };
     }
 
     private int maxLineWidth(String s) {
@@ -139,9 +215,12 @@ public final class LayoutEngine {
 
     private int prefW(LayoutBox b) {
         Size s = b.style.size("width", Size.AUTO);
+        double r = ratio(b);
+        Size hs = b.style.size("height", Size.AUTO);
         int v = switch (s.kind()) {
             case PX -> Math.round(s.value()) + adj(b, true);
-            case AUTO -> contentW(b) + padding(b).horizontal();
+            case AUTO -> r > 0 && hs.kind() == Size.Kind.PX ? (int) Math.round((hs.value() + adj(b, false)) * r)
+                    : contentW(b) + padding(b).horizontal();
             default -> 0;
         };
         return clamp(b, true, v, 0);
@@ -149,9 +228,12 @@ public final class LayoutEngine {
 
     private int prefH(LayoutBox b) {
         Size s = b.style.size("height", Size.AUTO);
+        double r = ratio(b);
+        Size ws = b.style.size("width", Size.AUTO);
         int v = switch (s.kind()) {
             case PX -> Math.round(s.value()) + adj(b, false);
-            case AUTO -> contentH(b) + padding(b).vertical();
+            case AUTO -> r > 0 && ws.kind() == Size.Kind.PX ? (int) Math.round((ws.value() + adj(b, true)) / r)
+                    : contentH(b) + padding(b).vertical();
             default -> 0;
         };
         return clamp(b, false, v, 0);
@@ -209,9 +291,9 @@ public final class LayoutEngine {
         List<LayoutBox> kids = visibleChildren(b);
         int gap = b.style.integer("gap", 0);
         int v = 0;
-        if (b.tag().equals("row")) {
+        if (axisOf(b) == 1) {
             for (LayoutBox c : kids) v += outerW(c);
-            if (!kids.isEmpty()) v += gap * (kids.size() - 1);
+            if (!kids.isEmpty()) v += b.style.integer("column-gap", gap) * (kids.size() - 1);
         } else {
             for (LayoutBox c : kids) v = Math.max(v, outerW(c));
         }
@@ -231,9 +313,9 @@ public final class LayoutEngine {
         List<LayoutBox> kids = visibleChildren(b);
         int gap = b.style.integer("gap", 0);
         int v = 0;
-        if (b.tag().equals("column") || b.tag().equals("scroll")) {
+        if (axisOf(b) == 2 || b.tag().equals("scroll")) {
             for (LayoutBox c : kids) v += outerH(c);
-            if (!kids.isEmpty()) v += gap * (kids.size() - 1);
+            if (!kids.isEmpty()) v += b.style.integer("row-gap", gap) * (kids.size() - 1);
         } else {
             for (LayoutBox c : kids) v = Math.max(v, outerH(c));
         }
@@ -243,6 +325,10 @@ public final class LayoutEngine {
     // ---- 배치 ----
 
     private void place(LayoutBox b, int x, int y, int w, int h) {
+        if ("relative".equalsIgnoreCase(b.style.get("position", ""))) {          // 원래 자리 기준으로 밀기
+            x += b.style.integer("left", 0) - b.style.integer("right", 0);
+            y += b.style.integer("top", 0) - b.style.integer("bottom", 0);
+        }
         b.x = x;
         b.y = y;
         b.w = Math.max(0, w);
@@ -251,9 +337,13 @@ public final class LayoutEngine {
         Insets pad = padding(b);
         int cx = x + pad.left(), cy = y + pad.top();
         int cw = Math.max(0, b.w - pad.horizontal()), ch = Math.max(0, b.h - pad.vertical());
+        int axis = axisOf(b);
+        if (axis != 0) {
+            flow(b, axis == 1, cx, cy, cw, ch);
+            placeAbsolutes(b);
+            return;
+        }
         switch (b.tag()) {
-            case "row" -> flow(b, true, cx, cy, cw, ch);
-            case "column" -> flow(b, false, cx, cy, cw, ch);
             case "grid" -> grid(b, cx, cy);
             case "scroll" -> {
                 int content = contentH(b), bar = 0, offset = 0;
@@ -270,6 +360,37 @@ public final class LayoutEngine {
             }
             default -> stack(b, cx, cy, cw, ch);
         }
+        placeAbsolutes(b);
+    }
+
+    /** {@code position:absolute|fixed}: 부모 상자를 기준으로 top/right/bottom/left 로 배치(없는 축은 anchor + x/y). */
+    private void placeAbsolutes(LayoutBox b) {
+        for (LayoutBox c : absoluteChildren(b)) {
+            Insets m = margin(c);
+            int bw = b.w, bh = b.h;
+            Integer l = edge(c, "left", bw), r = edge(c, "right", bw), t = edge(c, "top", bh), bo = edge(c, "bottom", bh);
+            Size ws = c.style.size("width", Size.AUTO), hs = c.style.size("height", Size.AUTO);
+            int w = ws.kind() == Size.Kind.AUTO && l != null && r != null ? bw - l - r - m.horizontal()
+                    : resolve(ws, bw - m.horizontal(), prefW(c), adj(c, true));
+            int h = hs.kind() == Size.Kind.AUTO && t != null && bo != null ? bh - t - bo - m.vertical()
+                    : resolve(hs, bh - m.vertical(), prefH(c), adj(c, false));
+            w = clamp(c, true, Math.max(0, w), bw);
+            h = clamp(c, false, Math.max(0, h), bh);
+            int[] base = anchorPosition(b.x, b.y, bw, bh, m, c.style.get("anchor", "top-left"), w, h);
+            int px = l != null ? b.x + l + m.left() : r != null ? b.x + bw - r - w - m.right() : base[0] + c.style.integer("x", 0);
+            int py = t != null ? b.y + t + m.top() : bo != null ? b.y + bh - bo - h - m.bottom() : base[1] + c.style.integer("y", 0);
+            place(c, px, py, w, h);
+        }
+    }
+
+    private static Integer edge(LayoutBox c, String key, int full) {
+        if (!c.style.has(key)) return null;
+        Size s = c.style.size(key, Size.AUTO);
+        return switch (s.kind()) {
+            case PX -> Math.round(s.value());
+            case PERCENT -> Math.round(s.value() * full);
+            default -> null;
+        };
     }
 
     // ---- grid ----
@@ -324,43 +445,131 @@ public final class LayoutEngine {
 
     private void flow(LayoutBox b, boolean horiz, int cx, int cy, int cw, int ch) {
         List<LayoutBox> items = visibleChildren(b);
-        int n = items.size();
-        if (n == 0) return;
+        if (items.isEmpty()) return;
         int gap = b.style.integer("gap", 0);
+        int mainGap = b.style.integer(horiz ? "column-gap" : "row-gap", gap);
+        int crossGap = b.style.integer(horiz ? "row-gap" : "column-gap", gap);
+        boolean wrap = b.style.get("flex-wrap", "nowrap").toLowerCase().startsWith("wrap");
+        if (!wrap) {
+            flowLine(b, items, horiz, cx, cy, cw, ch, mainGap);
+            return;
+        }
+        int mainAvail = horiz ? cw : ch;
+        List<List<LayoutBox>> lines = new ArrayList<>();
+        List<LayoutBox> line = new ArrayList<>();
+        int used = 0;
+        for (LayoutBox c : items) {
+            Insets m = margin(c);
+            int outer = baseMain(c, horiz, mainAvail) + (horiz ? m.horizontal() : m.vertical());
+            if (!line.isEmpty() && used + mainGap + outer > mainAvail) {
+                lines.add(line);
+                line = new ArrayList<>();
+                used = 0;
+            }
+            used += (line.isEmpty() ? 0 : mainGap) + outer;
+            line.add(c);
+        }
+        if (!line.isEmpty()) lines.add(line);
+        int crossAvail = horiz ? ch : cw;
+        int[] lineCross = new int[lines.size()];
+        for (int i = 0; i < lines.size(); i++) {
+            for (LayoutBox c : lines.get(i)) {
+                Insets m = margin(c);
+                Size cs = c.style.size(horiz ? "height" : "width", Size.AUTO);
+                int size = switch (cs.kind()) {
+                    case PX -> Math.round(cs.value()) + adj(c, !horiz);
+                    case PERCENT -> Math.round(cs.value() * crossAvail) + adj(c, !horiz);
+                    default -> horiz ? prefH(c) : prefW(c);
+                };
+                lineCross[i] = Math.max(lineCross[i], clamp(c, !horiz, size, crossAvail) + (horiz ? m.vertical() : m.horizontal()));
+            }
+        }
+        boolean reverse = b.style.get("flex-wrap", "").equalsIgnoreCase("wrap-reverse");
+        int offset = 0;
+        for (int k = 0; k < lines.size(); k++) {
+            int i = reverse ? lines.size() - 1 - k : k;
+            if (horiz) flowLine(b, lines.get(i), true, cx, cy + offset, cw, lineCross[i], mainGap);
+            else flowLine(b, lines.get(i), false, cx + offset, cy, lineCross[i], ch, mainGap);
+            offset += lineCross[i] + crossGap;
+        }
+    }
+
+    /** 줄바꿈 판단용 기본 주축 크기(basis/지정 크기/내용). */
+    private int baseMain(LayoutBox c, boolean horiz, int mainAvail) {
+        Size s = c.style.size(horiz ? "width" : "height", Size.AUTO);
+        int v = switch (s.kind()) {
+            case PX -> Math.round(s.value()) + adj(c, horiz);
+            case PERCENT -> Math.round(s.value() * mainAvail) + adj(c, horiz);
+            default -> basis(c, horiz, mainAvail, horiz ? prefW(c) : prefH(c));
+        };
+        return clamp(c, horiz, v, mainAvail);
+    }
+
+    private int basis(LayoutBox c, boolean horiz, int mainAvail, int fallback) {
+        if (!c.style.has("flex-basis")) return fallback;
+        Size bs = c.style.size("flex-basis", Size.AUTO);
+        return switch (bs.kind()) {
+            case PX -> Math.round(bs.value()) + adj(c, horiz);
+            case PERCENT -> Math.round(bs.value() * mainAvail) + adj(c, horiz);
+            default -> fallback;
+        };
+    }
+
+    private static float number(LayoutBox c, String key, float def) {
+        String v = c.style.get(key);
+        if (v == null) return def;
+        try {
+            return Float.parseFloat(v.trim());
+        } catch (NumberFormatException e) {
+            return def;
+        }
+    }
+
+    /** 한 줄(wrap 이 없으면 전체)을 주축으로 배치한다. 사각형 (cx,cy,cw,ch) 이 이 줄의 영역. */
+    private void flowLine(LayoutBox b, List<LayoutBox> items, boolean horiz, int cx, int cy, int cw, int ch, int gap) {
+        int n = items.size();
         int mainAvail = horiz ? cw : ch, crossAvail = horiz ? ch : cw;
         String mainKey = horiz ? "width" : "height", crossKey = horiz ? "height" : "width";
 
         int[] main = new int[n];
-        float[] weight = new float[n];
+        float[] weight = new float[n], grow = new float[n], shrink = new float[n];
+        boolean[][] autos = new boolean[n][];
         int used = gap * (n - 1);
-        float totalWeight = 0;
+        float totalWeight = 0, totalGrow = 0, totalShrink = 0;
+        int autoMainCount = 0;
         for (int i = 0; i < n; i++) {
             LayoutBox c = items.get(i);
             Insets m = margin(c);
             int mm = horiz ? m.horizontal() : m.vertical();
+            autos[i] = autoMargins(c);
+            if (autos[i] != null) {
+                boolean[] a = autos[i];
+                autoMainCount += horiz ? (a[3] ? 1 : 0) + (a[1] ? 1 : 0) : (a[0] ? 1 : 0) + (a[2] ? 1 : 0);
+            }
             Size s = c.style.size(mainKey, Size.AUTO);
             switch (s.kind()) {
                 case PX -> main[i] = Math.round(s.value()) + adj(c, horiz);
                 case PERCENT -> main[i] = Math.round(s.value() * mainAvail) + adj(c, horiz);
-                case AUTO -> main[i] = horiz ? prefW(c) : prefH(c);
+                case AUTO -> main[i] = basis(c, horiz, mainAvail, horiz ? prefW(c) : prefH(c));
                 case FILL -> {
                     float g = s.value();
-                    if (c.style.has("grow")) {
-                        try {
-                            g = Float.parseFloat(c.style.get("grow"));
-                        } catch (NumberFormatException ignored) {
-                            // 잘못된 grow 값은 기본 가중치 사용
-                        }
-                    }
+                    if (c.style.has("grow")) g = number(c, "grow", g);
                     weight[i] = Math.max(0.0001f, g);
                     totalWeight += weight[i];
                 }
             }
-            if (s.kind() != Size.Kind.FILL) main[i] = clamp(c, horiz, main[i], mainAvail);
+            if (s.kind() != Size.Kind.FILL) {
+                main[i] = clamp(c, horiz, main[i], mainAvail);
+                grow[i] = Math.max(0, number(c, "grow", 0));
+                shrink[i] = Math.max(0, number(c, "flex-shrink", 0));
+                totalGrow += grow[i];
+                totalShrink += shrink[i] * main[i];
+            }
             used += main[i] + mm;
         }
-        int free = Math.max(0, mainAvail - used);
+        int free = mainAvail - used;
         if (totalWeight > 0) {
+            free = Math.max(0, free);
             int given = 0, lastFill = -1;
             for (int i = 0; i < n; i++) if (weight[i] > 0) lastFill = i;
             for (int i = 0; i < n; i++) {
@@ -370,40 +579,90 @@ public final class LayoutEngine {
                 given += main[i];
             }
             free = 0;
+        } else if (free > 0 && totalGrow > 0) {
+            int left = free;
+            for (int i = 0; i < n; i++) {
+                if (grow[i] <= 0) continue;
+                int extra = Math.round(free * grow[i] / totalGrow);
+                int before = main[i];
+                main[i] = clamp(items.get(i), horiz, before + Math.min(extra, left), mainAvail);
+                left -= main[i] - before;
+            }
+            free = Math.max(0, left);
+        } else if (free < 0 && totalShrink > 0) {
+            int overflow = -free;
+            for (int i = 0; i < n; i++) {
+                if (shrink[i] <= 0) continue;
+                int dec = Math.round(overflow * shrink[i] * main[i] / totalShrink);
+                int before = main[i];
+                main[i] = clamp(items.get(i), horiz, Math.max(0, before - dec), mainAvail);
+                free += before - main[i];
+            }
+            free = Math.max(0, free);
+        } else {
+            free = Math.max(0, free);
         }
 
-        String justify = b.style.get("justify", "start");
-        int cursor = 0;
-        int betweenExtra = 0;
-        switch (justify) {
-            case "center" -> cursor = free / 2;
-            case "end" -> cursor = free;
-            case "space-between" -> {
-                if (n > 1) betweenExtra = free / (n - 1);
+        String justify = norm(b.style.get("justify", "start"));
+        int cursor = 0, betweenExtra = 0, autoShare = 0;
+        if (autoMainCount > 0 && free > 0) {
+            autoShare = free / autoMainCount;                 // auto 여백이 남는 공간을 나눠 가진다
+        } else {
+            switch (justify) {
+                case "center" -> cursor = free / 2;
+                case "end" -> cursor = free;
+                case "space-between" -> {
+                    if (n > 1) betweenExtra = free / (n - 1);
+                }
+                case "space-around" -> {
+                    betweenExtra = free / n;
+                    cursor = betweenExtra / 2;
+                }
+                case "space-evenly" -> {
+                    betweenExtra = free / (n + 1);
+                    cursor = betweenExtra;
+                }
+                default -> { }
             }
-            default -> { }
         }
-        String align = b.style.get("align", "start");
+        String align = norm(b.style.get("align", "start"));
         for (int i = 0; i < n; i++) {
             LayoutBox c = items.get(i);
             Insets m = margin(c);
+            boolean[] au = autos[i];
             int mLead = horiz ? m.left() : m.top(), mTrail = horiz ? m.right() : m.bottom();
+            if (au != null) {
+                if (horiz ? au[3] : au[0]) mLead += autoShare;
+                if (horiz ? au[1] : au[2]) mTrail += autoShare;
+            }
             int mCrossLead = horiz ? m.top() : m.left(), mCrossTrail = horiz ? m.bottom() : m.right();
-            String a = c.style.get("align-self", align);
+            boolean autoCrossLead = au != null && (horiz ? au[0] : au[3]);
+            boolean autoCrossTrail = au != null && (horiz ? au[2] : au[1]);
+            String a = norm(c.style.get("align-self", align));
 
             Size cs = c.style.size(crossKey, Size.AUTO);
             int crossSize = switch (cs.kind()) {
                 case PX -> Math.round(cs.value()) + adj(c, !horiz);
                 case PERCENT -> Math.round(cs.value() * crossAvail) + adj(c, !horiz);
                 case FILL -> Math.max(0, crossAvail - mCrossLead - mCrossTrail);
-                case AUTO -> a.equals("stretch") ? Math.max(0, crossAvail - mCrossLead - mCrossTrail)
+                case AUTO -> a.equals("stretch") && !autoCrossLead && !autoCrossTrail
+                        ? Math.max(0, crossAvail - mCrossLead - mCrossTrail)
                         : (horiz ? prefH(c) : prefW(c));
             };
+            double ar = ratio(c);
+            if (ar > 0 && cs.kind() == Size.Kind.AUTO) {
+                crossSize = (int) Math.round(horiz ? main[i] / ar : main[i] * ar);
+            }
             crossSize = clamp(c, !horiz, crossSize, crossAvail);
             int crossOuter = crossSize + mCrossLead + mCrossTrail;
-            int crossPos = switch (a) {
-                case "center" -> (crossAvail - crossOuter) / 2;
-                case "end" -> crossAvail - crossOuter;
+            int crossFree = crossAvail - crossOuter;
+            int crossPos;
+            if (autoCrossLead && autoCrossTrail) crossPos = crossFree / 2;
+            else if (autoCrossLead) crossPos = crossFree;
+            else if (autoCrossTrail) crossPos = 0;
+            else crossPos = switch (a) {
+                case "center" -> crossFree / 2;
+                case "end" -> crossFree;
                 default -> 0;
             };
             int mainPos = cursor + mLead;
@@ -419,6 +678,13 @@ public final class LayoutEngine {
             Insets m = margin(c);
             int w = clamp(c, true, resolve(c.style.size("width", Size.AUTO), cw - m.horizontal(), prefW(c), adj(c, true)), cw - m.horizontal());
             int h = clamp(c, false, resolve(c.style.size("height", Size.AUTO), ch - m.vertical(), prefH(c), adj(c, false)), ch - m.vertical());
+            double ar = ratio(c);
+            if (ar > 0) {
+                boolean wAuto = c.style.size("width", Size.AUTO).kind() == Size.Kind.AUTO;
+                boolean hAuto = c.style.size("height", Size.AUTO).kind() == Size.Kind.AUTO;
+                if (hAuto && !wAuto) h = clamp(c, false, (int) Math.round(w / ar), ch - m.vertical());
+                else if (wAuto && !hAuto) w = clamp(c, true, (int) Math.round(h * ar), cw - m.horizontal());
+            }
             int[] base = anchorPosition(cx, cy, cw, ch, m, c.style.get("anchor", "top-left"), w, h);
             place(c, base[0] + c.style.integer("x", 0), base[1] + c.style.integer("y", 0), w, h);
         }

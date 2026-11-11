@@ -119,7 +119,7 @@ public final class UiPainter {
 
         boolean clip = "hidden".equals(s.get("overflow")) || b.tag().equals("scroll");
         if (clip) g.pushClip(b.x, b.y, b.w, b.h);
-        for (LayoutBox c : b.children) paintBox(c, g, state, opacity);
+        for (LayoutBox c : b.paintOrder()) paintBox(c, g, state, opacity);
         if (b.widget != null) b.widget.paintOver(g, b.x, b.y, b.w, b.h, frame);
         if (clip) g.popClip();
 

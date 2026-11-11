@@ -36,6 +36,10 @@ final class Shorthands {
                 }
             }
         }
+        if (key.equals("flex") && !value.contains("var(")) {
+            expandFlex(m, value);
+            return true;
+        }
         if (key.equals("border-width")) {
             m.put("border", value);
             return true;
@@ -60,6 +64,42 @@ final class Shorthands {
             String keep = m.get("border-color");
             expandBorder(m, t);
             if (hadColor) m.put("border-color", keep);
+        }
+    }
+
+    /** {@code flex: none | auto | N | N M | N basis | N M basis | basis} → grow / flex-shrink / flex-basis. */
+    private static void expandFlex(StyleMap m, String value) {
+        List<String> t = CssMath.tokens(value);
+        String grow = "0", shrink = "1", basis = null;
+        if (t.size() == 1 && t.get(0).equalsIgnoreCase("none")) {
+            shrink = "0";
+        } else if (t.size() == 1 && t.get(0).equalsIgnoreCase("auto")) {
+            grow = "1";
+        } else if (t.size() == 1 && isPlain(t.get(0))) {
+            grow = t.get(0);                                  // flex: 1  ==  1 1 0
+            basis = "0";
+        } else if (t.size() == 1) {
+            basis = t.get(0);                                 // flex: 100px
+        } else if (t.size() == 2) {
+            grow = t.get(0);
+            if (isPlain(t.get(1))) shrink = t.get(1);
+            else basis = t.get(1);
+        } else if (t.size() >= 3) {
+            grow = t.get(0);
+            shrink = t.get(1);
+            basis = t.get(2);
+        }
+        m.put("grow", grow);
+        m.put("flex-shrink", shrink);
+        if (basis != null) m.put("flex-basis", basis);
+    }
+
+    private static boolean isPlain(String tok) {
+        try {
+            Double.parseDouble(tok);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 

@@ -16,6 +16,7 @@ public record Insets(int top, int right, int bottom, int left) {
         try {
             for (int i = 0; i < p.length; i++) {
                 String t = p[i].toLowerCase();
+                if (t.equals("auto")) t = "0";                // auto 여백은 레이아웃이 따로 처리
                 if (t.endsWith("px")) t = t.substring(0, t.length() - 2);
                 v[i] = Math.round(Float.parseFloat(t));
             }
