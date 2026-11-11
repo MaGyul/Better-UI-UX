@@ -23,7 +23,9 @@ CSS3 의 게임 UI 에 의미 있는 부분집합. 구현 계획과 진행 상�
 결합자 ` ` `>` `+` `~`,
 `:hover` `:active`(대상 요소 최상위에서만), `:first-child :last-child :only-child :first-of-type :last-of-type :only-of-type :root :empty :disabled :enabled :checked`,
 `:nth-child() :nth-last-child() :nth-of-type() :nth-last-of-type()`(`odd even an+b`), `:not() :is() :where()`.
-미지원: `:focus`, `::before/::after`, `:has()`.
+동적 상태: `:hover :active :focus :focus-within` — 선택자의 **어느 단계에서든**(`.card:hover .title`, `#a:hover + #b`, `:not(:hover)`) 쓸 수 있고 그릴 때 판정한다. 그리기에만 영향을 주며 레이아웃은 바꾸지 않는다.
+가상 요소: `::before` / `::after`(옛 `:before` 도 허용) + `content: "문자열" attr(이름)`(`\201C` 이스케이프, `none`/`normal` 은 만들지 않음). label/button 에서는 글자 앞뒤에 붙고, 컨테이너에서는 첫/마지막 자식 가상 label 이 생긴다(클릭·선택·편집 대상 아님, 이미지·위젯 같은 리프에는 없음). 가상 요소 규칙은 주인 요소에 적용되지 않는다.
+미지원: `:has()`, 그 밖의 가상 요소(`::first-line` 등).
 
 우선순위: 상속 < 태그 기본값 < XML 속성 < 시트 규칙(특이도·순서) < inline `style=""`. 시트의 `!important` 는 inline 일반 값을 이기고, inline `!important` 가 최종 승자.
 
