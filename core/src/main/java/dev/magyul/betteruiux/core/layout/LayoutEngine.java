@@ -139,19 +139,47 @@ public final class LayoutEngine {
 
     private int prefW(LayoutBox b) {
         Size s = b.style.size("width", Size.AUTO);
-        return switch (s.kind()) {
-            case PX -> Math.round(s.value());
+        int v = switch (s.kind()) {
+            case PX -> Math.round(s.value()) + adj(b, true);
             case AUTO -> contentW(b) + padding(b).horizontal();
             default -> 0;
         };
+        return clamp(b, true, v, 0);
     }
 
     private int prefH(LayoutBox b) {
         Size s = b.style.size("height", Size.AUTO);
-        return switch (s.kind()) {
-            case PX -> Math.round(s.value());
+        int v = switch (s.kind()) {
+            case PX -> Math.round(s.value()) + adj(b, false);
             case AUTO -> contentH(b) + padding(b).vertical();
             default -> 0;
+        };
+        return clamp(b, false, v, 0);
+    }
+
+    /** {@code box-sizing: content-box} 면 width/height 에 안쪽 여백을 더한다(기본은 border-box: 여백 포함). */
+    private int adj(LayoutBox c, boolean horiz) {
+        if (!"content-box".equalsIgnoreCase(c.style.get("box-sizing", ""))) return 0;
+        Insets p = padding(c);
+        return horiz ? p.horizontal() : p.vertical();
+    }
+
+    /** {@code min-/max-width/height}(px 또는 %) 적용. min 이 max 보다 우선한다. */
+    private int clamp(LayoutBox c, boolean horiz, int v, int avail) {
+        int a = adj(c, horiz);
+        Integer max = limit(c.style.size(horiz ? "max-width" : "max-height", Size.AUTO), avail, a);
+        Integer min = limit(c.style.size(horiz ? "min-width" : "min-height", Size.AUTO), avail, a);
+        int r = v;
+        if (max != null) r = Math.min(r, max);
+        if (min != null) r = Math.max(r, min);
+        return r;
+    }
+
+    private static Integer limit(Size s, int avail, int adj) {
+        return switch (s.kind()) {
+            case PX -> Math.round(s.value()) + adj;
+            case PERCENT -> Math.round(s.value() * avail) + adj;
+            default -> null;
         };
     }
 
@@ -285,8 +313,8 @@ public final class LayoutEngine {
                 LayoutBox c = items.get(r * cols + k);
                 Insets mg = margin(c);
                 int colW = m[0][k + 1];
-                int w = resolve(c.style.size("width", Size.AUTO), colW - mg.horizontal(), prefW(c));
-                int h = resolve(c.style.size("height", Size.AUTO), rowH - mg.vertical(), prefH(c));
+                int w = clamp(c, true, resolve(c.style.size("width", Size.AUTO), colW - mg.horizontal(), prefW(c), adj(c, true)), colW - mg.horizontal());
+                int h = clamp(c, false, resolve(c.style.size("height", Size.AUTO), rowH - mg.vertical(), prefH(c), adj(c, false)), rowH - mg.vertical());
                 place(c, x + mg.left(), y + mg.top(), w, h);
                 x += colW + gap;
             }
@@ -312,8 +340,8 @@ public final class LayoutEngine {
             int mm = horiz ? m.horizontal() : m.vertical();
             Size s = c.style.size(mainKey, Size.AUTO);
             switch (s.kind()) {
-                case PX -> main[i] = Math.round(s.value());
-                case PERCENT -> main[i] = Math.round(s.value() * mainAvail);
+                case PX -> main[i] = Math.round(s.value()) + adj(c, horiz);
+                case PERCENT -> main[i] = Math.round(s.value() * mainAvail) + adj(c, horiz);
                 case AUTO -> main[i] = horiz ? prefW(c) : prefH(c);
                 case FILL -> {
                     float g = s.value();
@@ -328,6 +356,7 @@ public final class LayoutEngine {
                     totalWeight += weight[i];
                 }
             }
+            if (s.kind() != Size.Kind.FILL) main[i] = clamp(c, horiz, main[i], mainAvail);
             used += main[i] + mm;
         }
         int free = Math.max(0, mainAvail - used);
@@ -337,7 +366,7 @@ public final class LayoutEngine {
             for (int i = 0; i < n; i++) {
                 if (weight[i] <= 0) continue;
                 int share = i == lastFill ? free - given : Math.round(free * weight[i] / totalWeight);
-                main[i] = Math.max(0, share);
+                main[i] = clamp(items.get(i), horiz, Math.max(0, share), mainAvail);
                 given += main[i];
             }
             free = 0;
@@ -364,12 +393,13 @@ public final class LayoutEngine {
 
             Size cs = c.style.size(crossKey, Size.AUTO);
             int crossSize = switch (cs.kind()) {
-                case PX -> Math.round(cs.value());
-                case PERCENT -> Math.round(cs.value() * crossAvail);
+                case PX -> Math.round(cs.value()) + adj(c, !horiz);
+                case PERCENT -> Math.round(cs.value() * crossAvail) + adj(c, !horiz);
                 case FILL -> Math.max(0, crossAvail - mCrossLead - mCrossTrail);
                 case AUTO -> a.equals("stretch") ? Math.max(0, crossAvail - mCrossLead - mCrossTrail)
                         : (horiz ? prefH(c) : prefW(c));
             };
+            crossSize = clamp(c, !horiz, crossSize, crossAvail);
             int crossOuter = crossSize + mCrossLead + mCrossTrail;
             int crossPos = switch (a) {
                 case "center" -> (crossAvail - crossOuter) / 2;
@@ -387,8 +417,8 @@ public final class LayoutEngine {
     private void stack(LayoutBox b, int cx, int cy, int cw, int ch) {
         for (LayoutBox c : visibleChildren(b)) {
             Insets m = margin(c);
-            int w = resolve(c.style.size("width", Size.AUTO), cw - m.horizontal(), prefW(c));
-            int h = resolve(c.style.size("height", Size.AUTO), ch - m.vertical(), prefH(c));
+            int w = clamp(c, true, resolve(c.style.size("width", Size.AUTO), cw - m.horizontal(), prefW(c), adj(c, true)), cw - m.horizontal());
+            int h = clamp(c, false, resolve(c.style.size("height", Size.AUTO), ch - m.vertical(), prefH(c), adj(c, false)), ch - m.vertical());
             int[] base = anchorPosition(cx, cy, cw, ch, m, c.style.get("anchor", "top-left"), w, h);
             place(c, base[0] + c.style.integer("x", 0), base[1] + c.style.integer("y", 0), w, h);
         }
@@ -407,10 +437,10 @@ public final class LayoutEngine {
         return new int[] {px, py};
     }
 
-    private static int resolve(Size s, int avail, int auto) {
+    private static int resolve(Size s, int avail, int auto, int adj) {
         return switch (s.kind()) {
-            case PX -> Math.round(s.value());
-            case PERCENT -> Math.round(s.value() * avail);
+            case PX -> Math.round(s.value()) + adj;
+            case PERCENT -> Math.round(s.value() * avail) + adj;
             case FILL -> Math.max(0, avail);
             case AUTO -> auto;
         };
