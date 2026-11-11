@@ -46,3 +46,14 @@ if (!providers.gradleProperty("scriptFromMods").isPresent) tasks.matching { it.n
     // GraalJS 의 일부 의존성은 .pom 파일이 같이 풀려 나오는데 jar 가 아니라서 로더가 읽다가 실패한다: jar 만 붙인다.
     (this as JavaExec).classpath(scriptRuntime.get().filter { it.name.endsWith(".jar") })
 }
+
+// 인게임 클라이언트 GameTest(./gradlew :fabric:runClientGameTest): 실제 창/월드/입력으로 에디터를 검증한다.
+// EULA 동의(eula)는 켜지 않는다: 싱글플레이(내장 서버)만 쓰므로 필요 없고, 동의는 사용자가 직접 해야 한다.
+fabricApi {
+    configureTests {
+        createSourceSet.set(true)
+        modId.set("better-uiux-test")
+        enableGameTests.set(false)
+        enableClientGameTests.set(true)
+    }
+}

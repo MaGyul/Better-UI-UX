@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "better-uiux-test",
+  "version": "1.0.0",
+  "name": "Better UI/UX GameTest",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": ["dev.magyul.betteruiux.fabric.test.EditorClientGameTest"]
+  },
+  "depends": {
+    "better_uiux": "*"
+  }
+}

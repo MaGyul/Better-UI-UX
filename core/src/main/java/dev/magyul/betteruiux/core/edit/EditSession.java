@@ -34,6 +34,9 @@ public final class EditSession {
 
     public boolean canRedo() { return !redo.isEmpty(); }
 
+    /** 다시 실행 목록을 비운다(편집기 밖의 다른 되돌리기 단위가 끼어들 때). */
+    public void clearRedo() { redo.clear(); }
+
     /**
      * 편집을 적용한다. 변환이 실패({@link IllegalArgumentException})하거나 결과가 같으면 아무것도 바꾸지 않는다.
      *

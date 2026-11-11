@@ -77,6 +77,9 @@ public final class UiScreen extends Screen {
     /** 지금 보여주는 문서(핫리로드/편집 시 교체될 수 있으니 오래 들고 있지 말 것). */
     public UiDocument document() { return activeDoc(); }
 
+    /** 에디터가 켜져 있으면 그 컨트롤러(GameTest 가 상태를 확인할 때 쓴다), 아니면 null. */
+    public EditorController editor() { return editor; }
+
     private UiDocument activeDoc() { return editor != null ? editor.document() : doc; }
 
     private ScriptBridge.Attached scriptHost;

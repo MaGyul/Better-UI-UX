@@ -96,6 +96,20 @@ final class EditorBackend {
 
             @Override public void switchTo(String other) { screen.switchEditor(other); }
 
+            /** &lt;link&gt; 스타일시트: 사용자 폴더 파일이 있으면 그것, 없으면 기본 제공 파일. 쓰기는 항상 사용자 폴더에(기본 제공본은 건드리지 않는다). */
+            @Override public String readFile(String name) {
+                try {
+                    return UiSources.loadFile(userDir, name).orElse(null);
+                } catch (IOException e) {
+                    return null;
+                }
+            }
+
+            @Override public void writeFile(String name, String text) throws IOException {
+                if (!UiSources.validName(name)) throw new IOException("올바르지 않은 파일 이름: " + name);
+                AtomicFiles.write(userDir.resolve(name), text);
+            }
+
             @Override public String createScreen(int kind) throws IOException {
                 String body = kind == 1 ? """
                         <screen use="blur,dim">
