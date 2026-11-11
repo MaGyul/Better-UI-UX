@@ -88,7 +88,11 @@ View 메뉴의 상태 미리보기로 `:hover :active :focus` 를 선택한 요�
 - `animation: a 1s, b 2s` (여러 개; 뒤의 것이 같은 속성을 덮어씀), `animation-play-state: paused | running`.
 - `:has(.x)`, `:has(> .x)`, `:has(+ .x)`, `:has(~ .x)`, `:has(a, b)`.
 
+- **상태 규칙의 레이아웃 속성**: `:hover/:active/:focus` 규칙에 `width`, `margin`, `padding`, `gap`, `font-size`, `display` 등을 써도 된다(상태가 바뀌면 다시 배치). 그리기 속성만 바뀌면 다시 배치하지 않는다.
+- 줄바꿈 글자: 너비가 정해진 컨테이너·grid 칸·scroll 안에서 줄 수만큼 높이가 늘어난다.
+- `textfield`/`select` 의 글자가 `font-size/font-weight/letter-spacing/color`(select 는 `text-transform` 도)를 따른다.
+
 ## 아직 없는 것
 
 `font-family`/italic, `radial/conic` 그라디언트, 자식을 둥글게 잘라내는 클립, `filter`/`backdrop-filter`, 3D 변환,
-레이아웃에 영향을 주는 `:hover` 규칙(상태 규칙은 그리기에만 적용), 프로퍼티 레지스트리 기반의 값 타입 검증(속성 이름만 검사한다).
+프로퍼티 레지스트리 기반의 값 타입 검증(속성 이름만 검사한다).

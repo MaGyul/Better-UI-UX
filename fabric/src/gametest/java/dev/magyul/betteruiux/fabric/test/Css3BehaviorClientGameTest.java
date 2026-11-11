@@ -40,7 +40,47 @@ public class Css3BehaviorClientGameTest implements FabricClientGameTest {
             focusRuleOnRealClick(ctx);
             zIndexOrder(ctx);
             importAndValues(ctx);
+            open(ctx, "gt_beh2");
+            hoverChangesLayout(ctx);
+            wrappedTextGrowsContainer(ctx);
+            styledTextfield(ctx);
         }
+    }
+
+    /** :hover 규칙의 width 가 실제 마우스로 배치를 바꾸고(transition 으로 부드럽게), 옆 요소를 민다. */
+    private void hoverChangesLayout(ClientGameTestContext ctx) {
+        LayoutBox hw = box(ctx, "hw");
+        int w0 = hw.w, nx0 = box(ctx, "nx").x;
+        ctx.getInput().setCursorPos(hw.x + 5, hw.y + 3);
+        ctx.waitTicks(4);                                               // 200ms 전환 도중
+        int mid = box(ctx, "hw").w;
+        ctx.waitTicks(20);
+        ctx.takeScreenshot("beh-4-hover-layout");
+        LayoutBox after = box(ctx, "hw");
+        check(after.w == 80 && w0 == 40, "호버하면 width 가 80 이 돼야 한다: " + w0 + " → " + after.w);
+        check(mid > 40 && mid < 80 || mid == 80, "전환 중이거나 끝난 값이어야 한다: " + mid);
+        check(box(ctx, "nx").x - nx0 == 40, "옆 요소가 넓어진 만큼 밀려야 한다: " + nx0 + " → " + box(ctx, "nx").x);
+        ctx.getInput().setCursorPos(2, 2);
+        ctx.waitTicks(25);
+        check(box(ctx, "hw").w == 40 && box(ctx, "nx").x == nx0, "마우스를 치우면 원래대로");
+    }
+
+    /** 너비가 정해진 컨테이너 안의 줄바꿈 글자: 컨테이너 높이가 그 줄 수만큼 늘어난다. */
+    private void wrappedTextGrowsContainer(ClientGameTestContext ctx) {
+        LayoutBox box = box(ctx, "wrapbox"), one = box(ctx, "oneline");
+        check(box.h > one.h, "여러 줄로 줄바꿈되면 컨테이너가 한 줄짜리보다 높아야 한다: " + box.h + " vs " + one.h);
+        check(box.h >= box(ctx, "wraptext").h, "컨테이너가 글자를 다 담아야 한다: " + box.h + " / " + box(ctx, "wraptext").h);
+    }
+
+    /** 입력칸 글자가 font-size 를 따른다(확대 변환으로 그려진다). */
+    private void styledTextfield(ClientGameTestContext ctx) {
+        List<DrawCommand> cmds = paint(ctx);
+        boolean scaled = false;
+        for (int i = 0; i < cmds.size(); i++) {
+            if (cmds.get(i) instanceof DrawCommand.DrawText t && t.text().equals("hello") && i > 0
+                    && cmds.get(i - 1) instanceof DrawCommand.PushTransform p && p.scale() == 2f) scaled = true;
+        }
+        check(scaled, "font-size: 16 인 입력칸의 글자는 2배로 그려져야 한다");
     }
 
     /** @keyframes 로 translate-x 가 시간에 따라 커진다. */
@@ -123,6 +163,23 @@ public class Css3BehaviorClientGameTest implements FabricClientGameTest {
             Files.writeString(base.resolve("config.toml"), "[editor]\nenabled = true\n");
             Files.writeString(base.resolve("ui/gt_base.uicss"), "#imp { width: 30; height: 10; background: #AB00CD; }\n");
             Files.writeString(base.resolve("ui/gt_imp.uicss"), "@import \"gt_base.uicss\";\n");
+            Files.writeString(base.resolve("ui/gt_beh2.xml"), """
+                    <screen>
+                      <style>
+                        #hw { width: 40; height: 10; background: #3366CC; transition: width 200ms linear; }
+                        #hw:hover { width: 80; }
+                        #nx { width: 10; height: 10; background: #CC6633; }
+                        .wrapbox { width: 60; background: #333333; }
+                        .wrapbox label { white-space: normal; }
+                      </style>
+                      <column gap="6" anchor="top-left" x="10" y="10">
+                        <row><panel id="hw"/><panel id="nx"/></row>
+                        <column id="wrapbox" class="wrapbox"><label id="wraptext" text="aaaa bbbb cccc dddd eeee ffff gggg hhhh"/></column>
+                        <column id="oneline" class="wrapbox"><label text="a"/></column>
+                        <textfield id="tf" width="100" height="24" value="hello" style="font-size: 16px"/>
+                      </column>
+                    </screen>
+                    """);
             Files.writeString(base.resolve("ui/gt_beh.xml"), """
                     <screen>
                       <link rel="style" href="gt_imp.uicss"/>

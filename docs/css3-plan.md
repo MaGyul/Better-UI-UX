@@ -84,13 +84,12 @@
 
 ## 남은 일 (2026-11 기준)
 
-구현됨(최근): `row-reverse`/`column-reverse`, `align-content`, absolute 의 기준 조상(가장 가까운 positioned 조상, 없으면 부모)·`fixed` 는 화면 기준, 이미지 둥근 모서리(행 묶음으로 잘라 그림, 테두리 안쪽에만),
-`inset` 그림자, 쉼표로 여러 `animation`, `animation-play-state`, `:has()`(후손/`>`/`+`/`~`).
+구현됨(최근): `row-reverse`/`column-reverse`, `align-content`, absolute 의 기준 조상·`fixed` 는 화면 기준, 이미지 둥근 모서리, `inset` 그림자, 여러 `animation`·`animation-play-state`, `:has()`,
+줄바꿈 글자의 높이가 auto 높이 컨테이너·grid 행·scroll 내용에 반영, `textfield`/`select` 입력 글자 스타일(`text-transform` 은 편집 위치가 어긋나지 않게 textfield 에서 제외),
+**레이아웃에 영향을 주는 상태 규칙**(`:hover/:active/:focus` 의 width/margin/padding/gap/font-size 등 → 상태가 바뀌면 다시 배치, `transition` 과도 함께 동작).
 
-- 레이아웃: grid 칸·컨테이너 auto 높이의 줄바꿈 반영
 - 렌더링: 안티앨리어싱, 둥근 클립(자식 잘라내기), radial/conic, 필요하면 `UiGfx` 프리미티브(rounded rect 등) 추가
-- 텍스트: `font-family`/italic, 위젯 `textfield`/`select` 입력 글자
-- 선택자: 레이아웃에 영향을 주는 상태 규칙
+- 텍스트: `font-family`/italic
 - 도구: `@media` 조건 평가 표시, 새 문법에 대한 규칙 편집기 안내, 프로퍼티 레지스트리(타입 검증)
 
 ## 실기 검증 (GameTest / 스모크)
@@ -103,6 +102,7 @@
 
 - `Css3BehaviorClientGameTest`: 실제 시간·입력으로 — `@keyframes` 가 시간에 따라 움직임, 호버 색 `transition` 이 중간 값을 거쳐 끝값에 도달, 진짜 클릭으로 `:focus` 켜짐/꺼짐, `z-index` 겹침 순서, 외부 `@import`, `calc(var(--w) * 2 + 10px)`, 시트 `!important` 가 인라인을 이김.
 - `Css3VisualClientGameTest` 의 `newFeatures`: 이미지 둥근 모서리(픽셀), `inset` 그림자(픽셀), `:has()`, `row-reverse` 를 실제 화면(GUI 배율 2)에서 확인.
+- `Css3BehaviorClientGameTest`(2): 실제 마우스 호버로 `:hover` 의 width 가 배치를 바꾸고 옆 요소를 밀며(`transition` 포함) 벗어나면 원래대로, 너비가 정해진 컨테이너 안 줄바꿈 글자가 컨테이너 높이를 늘림, `font-size` 가 입력칸 글자에 적용.
 - **Vulkan / OpenGL**: `-PgfxBackend=vulkan|opengl` 가 게임의 `--graphicsBackend` 인자로 백엔드를 고정한다(로그의 "Using graphics backend" 로 확인). 같은 GameTest(픽셀 검사 포함)가 두 백엔드에서 모두 통과했고(NVIDIA: Vulkan 1.4 / OpenGL 3.3), 렌더링 비용 수치도 같았다.
 
 **NeoForge** — `./gradlew :neoforge:runSmokeClient`: NeoForge 에는 클라이언트 GameTest 가 없어 `NeoSmoke`(`-Dbetteruiux.smoke=true` 일 때만 동작)가 타이틀 화면에서 CSS3 데모를 열어

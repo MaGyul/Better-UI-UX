@@ -127,14 +127,13 @@ class DynamicStateRulesTest {
     }
 
     @Test
-    void layoutIsNotAffectedByDynamicRules() throws Exception {
+    void layoutAffectingPropsInStateRulesNowRelayout() throws Exception {
         UiDocument d = doc("""
             <screen>
               <style>panel:hover { width: 100 }</style>
               <panel id='p' x='0' y='0' width='20' height='20'/>
             </screen>""");
         d.paint(new DrawList(), 5, 5);
-        assertEquals(20, d.findById("p").w);
-        assertEquals(List.of(), List.of());
+        assertEquals(100, d.findById("p").w, "상태 규칙의 width 도 배치에 반영된다(LayoutStateRulesTest 참고)");
     }
 }

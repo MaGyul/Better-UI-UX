@@ -187,6 +187,7 @@ public final class UiDocument {
         this.anim = new AnimationEngine(name -> resolver.keyframes(name));
         this.layoutEngine = new LayoutEngine(textMetrics, resolver, this::interpolate, this::widgetFor);
         this.layoutEngine.setImageSizer(imageSizer);
+        this.layoutEngine.setDynState(state);              // :hover 같은 상태 규칙의 width/margin 등도 배치에 반영
         this.layoutEngine.setStyleAnimator((box, s) -> animationsEnabled ? anim.applyLayout(box.node, s, clock.nowMillis()) : s);
     }
 
@@ -385,6 +386,12 @@ public final class UiDocument {
         for (LayoutBox c : b.children) index(c);
     }
 
+    private boolean layoutDynChanged(LayoutBox b) {
+        if (b.layoutDyn && b.layoutHitMask(state) != b.layoutDynMask) return true;
+        for (LayoutBox c : b.children) if (layoutDynChanged(c)) return true;
+        return false;
+    }
+
     private void applyDirty() {
         if (dirty && viewW > 0) relayout();
     }
@@ -416,6 +423,7 @@ public final class UiDocument {
         if (layoutAnimating) dirty = true;
         applyDirty();
         updateHover();
+        if (layoutDynChanged(layout)) dirty = true;        // 상태(hover/active/focus)가 바뀌어 레이아웃 상태 규칙이 달라졌으면 다시 배치
         applyDirty();
         painter.paint(layout, gfx, state);
         paintPopupAndTooltip(gfx);

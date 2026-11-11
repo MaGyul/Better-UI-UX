@@ -1,6 +1,7 @@
 package dev.magyul.betteruiux.core.layout;
 
 import dev.magyul.betteruiux.api.TextMetrics;
+import dev.magyul.betteruiux.core.style.Selector;
 import dev.magyul.betteruiux.core.doc.BuiltinWidgets;
 import dev.magyul.betteruiux.core.doc.UiWidget;
 import dev.magyul.betteruiux.core.style.StyleResolver;
@@ -120,8 +121,36 @@ public final class LayoutEngine {
     /** 스타일 해석 직후 레이아웃 속성에 전환·애니메이션을 덧입히는 훅(문서가 건다). null 이면 없음. */
     public void setStyleAnimator(java.util.function.BiFunction<LayoutBox, StyleMap, StyleMap> animator) { this.styleAnimator = animator; }
 
+    private Selector.DynState dynState;
+
+    /** 상태 규칙({@code :hover} 등)에 레이아웃 속성이 있으면 이 상태를 기준으로 배치에 반영한다. null 이면 반영하지 않는다. */
+    public void setDynState(Selector.DynState st) { this.dynState = st; }
+
+    /** 상태 규칙 중 지금 맞는 것의 레이아웃 속성(width, margin …)을 스타일에 덧입힌다. */
+    private void overlayLayoutDyn(LayoutBox b) {
+        b.layoutDyn = false;
+        b.layoutDynMask = 0;
+        if (b.dynRules.isEmpty()) return;
+        for (LayoutBox.DynRule r : b.dynRules) b.layoutDyn |= LayoutBox.hasLayoutKey(r);
+        if (!b.layoutDyn || dynState == null) return;
+        b.layoutDynMask = b.layoutHitMask(dynState);
+        if (b.layoutDynMask == 0) return;
+        StyleMap m = b.style.copy();
+        for (int pass = 0; pass < 2; pass++) {                           // 보통 선언 → !important 순
+            for (int i = 0; i < b.dynRules.size() && i < 62; i++) {
+                if ((b.layoutDynMask >> i & 1) == 0) continue;
+                LayoutBox.DynRule r = b.dynRules.get(i);
+                for (var e : (pass == 0 ? r.normal() : r.important()).entries().entrySet()) {
+                    if (LayoutBox.isLayoutKey(e.getKey())) m.put(e.getKey(), e.getValue());
+                }
+            }
+        }
+        b.style = m;
+    }
+
     private void resolveStyles(LayoutBox b) {
         resolver.resolve(b);
+        overlayLayoutDyn(b);
         if (styleAnimator != null) b.style = styleAnimator.apply(b, b.style);
         if (!b.synthetic) addPseudoBoxes(b);
         for (LayoutBox c : b.children) resolveStyles(c);

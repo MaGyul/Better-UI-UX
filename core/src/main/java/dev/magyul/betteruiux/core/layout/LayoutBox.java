@@ -61,6 +61,40 @@ public final class LayoutBox {
         return r;
     }
 
+    /** 상태 규칙(:hover 등) 중 레이아웃에 영향을 주는 속성을 가진 것이 있는지(레이아웃 때 한 번 정해진다). */
+    public boolean layoutDyn;
+    /** 마지막 레이아웃 때 맞았던 레이아웃 상태 규칙의 비트마스크(바뀌면 다시 배치해야 한다). */
+    public long layoutDynMask;
+
+    /** 레이아웃에 영향을 주는 속성을 가진 상태 규칙 중 {@code st} 에서 맞는 것의 비트마스크. */
+    public long layoutHitMask(Selector.DynState st) {
+        long mask = 0;
+        for (int i = 0; i < dynRules.size() && i < 62; i++) {
+            DynRule r = dynRules.get(i);
+            if (hasLayoutKey(r) && r.selector().matches(node, st)) mask |= 1L << i;
+        }
+        return mask;
+    }
+
+    static boolean hasLayoutKey(DynRule r) {
+        for (String k : r.normal().entries().keySet()) if (isLayoutKey(k)) return true;
+        for (String k : r.important().entries().keySet()) if (isLayoutKey(k)) return true;
+        return false;
+    }
+
+    /** 값이 바뀌면 다시 배치해야 하는 속성(그리기 전용 속성이 아닌 것 중 크기/배치/글자 크기 관련). */
+    public static boolean isLayoutKey(String k) {
+        if (dev.magyul.betteruiux.core.anim.Interpolator.LAYOUT.contains(k)) return true;
+        return switch (k) {
+            case "display", "position", "top", "right", "bottom", "left", "anchor", "x", "y", "flex-direction", "flex-wrap", "flex-basis",
+                 "flex-shrink", "grow", "order", "justify", "align", "align-self", "align-content", "justify-self", "columns",
+                 "grid-template-columns", "grid-template-rows", "grid-column", "grid-row", "box-sizing", "aspect-ratio", "border",
+                 "border-top-width", "border-right-width", "border-bottom-width", "border-left-width", "white-space", "text-transform",
+                 "font-weight", "visible", "margin", "padding" -> true;
+            default -> false;
+        };
+    }
+
     /** 호버/눌림 상태를 반영한 그리기용 스타일(이 요소 자신의 상태만 아는 단순 형태). 규칙이 없으면 {@link #style} 그대로. */
     public StyleMap effective(boolean hovered, boolean active) {
         if (dynRules.isEmpty()) return style;
