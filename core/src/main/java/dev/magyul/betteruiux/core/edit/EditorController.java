@@ -195,7 +195,8 @@ public final class EditorController {
         extRedo.clear();
         session.clearRedo();
         reload();
-        setStatus(href + " 에 바로 저장했어요", false);
+        String warn = StyleText.lint(key, raw);
+        setStatus(warn != null ? href + " 에 저장했어요. 주의: " + warn : href + " 에 바로 저장했어요", warn != null);
     }
 
     private boolean writeExt(ExtEdit e, String text) {
@@ -2038,7 +2039,11 @@ public final class EditorController {
                 String next = StyleText.apply(session.source(), key, raw);
                 int before = session.source().all().size();
                 if (!applyEdit(src -> next)) setStatus("바뀐 것이 없어요", false);
-                else if (selected > 0 && session.source().all().size() > before) selected += session.source().all().size() - before;   // <style> 블록이 새로 생기면 뒤 요소 번호가 밀린다
+                else {
+                    if (selected > 0 && session.source().all().size() > before) selected += session.source().all().size() - before;   // <style> 블록이 새로 생기면 뒤 요소 번호가 밀린다
+                    String warn = StyleText.lint(key, raw);
+                    if (warn != null) setStatus("주의: " + warn, true);                  // 적용은 됐지만 속성 이름/값이 이상하면 바로 알려 준다
+                }
             } catch (IllegalArgumentException e) {
                 setStatus(e.getMessage(), true);
             }

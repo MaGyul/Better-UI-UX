@@ -455,6 +455,27 @@ final class StyleText {
     }
 
     /** 속성 패널 키({@code css:규칙:속성}, {@code css+:규칙})로 값을 반영한다. 잘못된 입력이면 IllegalArgumentException. */
+    /**
+     * 규칙 편집(키 {@code css:...}/{@code xcss:...} 등)으로 방금 쓴 선언을 검사해 경고 문장을 돌려준다(없으면 null).
+     * 추가/새 규칙은 입력한 {@code 속성: 값} 에서, 기존 선언의 값 고치기는 키 끝의 속성 이름에서 속성을 읽는다.
+     */
+    static String lint(String key, String raw) {
+        if (raw == null || raw.isBlank() || isKeyframeKey(key)) return null;
+        try {
+            if (key.startsWith(ADD_KEY) || key.startsWith(NEW_KEY) || key.startsWith(X_ADD_KEY) || key.startsWith(X_NEW_KEY)) {
+                for (dev.magyul.betteruiux.core.style.Stylesheet.Declaration d : dev.magyul.betteruiux.core.style.Stylesheet.parseDeclarations(raw)) {
+                    String w = dev.magyul.betteruiux.core.style.Stylesheet.lint(d.prop(), d.value());
+                    if (w != null) return w;
+                }
+                return null;
+            }
+            int colon = key.lastIndexOf(':');
+            return colon < 0 ? null : dev.magyul.betteruiux.core.style.Stylesheet.lint(key.substring(colon + 1), raw);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     static String apply(XmlSource src, String key, String raw) {
         if (isKeyframeKey(key)) return applyKeyframe(src.text(), keyframes(src), key, raw);
         if (key.startsWith(NEW_KEY)) {

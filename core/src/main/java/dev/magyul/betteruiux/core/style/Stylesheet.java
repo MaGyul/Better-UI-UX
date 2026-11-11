@@ -57,6 +57,20 @@ public final class Stylesheet {
             "use", "block-size", "block-tint", "enabled", "checked", "value", "min", "max", "step", "maxlength",
             "placeholder", "options", "group", "title", "tooltip", "modal", "onclick", "onchange", "onsubmit");
 
+    /**
+     * 선언 하나를 검사해 사람이 읽을 경고를 돌려준다(문제가 없으면 null): 모르는 속성(비슷한 이름 제안)이거나 알려진 속성의 값이 명백히 잘못된 경우.
+     * 에디터가 규칙을 고칠 때 바로 알려 주는 데 쓴다.
+     */
+    public static String lint(String prop, String value) {
+        if (prop == null || prop.isBlank()) return null;
+        String p = prop.trim();
+        String hint = unknownHint(p);
+        if (hint == null) return "알 수 없는 속성 '" + p + "'";
+        if (!hint.isEmpty()) return "알 수 없는 속성 '" + p + "' (혹시 '" + hint + "'?)";
+        String bad = PropValues.check(p, value);
+        return bad == null ? null : "'" + p + ": " + value.trim() + "' - " + bad;
+    }
+
     /** 모르는 속성이면 가장 비슷한 알려진 이름(편집 거리 2 이하), 없으면 null; 알려진 속성이면 빈 문자열. */
     static String unknownHint(String prop) {
         if (prop.startsWith("--") || prop.startsWith("-") || KNOWN_PROPS.contains(prop)) return "";

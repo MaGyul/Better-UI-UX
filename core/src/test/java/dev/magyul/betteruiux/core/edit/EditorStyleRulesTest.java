@@ -105,4 +105,44 @@ class EditorStyleRulesTest {
         assertEquals(XML, e.text());
         assertTrue(e.status().contains("속성"));
     }
+
+    @Test
+    void addingATypoedPropertyStillAppliesButWarns() throws Exception {
+        EditorController e = selected();
+        DrawCommand.DrawText add = find(paint(e), "+ 추가");
+        click(e, W - EditorController.RIGHT_W + 60 + 5, add.y() + 2);
+        for (char c : "colour: #FFFFFF".toCharArray()) e.charTyped(c);
+        e.keyPressed(EditorKey.ENTER, false, false);
+        assertTrue(e.text().contains("colour: #FFFFFF"), "적용은 된다");
+        assertTrue(e.status().contains("주의") && e.status().contains("혹시 'color'"), e.status());
+    }
+
+    @Test
+    void addingAnInvalidValueWarns() throws Exception {
+        EditorController e = selected();
+        DrawCommand.DrawText add = find(paint(e), "+ 추가");
+        click(e, W - EditorController.RIGHT_W + 60 + 5, add.y() + 2);
+        for (char c : "opacity: red".toCharArray()) e.charTyped(c);
+        e.keyPressed(EditorKey.ENTER, false, false);
+        assertTrue(e.text().contains("opacity: red"));
+        assertTrue(e.status().contains("주의") && e.status().contains("opacity"), e.status());
+    }
+
+    @Test
+    void validEditHasNoWarning() throws Exception {
+        EditorController e = selected();
+        DrawCommand.DrawText add = find(paint(e), "+ 추가");
+        click(e, W - EditorController.RIGHT_W + 60 + 5, add.y() + 2);
+        for (char c : "opacity: 0.5".toCharArray()) e.charTyped(c);
+        e.keyPressed(EditorKey.ENTER, false, false);
+        assertTrue(!e.status().contains("주의"), e.status());
+    }
+
+    @Test
+    void lintHelperReadsThePropertyFromTheKey() {
+        assertEquals(null, StyleText.lint("css:0:padding", "8"));
+        assertTrue(StyleText.lint("css:0:padding", "8") == null && StyleText.lint("css:0:width", "abc").contains("width"));
+        assertTrue(StyleText.lint("xcss:a.uicss:0:opacity", "red").contains("opacity"));
+        assertEquals(null, StyleText.lint("css+:0", ""));
+    }
 }
