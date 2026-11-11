@@ -57,6 +57,12 @@ public final class UiApi {
         UiOpener.open(id, baseDir, true);
     }
 
+    /** 열린 화면 없이 에디터만 연다(안에서 편집할 화면을 고른다). */
+    public static void editor() {
+        requireInit();
+        UiOpener.openBlankEditor(baseDir);
+    }
+
     public static void registerAction(String id, Consumer<UiActions.Context> handler) { UiActions.register(id, handler); }
 
     public static void registerWidget(String tag, Function<UiElement, UiWidget> factory) { UiWidgets.register(tag, factory); }

@@ -52,6 +52,9 @@ public final class UiScreen extends Screen {
     private final Options options;
     private UiDocument doc;
     private UiFileWatcher watcher;
+    /** 열린 화면 없이 시작하는 빈 에디터의 id(실제 화면 id 는 비어 있을 수 없다). */
+    static final String BLANK_ID = "";
+
     private EditorController editor;
     private boolean startInEditor;
     private String error;
@@ -215,6 +218,7 @@ public final class UiScreen extends Screen {
         UiDocument edited = editor.document();
         editor.close();   // 편집 중이던 칸 취소 + 글자 입력 끄기
         editor = null;
+        if (!id.isEmpty() && !java.nio.file.Files.exists(userDir.resolve(id + ".xml"))) NewDocs.remove(userDir, id);   // 저장하지 않고 떠난 새 화면은 버린다
         edited.setAnimationsEnabled(true);
         bind(edited);
         doc = edited;

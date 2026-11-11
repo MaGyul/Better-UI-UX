@@ -38,13 +38,17 @@ final class EditorBackend {
 
     static EditorController create(String id, Path userDir, TextMetrics metrics, UiScreen screen, int width, int height)
             throws IOException, UiParseException {
-        String text = UiSources.load(userDir, id).orElseThrow(() -> new NoSuchFileException(id + ".xml"));
+        boolean blank = id.isEmpty();   // 빈 에디터(/uiux editor): 열린 화면 없이 파일을 고르는 목록만 보인다
+        String text = blank ? "<screen/>" : UiSources.load(userDir, id).or(() -> java.util.Optional.ofNullable(NewDocs.get(userDir, id)))
+                .orElseThrow(() -> new NoSuchFileException(id + ".xml"));
         EditorHost host = new EditorHost() {
+            @Override public boolean isBlank() { return blank; }
+
             @Override public UiDocument load(String xml) throws UiParseException {
                 try {
                     UiDocument d = UiDocumentLoader.loadText(userDir, xml, metrics);
                     d.setOnClose(screen::onClose);
-                    UiApi.fireOpened(id, d);   // 모드의 바인딩/이벤트 설정도 편집 화면에 똑같이 적용한다
+                    if (!blank) UiApi.fireOpened(id, d);   // 모드의 바인딩/이벤트 설정도 편집 화면에 똑같이 적용한다
                     return d;
                 } catch (IOException e) {
                     throw new UiParseException("읽기 실패: " + e.getMessage(), -1);
@@ -52,12 +56,18 @@ final class EditorBackend {
             }
 
             @Override public void save(String xml) throws IOException {
+                if (blank) throw new IOException("저장할 화면이 없습니다");
                 AtomicFiles.write(userDir.resolve(id + ".xml"), xml);
+                NewDocs.remove(userDir, id);                      // 새 화면은 처음 저장할 때 비로소 파일이 된다
             }
 
-            @Override public String title() { return id + ".xml"; }
+            @Override public String title() {
+                if (blank) return "(열린 화면 없음)";
+                boolean unsavedNew = NewDocs.has(userDir, id) && !java.nio.file.Files.exists(userDir.resolve(id + ".xml"));
+                return id + ".xml" + (unsavedNew ? " (새 파일 - 저장 전)" : "");
+            }
 
-            @Override public boolean canPublish() { return ClientSync.active(); }
+            @Override public boolean canPublish() { return !blank && ClientSync.active(); }
 
             @Override public void publish() { ClientSync.publishUi(id); }
 
@@ -124,11 +134,11 @@ final class EditorBackend {
                         <screen>
                         </screen>
                         """;
-                java.nio.file.Files.createDirectories(userDir);
                 for (int n = 1; n < 1000; n++) {
                     String nid = "new_" + n;
                     if (java.nio.file.Files.exists(userDir.resolve(nid + ".xml"))) continue;
-                    AtomicFiles.write(userDir.resolve(nid + ".xml"), body);
+                    NewDocs.put(userDir, nid, body);              // 파일은 만들지 않는다: 저장하기 전에 닫으면 아무것도 남지 않는다
+                    java.nio.file.Files.deleteIfExists(userDir.getParent().resolve("autosave").resolve(nid + ".xml"));   // 지난번 새 화면의 임시 저장본이 복구 대화상자로 뜨지 않게
                     return nid;
                 }
                 throw new IOException("new_1..new_999 가 모두 사용 중입니다");
@@ -169,6 +179,7 @@ final class EditorBackend {
             private Path autosaveFile() { return userDir.getParent().resolve("autosave").resolve(id + ".xml"); }
 
             @Override public void autosave(String text) {
+                if (blank) return;
                 try {
                     AtomicFiles.write(autosaveFile(), text);
                 } catch (IOException ignored) {
@@ -177,6 +188,7 @@ final class EditorBackend {
             }
 
             @Override public String readAutosave() {
+                if (blank) return null;
                 try {
                     Path f = autosaveFile();
                     return java.nio.file.Files.exists(f) ? java.nio.file.Files.readString(f) : null;
@@ -186,6 +198,7 @@ final class EditorBackend {
             }
 
             @Override public void clearAutosave() {
+                if (blank) return;
                 try {
                     java.nio.file.Files.deleteIfExists(autosaveFile());
                 } catch (IOException ignored) {
