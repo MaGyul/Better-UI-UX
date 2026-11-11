@@ -9,6 +9,8 @@ import dev.magyul.betteruiux.core.layout.Insets;
 import dev.magyul.betteruiux.core.layout.LayoutBox;
 import dev.magyul.betteruiux.core.layout.LayoutEngine;
 import dev.magyul.betteruiux.core.layout.StyleMap;
+import dev.magyul.betteruiux.core.layout.TextStyle;
+import java.util.List;
 import java.util.function.Function;
 
 /** 레이아웃 결과를 {@link UiGfx} 명령으로 그린다. 입력/시간 상태는 {@link PaintState} 로 받는다. */
@@ -150,21 +152,36 @@ public final class UiPainter {
         String t = interpolator.apply(LayoutEngine.rawText(b));
         if (t.isEmpty()) return;
         boolean button = b.tag().equals("button");
-        int color = s.color("color", dim ? 0xFF888888 : 0xFFFFFFFF);
-        boolean shadow = s.bool("shadow", true);
-        String align = s.get("text-align", button ? "center" : "left");
-        int lineH = text.lineHeight();
-        String[] lines = t.split("\n", -1);
-        int totalH = lines.length * lineH;
-        int y = b.y + (button ? (b.h - totalH) / 2 : 0);
+        int color = withOpacity(s.color("color", dim ? 0xFF888888 : 0xFFFFFFFF), opacity);
+        boolean shadow = s.bool("shadow", true) && !"none".equalsIgnoreCase(s.get("text-shadow", ""));
+        String align = s.get("text-align", button ? "center" : "left").toLowerCase();
+        TextStyle ts = TextStyle.of(s, text);
+        int availW = TextStyle.availableWidth(s, b.tag(), b.w);
+        List<String> lines = ts.lines(t, ts.wraps() ? availW : 0);
+        int lineH = ts.lineHeight();
+        int totalH = lines.size() * lineH;
+        String va = s.get("vertical-align", button ? "middle" : "top").toLowerCase();
+        int y = switch (va) {
+            case "middle", "center" -> b.y + (b.h - totalH) / 2;
+            case "bottom" -> b.y + b.h - totalH;
+            default -> b.y;
+        };
+        String deco = s.get("text-decoration", s.get("text-decoration-line", "none")).toLowerCase();
         for (String line : lines) {
-            int w = text.width(line);
+            if (ts.ellipsis() && !ts.wraps()) line = ts.fit(line, b.w);
+            int w = ts.width(line);
             int x = switch (align) {
                 case "center" -> b.x + (b.w - w) / 2;
-                case "right" -> b.x + b.w - w;
+                case "right", "end" -> b.x + b.w - w;
                 default -> b.x;
             };
-            g.drawText(line, x, y, withOpacity(color, opacity), shadow);
+            ts.draw(g, line, x, y, color, shadow);
+            if (!line.isEmpty() && !deco.equals("none")) {
+                int th = ts.thickness();
+                if (deco.contains("underline")) BoxPainter.rect(g, x, y + ts.underlineOffset(), w, th, color);
+                if (deco.contains("line-through")) BoxPainter.rect(g, x, y + ts.strikeOffset(), w, th, color);
+                if (deco.contains("overline")) BoxPainter.rect(g, x, y, w, th, color);
+            }
             y += lineH;
         }
     }

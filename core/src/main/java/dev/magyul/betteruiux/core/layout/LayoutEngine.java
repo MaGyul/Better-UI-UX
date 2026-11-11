@@ -275,6 +275,17 @@ public final class LayoutEngine {
         return new int[] {contentW(b) + pad.horizontal(), contentH(b) + pad.vertical()};
     }
 
+    /** 폭이 정해진 뒤의 높이: 줄바꿈하는 label/button 은 그 폭에서 몇 줄이 되는지 반영한다. 아니면 {@link #prefH}. */
+    private int prefHFor(LayoutBox c, int width) {
+        if (c.widget != null || !(c.tag().equals("label") || c.tag().equals("button"))) return prefH(c);
+        if (c.style.size("height", Size.AUTO).kind() != Size.Kind.AUTO || ratio(c) > 0) return prefH(c);
+        TextStyle ts = TextStyle.of(c.style, text);
+        if (!ts.wraps()) return prefH(c);
+        int avail = TextStyle.availableWidth(c.style, c.tag(), width);
+        int h = ts.height(ts.lines(textOf(c), avail).size()) + padding(c).vertical();
+        return clamp(c, false, h, 0);
+    }
+
     private int outerW(LayoutBox b) { return prefW(b) + margin(b).horizontal(); }
 
     private int outerH(LayoutBox b) { return prefH(b) + margin(b).vertical(); }
@@ -282,7 +293,7 @@ public final class LayoutEngine {
     private int contentW(LayoutBox b) {
         if (b.widget != null && !b.widget.container()) return b.widget.intrinsicWidth();
         switch (b.tag()) {
-            case "label", "button": return maxLineWidth(textOf(b));
+            case "label", "button": return TextStyle.of(b.style, text).maxWidth(textOf(b));
             case "image", "video": return naturalSize(b, 0);
             case "item": return Math.max(1, b.style.integer("size", 16));
             case "spacer", "separator": return 0;
@@ -304,7 +315,10 @@ public final class LayoutEngine {
     private int contentH(LayoutBox b) {
         if (b.widget != null && !b.widget.container()) return b.widget.intrinsicHeight();
         switch (b.tag()) {
-            case "label", "button": return lineCount(textOf(b)) * text.lineHeight();
+            case "label", "button": {
+                TextStyle ts = TextStyle.of(b.style, text);
+                return ts.height(ts.lines(textOf(b), 0).size());
+            }
             case "image", "video": return naturalSize(b, 1);
             case "item": return Math.max(1, b.style.integer("size", 16));
             case "spacer", "separator": return 0;
@@ -613,7 +627,7 @@ public final class LayoutEngine {
             int cellW = colX[c1 - 1] + p.colW()[c1 - 1] - colX[c0];
             int cellH = rowY[r1 - 1] + p.rowH()[r1 - 1] - rowY[r0];
             int w = clamp(c, true, resolve(c.style.size("width", Size.AUTO), cellW - mg.horizontal(), prefW(c), adj(c, true)), cellW - mg.horizontal());
-            int h = clamp(c, false, resolve(c.style.size("height", Size.AUTO), cellH - mg.vertical(), prefH(c), adj(c, false)), cellH - mg.vertical());
+            int h = clamp(c, false, resolve(c.style.size("height", Size.AUTO), cellH - mg.vertical(), prefHFor(c, w), adj(c, false)), cellH - mg.vertical());
             String js = norm(c.style.get("justify-self", "start"));
             String as = norm(c.style.get("align-self", "start"));
             int px = colX[c0] + mg.left() + switch (js) {
@@ -692,6 +706,20 @@ public final class LayoutEngine {
         return clamp(c, horiz, v, mainAvail);
     }
 
+    /** 세로 흐름에서 항목의 폭이 (교차축 정렬까지 고려해) 얼마가 될지 미리 가늠한다. 줄바꿈 높이 계산용. */
+    private int guessWidth(LayoutBox c, int crossAvail, String align) {
+        Insets m = margin(c);
+        int room = Math.max(0, crossAvail - m.horizontal());
+        Size ws = c.style.size("width", Size.AUTO);
+        int w = switch (ws.kind()) {
+            case PX -> Math.round(ws.value()) + adj(c, true);
+            case PERCENT -> Math.round(ws.value() * crossAvail) + adj(c, true);
+            case FILL -> room;
+            case AUTO -> align.equals("stretch") ? room : Math.min(prefW(c), room);
+        };
+        return clamp(c, true, w, crossAvail);
+    }
+
     private int basis(LayoutBox c, boolean horiz, int mainAvail, int fallback) {
         if (!c.style.has("flex-basis")) return fallback;
         Size bs = c.style.size("flex-basis", Size.AUTO);
@@ -737,7 +765,7 @@ public final class LayoutEngine {
             switch (s.kind()) {
                 case PX -> main[i] = Math.round(s.value()) + adj(c, horiz);
                 case PERCENT -> main[i] = Math.round(s.value() * mainAvail) + adj(c, horiz);
-                case AUTO -> main[i] = basis(c, horiz, mainAvail, horiz ? prefW(c) : prefH(c));
+                case AUTO -> main[i] = basis(c, horiz, mainAvail, horiz ? prefW(c) : prefHFor(c, guessWidth(c, crossAvail, norm(c.style.get("align-self", b.style.get("align", "start"))))));
                 case FILL -> {
                     float g = s.value();
                     if (c.style.has("grow")) g = number(c, "grow", g);
@@ -834,7 +862,7 @@ public final class LayoutEngine {
                 case FILL -> Math.max(0, crossAvail - mCrossLead - mCrossTrail);
                 case AUTO -> a.equals("stretch") && !autoCrossLead && !autoCrossTrail
                         ? Math.max(0, crossAvail - mCrossLead - mCrossTrail)
-                        : (horiz ? prefH(c) : prefW(c));
+                        : (horiz ? prefHFor(c, main[i]) : prefW(c));
             };
             double ar = ratio(c);
             if (ar > 0 && cs.kind() == Size.Kind.AUTO) {
@@ -864,7 +892,7 @@ public final class LayoutEngine {
         for (LayoutBox c : visibleChildren(b)) {
             Insets m = margin(c);
             int w = clamp(c, true, resolve(c.style.size("width", Size.AUTO), cw - m.horizontal(), prefW(c), adj(c, true)), cw - m.horizontal());
-            int h = clamp(c, false, resolve(c.style.size("height", Size.AUTO), ch - m.vertical(), prefH(c), adj(c, false)), ch - m.vertical());
+            int h = clamp(c, false, resolve(c.style.size("height", Size.AUTO), ch - m.vertical(), prefHFor(c, w), adj(c, false)), ch - m.vertical());
             double ar = ratio(c);
             if (ar > 0) {
                 boolean wAuto = c.style.size("width", Size.AUTO).kind() == Size.Kind.AUTO;

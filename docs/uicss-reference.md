@@ -47,6 +47,11 @@ CSS3 의 게임 UI 에 의미 있는 부분집합. 구현 계획과 진행 상�
   행 단위 사각형으로 근사하며 안티앨리어싱은 없다. `overflow: hidden` 의 클립은 사각형이다.
 - `box-shadow: ox oy [blur [spread]] color [, ...]` — 바깥 그림자만(`inset` 은 무시). 번짐은 겹친 반투명 층(최대 10)으로 근사. 그림자는 상자 뒤에 그려지므로 반투명 배경에서는 비쳐 보인다.
 - `outline` / `outline-width|color|style|offset` — 레이아웃에 영향 없음.
+- **글자**(label/button): `font-size`(px/em/rem/%/키워드, 부모 기준, 균등 배율), `line-height`(무단위 배수 또는 길이), `letter-spacing`,
+  `font-weight: bold|600+`(1px 겹쳐 그리기), `white-space: pre(기본)|nowrap|normal|pre-wrap|pre-line`(normal/pre-wrap/pre-line 은 박스 폭에서 줄바꿈),
+  `text-transform`, `text-align: left|center|right|start|end`, `vertical-align: top|middle|bottom`, `text-overflow: ellipsis`,
+  `text-decoration: underline|line-through|overline`, `text-shadow: none`. `font-style: italic`/`font-family` 는 게임 글꼴이 하나라 미지원.
+  줄바꿈 높이는 stack·flow(가로/세로)에서 반영되며, grid 칸·컨테이너 auto 높이 계산에는 한 줄 기준으로 들어간다.
 - `opacity`(서브트리 전체), `translate-x translate-y scale rotate`(중심 기준), `color shadow text-align cursor`.
 
 ## 애니메이션
@@ -56,4 +61,4 @@ CSS3 의 게임 UI 에 의미 있는 부분집합. 구현 계획과 진행 상�
 
 ## 아직 없는 것
 
-`:focus`, `::before/::after`, `font-*`/`line-height`/`letter-spacing`/줄바꿈/`text-overflow`, 퍼센트가 섞인 `calc()`, `inset` 그림자, `radial/conic` 그라디언트, 둥근 클립, `filter`/`backdrop-filter`, 3D 변환.
+`:focus`, `::before/::after`, 퍼센트가 섞인 `calc()`, `inset` 그림자, `radial/conic` 그라디언트, 둥근 클립, `filter`/`backdrop-filter`, 3D 변환.

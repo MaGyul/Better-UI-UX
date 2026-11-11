@@ -27,7 +27,8 @@ public final class StyleResolver {
 
     private record Applied(Stylesheet.Declaration decl, int specificity, int ordinal) {}
 
-    private static final Set<String> INHERITED = Set.of("color", "shadow", "text-align", "cursor");
+    private static final Set<String> INHERITED = Set.of("color", "shadow", "text-align", "cursor",
+            "font-size", "line-height", "letter-spacing", "font-weight", "white-space", "text-transform");
     private static final Map<String, String> ALIASES = Map.of("background-color", "background",
             "justify-content", "justify", "align-items", "align", "flex-grow", "grow");
     private static final int MAX_VAR_DEPTH = 8;
@@ -110,6 +111,39 @@ public final class StyleResolver {
 
     private int viewW, viewH;
 
+    /** font-size 를 부모 기준으로 계산한 px 문자열로 바꾼다(em/%/키워드 포함). 해석 불가면 null. */
+    private static String fontSize(String v, String parentPx, CssMath.Env env) {
+        double parent = 8;
+        try {
+            if (parentPx != null) parent = Double.parseDouble(parentPx.trim());
+        } catch (NumberFormatException ignored) {
+            // 부모 값이 이상하면 기본 8
+        }
+        String t = v.trim().toLowerCase();
+        switch (t) {
+            case "xx-small": return "5";
+            case "x-small": return "6";
+            case "small": return "7";
+            case "medium": return "8";
+            case "large": return "10";
+            case "x-large": return "12";
+            case "xx-large": return "16";
+            case "smaller": return CssMath.fmt(parent * 0.8);
+            case "larger": return CssMath.fmt(parent * 1.25);
+            default: break;
+        }
+        try {
+            if (t.endsWith("rem")) return CssMath.fmt(Double.parseDouble(t.substring(0, t.length() - 3)) * CssMath.EM);
+            if (t.endsWith("em")) return CssMath.fmt(Double.parseDouble(t.substring(0, t.length() - 2)) * parent);
+            if (t.endsWith("%")) return CssMath.fmt(Double.parseDouble(t.substring(0, t.length() - 1)) / 100 * parent);
+            String r = CssMath.resolve(t, env);
+            if (r.endsWith("px")) r = r.substring(0, r.length() - 2);
+            return CssMath.fmt(Double.parseDouble(r.trim()));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     private boolean mediaOk(List<MediaQuery> media) {
         for (MediaQuery q : media) if (!q.matches(viewW, viewH)) return false;
         return true;
@@ -150,6 +184,13 @@ public final class StyleResolver {
             else m.entries().remove("color");
         }
         CssMath.Env env = new CssMath.Env(viewW, viewH);
+        String fs = m.get("font-size");
+        if (fs != null) {
+            String parentFs = parent != null ? parent.style.get("font-size") : null;
+            String px = fontSize(fs, parentFs, env);
+            if (px != null) m.put("font-size", px);
+            else m.entries().remove("font-size");
+        }
         for (String key : LENGTH_PROPS) {
             String v = m.get(key);
             if (v != null) m.put(key, CssMath.resolve(v, env));
