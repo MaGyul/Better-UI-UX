@@ -223,6 +223,10 @@ public final class McvHost {
                 return loadStructure(w, str(r, "name"), r.get("x") == null ? 0 : integer(r, "x"),
                         r.get("y") == null ? 0 : integer(r, "y"), r.get("z") == null ? 0 : integer(r, "z"));
             }
+            case "blockEvent" -> {
+                w.blockEvent(integer(r, "x"), integer(r, "y"), integer(r, "z"), integer(r, "id"), integer(r, "param"));
+                return null;
+            }
             case "spawnEntity" -> {
                 return w.spawnEntity(num(r, "x"), num(r, "y"), num(r, "z"), str(r, "type"), r.get("nbt") instanceof String n ? n : null).id();
             }

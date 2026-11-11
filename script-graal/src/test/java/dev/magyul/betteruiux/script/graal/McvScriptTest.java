@@ -216,6 +216,27 @@ class McvScriptTest {
     }
 
     @Test
+    void blockEventAndSetOpenAreAvailableToScripts() throws Exception {
+        rt.load("t.uijs", """
+                function go() {
+                  var w = mcv.createWorld(4, 4, 4);
+                  w.setBlock(1, 1, 1, 'chest[facing=south]');
+                  w.setOpen(1, 1, 1, true);
+                  w.blockEvent(1, 1, 1, 1, 0);
+                  w.setOpen(1, 1, 1);                       // 인자를 생략하면 열기
+                  try { w.setOpen(3, 3, 3, true); } catch (e) { ui.log('err:' + e.message); }
+                }
+                """);
+        String out = call("go");
+        assertTrue(out.contains("err:"), "블록이 없는 곳은 오류: " + out);
+        var log = host.world(1).blockEventsAt(1, 1, 1);
+        assertEquals(3, log.size());
+        assertEquals(1, log.get(0).param());
+        assertEquals(0, log.get(1).param());
+        assertEquals(1, log.get(2).param());
+    }
+
+    @Test
     void tickMessageCallsOnTick() throws Exception {
         rt.load("t.uijs", "function onTick(n, w) { ui.log('tick ' + n + ' world ' + w); }");
         assertTrue(rt.call("{\"type\":\"tick\",\"tick\":7,\"world\":2}").contains("tick 7 world 2"));

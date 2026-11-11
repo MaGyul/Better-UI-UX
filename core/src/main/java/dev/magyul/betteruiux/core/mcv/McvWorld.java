@@ -35,12 +35,22 @@ public final class McvWorld {
         record TickRate(float ticksPerSecond) implements Change { }
     }
 
+    /**
+     * 블록 이벤트(바닐라의 {@code blockEvent}: 상자 뚜껑 열기처럼 블록 엔티티에게 보내는 정수 두 개짜리 신호). {@code seq} 는 월드 전체에서 늘어나는
+     * 번호다. 렌더러가 블록 엔티티를 (다시) 만들 때 이 기록을 순서대로 다시 보내 같은 상태가 되도록, 블록마다 최근 것을 남겨 둔다.
+     */
+    public record BlockEvent(long seq, int id, int param) { }
+
+    public static final int MAX_EVENTS_PER_BLOCK = 32;
+
     /** {@link #drain} 결과: 변경 목록, 그리고 저널이 넘쳐 변경을 잃었다면 전체를 다시 읽어야 한다는 표시. */
     public record Drained(List<Change> changes, boolean resync) { }
 
     private final int sizeX, sizeY, sizeZ;
     private final Map<Long, McvBlock> blocks = new ConcurrentHashMap<>();
     private final Map<Integer, McvEntity> entities = new ConcurrentHashMap<>();
+    private final Map<Long, List<BlockEvent>> blockEvents = new ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong eventSeq = new java.util.concurrent.atomic.AtomicLong();
     private final AtomicInteger nextEntity = new AtomicInteger(1);
     private final ConcurrentLinkedQueue<Change> journal = new ConcurrentLinkedQueue<>();
     private final AtomicInteger journalSize = new AtomicInteger();
@@ -151,6 +161,7 @@ public final class McvWorld {
             McvBlock old = blocks.put(k, block);
             if (block.equals(old)) return;
         }
+        blockEvents.remove(k);                                         // 다른 블록이 되면 옛 블록의 이벤트 기록은 버린다
         log(new Change.BlockSet(x, y, z, block.isAir() ? McvBlock.AIR : block));
     }
 
@@ -168,6 +179,33 @@ public final class McvWorld {
             }
         }
         return (int) volume;
+    }
+
+    // ---- 블록 이벤트 ----
+
+    /**
+     * 블록에 이벤트를 보낸다(예: 상자 {@code blockEvent(x,y,z, 1, 1)} = 뚜껑 열기, {@code 1, 0} = 닫기). 블록이 있어야 한다.
+     * 실제로 받아 처리하는지는 렌더러가 정한다(지원하는 블록 엔티티만 반응하고 나머지는 무시된다).
+     */
+    public void blockEvent(int x, int y, int z, int id, int param) {
+        if (!inBounds(x, y, z) || !blocks.containsKey(key(x, y, z))) {
+            throw new IllegalArgumentException("블록이 없는 곳에는 이벤트를 보낼 수 없습니다: " + x + "," + y + "," + z);
+        }
+        if (Math.abs((long) id) > 1_000_000 || Math.abs((long) param) > 1_000_000) throw new IllegalArgumentException("이벤트 값이 너무 큽니다");
+        List<BlockEvent> list = blockEvents.computeIfAbsent(key(x, y, z), k -> java.util.Collections.synchronizedList(new ArrayList<>()));
+        synchronized (list) {
+            list.add(new BlockEvent(eventSeq.incrementAndGet(), id, param));
+            while (list.size() > MAX_EVENTS_PER_BLOCK) list.remove(0);
+        }
+    }
+
+    /** 블록에 보낸 이벤트 기록(오래된 것부터, 복사본). 없으면 빈 목록. */
+    public List<BlockEvent> blockEventsAt(int x, int y, int z) {
+        List<BlockEvent> list = blockEvents.get(key(x, y, z));
+        if (list == null) return List.of();
+        synchronized (list) {
+            return List.copyOf(list);
+        }
     }
 
     // ---- 엔티티 ----

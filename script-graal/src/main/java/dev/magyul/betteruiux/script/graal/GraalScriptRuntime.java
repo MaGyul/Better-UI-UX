@@ -113,6 +113,8 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                   setBlock: function (x, y, z, block, nbt) {
                     H({cmd: 'setBlock', world: w, x: x, y: y, z: z, block: String(block), nbt: nbt == null ? null : String(nbt)});
                   },
+                  blockEvent: function (x, y, z, id, param) { H({cmd: 'blockEvent', world: w, x: x, y: y, z: z, id: id, param: param == null ? 0 : param}); },
+                  setOpen: function (x, y, z, open) { H({cmd: 'blockEvent', world: w, x: x, y: y, z: z, id: 1, param: open === false ? 0 : 1}); },
                   getBlock: function (x, y, z) { return H({cmd: 'getBlock', world: w, x: x, y: y, z: z}); },
                   fill: function (x1, y1, z1, x2, y2, z2, block, nbt) {
                     return H({cmd: 'fill', world: w, x1: x1, y1: y1, z1: z1, x2: x2, y2: y2, z2: z2, block: String(block), nbt: nbt == null ? null : String(nbt)});

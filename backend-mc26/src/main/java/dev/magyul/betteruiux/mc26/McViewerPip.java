@@ -83,7 +83,7 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
                         r.parts(), r.tints(), LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
                 pose.popPose();
             }
-            if (beReady) blockEntities.render(r.state(), e.getValue(), p[0], p[1], p[2], pose, collector);   // 상자·표지판 같은 블록 엔티티
+            if (beReady) blockEntities.render(w, r.state(), e.getValue(), p[0], p[1], p[2], pose, collector);   // 상자·표지판 같은 블록 엔티티
         }
         if (beReady) blockEntities.end();
         entities.render(w, s.yaw(), s.pitch(), pose, collector);

@@ -179,4 +179,29 @@ class McvHostTest {
         Map<String, Object> p = call(h, proj + ",\"viewer\":\"nope\"}");
         assertEquals(null, p.get("value"), "만들어졌지만 그려진 적 없는 뷰어");
     }
+
+    @Test
+    void blockEventsAreLoggedPerBlockInOrderAndDroppedWhenTheBlockChanges() {
+        McvHost h = new McvHost();
+        int w = world(h, 4, 4, 4);
+        String ev = "{\"cmd\":\"blockEvent\",\"world\":" + w + ",\"x\":1,\"y\":1,\"z\":1,";
+        assertFalse((Boolean) call(h, ev + "\"id\":1,\"param\":1}").get("ok"), "블록이 없으면 보낼 수 없다");
+        h.world(w).setBlock(1, 1, 1, McvBlock.parse("chest", null));
+        assertTrue((Boolean) call(h, ev + "\"id\":1,\"param\":1}").get("ok"));
+        assertTrue((Boolean) call(h, ev + "\"id\":1,\"param\":0}").get("ok"));
+        var log = h.world(w).blockEventsAt(1, 1, 1);
+        assertEquals(2, log.size());
+        assertEquals(1, log.get(0).param());
+        assertEquals(0, log.get(1).param());
+        assertTrue(log.get(0).seq() < log.get(1).seq(), "기록은 순서대로");
+        assertEquals(0, h.world(w).blockEventsAt(2, 1, 1).size(), "다른 블록의 것은 섞이지 않는다");
+        for (int i = 0; i < 50; i++) call(h, ev + "\"id\":1,\"param\":" + i + "}");
+        assertEquals(McvWorld.MAX_EVENTS_PER_BLOCK, h.world(w).blockEventsAt(1, 1, 1).size(), "블록마다 최근 것만 남긴다");
+        assertEquals(49, h.world(w).blockEventsAt(1, 1, 1).get(McvWorld.MAX_EVENTS_PER_BLOCK - 1).param());
+        h.world(w).setBlock(1, 1, 1, McvBlock.parse("chest", null));
+        assertEquals(McvWorld.MAX_EVENTS_PER_BLOCK, h.world(w).blockEventsAt(1, 1, 1).size(), "같은 블록을 다시 놓아도(변화 없음) 기록은 그대로");
+        h.world(w).setBlock(1, 1, 1, McvBlock.parse("stone", null));
+        assertEquals(0, h.world(w).blockEventsAt(1, 1, 1).size(), "다른 블록이 되면 기록을 버린다");
+        assertFalse((Boolean) call(h, ev.replace("\"x\":1", "\"x\":9") + "\"id\":1,\"param\":1}").get("ok"), "범위 밖");
+    }
 }

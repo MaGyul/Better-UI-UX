@@ -196,6 +196,13 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                     }
                     function onBlockClick(e) { ui.setText('#c', e.block ? 'click ' + e.viewer + ' ' + e.x + ',' + e.y + ',' + e.z + ',' + e.face : 'click ' + e.viewer + ' none'); }
                     """);
+            for (String[] v : new String[][] {{"gt_mcv10a", ""}, {"gt_mcv10b", "w.setOpen(1, 1, 1, true);\n  w.setOpen(3, 1, 1, true);"}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"240\" height=\"180\"/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(5, 3, 3);\n  w.fill(0, 0, 0, 4, 0, 2, 'white_concrete');\n"
+                        + "  w.setBlock(1, 1, 1, 'chest[facing=south]');\n  w.setBlock(3, 1, 1, 'ender_chest[facing=south]');\n  " + v[1] + "\n}\n");
+            }
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -363,6 +370,14 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                 if (id.equals("b")) check(clicked.endsWith(",up"), "위에서 보는 뷰어 b 는 윗면을 맞힌다: " + clicked);
             }
             in9.setCursorPos(2, 2);
+
+            // 블록 엔티티 동작: world.setOpen 으로 상자/엔더상자 뚜껑이 열린다(월드 틱마다 뚜껑 애니메이션이 돈다).
+            BufferedImage closed = openAndShoot(ctx, "gt_mcv10a", "mc-viewer-chest-closed");
+            BufferedImage opened = openAndShoot(ctx, "gt_mcv10b", "mc-viewer-chest-open");
+            LayoutBox chestView = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            int lidDiff = diff(closed, opened, chestView, s, sx);
+            System.out.println("[mc-viewer test] chest lid diff=" + lidDiff);
+            check(lidDiff > 300, "setOpen 으로 뚜껑이 열리면 화면이 달라져야 한다(달라진 픽셀 " + lidDiff + ")");
 
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));
