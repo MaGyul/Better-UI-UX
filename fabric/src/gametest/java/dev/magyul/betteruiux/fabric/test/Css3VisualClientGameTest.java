@@ -66,6 +66,10 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
         int[] rc = px(img, sx, rad.x + rad.w / 2, rad.y + rad.h / 2, s), rk = px(img, sx, rad.x + 1, rad.y + 1, s);
         check(rc[0] > rc[2] + 60, "방사형 그라디언트 가운데는 빨강 쪽이어야 한다: " + hex(rc));
         check(rk[2] > rk[0] + 60, "방사형 그라디언트 모서리는 파랑 쪽이어야 한다: " + hex(rk));
+        LayoutBox clip = box(ctx, "clipbox");
+        int[] cc = px(img, sx, clip.x + clip.w / 2, clip.y + clip.h / 2, s), ck = px(img, sx, clip.x, clip.y, s);
+        check(cc[0] > cc[1] + 100, "클립 상자 가운데는 자식(빨강)이 보여야 한다: " + hex(cc));
+        check(!(ck[0] > ck[1] + 100 && ck[0] > 200), "둥근 클립: 모서리 끝에는 자식(빨강)이 안 보여야 한다: " + hex(ck));
         List<DrawCommand> cmds = paint(ctx);
         check(hasFill(cmds, box(ctx, "w1"), 0xFF0000FF), ":has(> .flag) 인 상자는 파랑이어야 한다");
         check(!hasFill(cmds, box(ctx, "w2"), 0xFF0000FF), ":has 에 안 맞는 상자는 파랑이 아니어야 한다");
@@ -184,6 +188,7 @@ public class Css3VisualClientGameTest implements FabricClientGameTest {
                         <row gap="4"><panel id="w1" class="wrap"><panel class="flag"/></panel><panel id="w2" class="wrap"><label text="x"/></panel></row>
                         <row id="rv"><panel id="ra"/><panel id="rb"/></row>
                         <panel id="rad" width="60" height="60" style="background: radial-gradient(#FF0000, #0000FF)"/>
+                        <panel id="clipbox" width="40" height="40" style="border-radius: 10; overflow: hidden; background: #202020"><panel width="40" height="40" style="background: #FF0000"/></panel>
                       </column>
                     </screen>
                     """);

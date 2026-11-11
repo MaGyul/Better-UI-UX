@@ -148,12 +148,33 @@ public final class UiPainter {
         if (b.widget != null) b.widget.paint(g, b.x, b.y, b.w, b.h, frame);
 
         boolean clip = "hidden".equals(s.get("overflow")) || b.tag().equals("scroll");
-        if (clip) g.pushClip(b.x, b.y, b.w, b.h);
-        for (LayoutBox c : b.paintOrder()) paintBox(c, g, state, opacity);
-        if (b.widget != null) b.widget.paintOver(g, b.x, b.y, b.w, b.h, frame);
-        if (clip) g.popClip();
+        List<int[]> strips = null;
+        if (clip && !radii.none()) {          // 둥근 상자의 자식 클립: 모서리 행 묶음마다 사각형 클립을 걸고 자식을 다시 그린다(BoxPainter.clipStrips)
+            Insets cb = s.borderInsets(button ? 1 : 0);
+            int iw = b.w - cb.horizontal(), ih = b.h - cb.vertical();
+            if (iw > 0 && ih > 0) {
+                strips = BoxPainter.clipStrips(b.x + cb.left(), b.y + cb.top(), iw, ih,
+                        radii.shrink(cb.top(), cb.right(), cb.bottom(), cb.left()).fit(iw, ih));
+            }
+        }
+        if (strips != null) {
+            for (int[] st : strips) {
+                g.pushClip(st[0], st[1], st[2], st[3]);
+                paintChildren(b, g, state, opacity, frame);
+                g.popClip();
+            }
+        } else {
+            if (clip) g.pushClip(b.x, b.y, b.w, b.h);
+            paintChildren(b, g, state, opacity, frame);
+            if (clip) g.popClip();
+        }
 
         if (transformed) g.popTransform();
+    }
+
+    private void paintChildren(LayoutBox b, UiGfx g, PaintState state, float opacity, UiWidget.Frame frame) {
+        for (LayoutBox c : b.paintOrder()) paintBox(c, g, state, opacity);
+        if (b.widget != null) b.widget.paintOver(g, b.x, b.y, b.w, b.h, frame);
     }
 
     private void paintText(LayoutBox b, StyleMap s, UiGfx g, float opacity, boolean dim) {

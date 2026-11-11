@@ -387,6 +387,45 @@ final class BoxPainter {
         }
     }
 
+    /**
+     * 둥근 상자 안쪽에 자식을 잘라 낼 때 쓰는 사각형 클립 목록 {x,y,w,h}: 같은 모양이 이어지는 행 묶음마다 하나.
+     * 묶음이 {@link #MAX_CLIP_STRIPS} 보다 많으면(반지름이 큼) 인접한 묶음을 둘씩 합쳐 줄인다. 합칠 때는 두 사각형의 교집합을 써서
+     * 둥근 모양 밖으로 자식이 새지 않게 하고(대신 모서리가 조금 더 각지게 잘린다) 잃는 면적이 가장 작은 쌍부터 합친다.
+     */
+    static List<int[]> clipStrips(int x, int y, int w, int h, Radii r) {
+        int[][] sp = spans(w, h, r);
+        List<int[]> out = new ArrayList<>();
+        int start = 0;
+        for (int i = 1; i <= h; i++) {
+            if (i == h || sp[0][i] != sp[0][start] || sp[1][i] != sp[1][start]) {
+                int cw = w - sp[0][start] - sp[1][start];
+                if (cw > 0) out.add(new int[] {x + sp[0][start], y + start, cw, i - start});
+                start = i;
+            }
+        }
+        while (out.size() > MAX_CLIP_STRIPS) {
+            int best = 0;
+            long bestLoss = Long.MAX_VALUE;
+            for (int i = 0; i + 1 < out.size(); i++) {
+                int[] a = out.get(i), b = out.get(i + 1);
+                int left = Math.max(a[0], b[0]), right = Math.min(a[0] + a[2], b[0] + b[2]);
+                long loss = (long) (a[2] + b[2] - 2 * (right - left)) * 0 + (long) a[3] * (a[2] - (right - left)) + (long) b[3] * (b[2] - (right - left));
+                if (loss < bestLoss) {
+                    bestLoss = loss;
+                    best = i;
+                }
+            }
+            int[] a = out.get(best), b = out.get(best + 1);
+            int left = Math.max(a[0], b[0]), right = Math.min(a[0] + a[2], b[0] + b[2]);
+            out.set(best, new int[] {left, a[1], right - left, a[3] + b[3]});
+            out.remove(best + 1);
+        }
+        return out;
+    }
+
+    /** 둥근 클립에서 자식을 다시 그리는 횟수의 상한. */
+    static final int MAX_CLIP_STRIPS = 12;
+
     /** 행 [from, to) 를 행마다(같은 모양·색이 이어지면 묶어서) 단색 사각형으로 그린다. */
     private static void solidRows(UiGfx g, int x, int y, int w, int h, int[][] sp, Gradient o, int from, int to) {
         if (from >= to) return;
