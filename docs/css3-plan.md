@@ -10,14 +10,14 @@
 - 레이아웃은 flex + grid + position 중심, block/inline 흐름은 제외.
 
 ## 진행 상황 (작업 시 갱신)
-- [~] Phase 0 기반 — 완료: `\s` 버그, 특이도 재설계(1000진 패킹), 시트 `!important` > inline > 시트, 괄호 인식 선택자 목록 분리(`Selector.splitList`, StyleText 반영), 값 처리기 `style/CssMath`. 남음: 프로퍼티 레지스트리, 알 수 없는 프로퍼티 경고
-- [~] Phase 1 선택자·캐스케이드 — 완료: `+ ~` 결합자, `:not/:is/:where`, `:nth-child/-last-child/-of-type/-last-of-type`, `:only-child/:first-of-type/:last-of-type/:only-of-type/:empty/:checked`, `[attr|=v]`·`i` 플래그, `inherit/initial/unset`. `@media`(width/height/aspect-ratio/orientation, min-/max-, 범위 문법, not/and/쉼표, 중첩), `@supports`(prop/selector()/not/and/or), `@import`(미디어 조건, 순환 방지, 가져온 시트가 앞 순서), 에디터 스캔이 조건 블록 안 규칙도 인식. `:focus`/`:focus-within`, 모든 단계의 `:hover/:active`(조상·형제 상태, `:not()` 안 포함), `::before/::after`+`content`.
-- [~] Phase 2 값·단위·색 — 완료: `#RGB #RGBA #RRGGBB #RRGGBBAA`(CSS 순서로 전면 마이그레이션, 데모·테스트·문서 포함), `rgb/rgba/hsl/hsla/hwb`, CSS 색 이름 148개 + `mc-*` 팔레트, `currentColor`, 단위 `em rem pt pc in cm mm q vw vh vmin vmax`, `calc/min/max/clamp`(퍼센트 없는 식), 숏핸드 `border`, `border-width`, `margin-*`, `padding-*`. 남음: `%` 가 섞인 calc(레이아웃 단계 평가), `font`/`transition`/`background` 숏핸드
+- [x] Phase 0 기반 — 완료: 알 수 없는 속성 경고(편집 거리 기반 제안), `\s` 버그, 특이도 재설계(1000진 패킹), 시트 `!important` > inline > 시트, 괄호 인식 선택자 목록 분리(`Selector.splitList`, StyleText 반영), 값 처리기 `style/CssMath`. 프로퍼티 레지스트리(타입·상속 메타데이터 통합)는 이름 목록(`Stylesheet.KNOWN_PROPS`)으로 갈음했다.
+- [x] Phase 1 선택자·캐스케이드 — 완료: `+ ~` 결합자, `:not/:is/:where`, `:nth-child/-last-child/-of-type/-last-of-type`, `:only-child/:first-of-type/:last-of-type/:only-of-type/:empty/:checked`, `[attr|=v]`·`i` 플래그, `inherit/initial/unset`. `@media`(width/height/aspect-ratio/orientation, min-/max-, 범위 문법, not/and/쉼표, 중첩), `@supports`(prop/selector()/not/and/or), `@import`(미디어 조건, 순환 방지, 가져온 시트가 앞 순서), 에디터 스캔이 조건 블록 안 규칙도 인식. `:focus`/`:focus-within`, 모든 단계의 `:hover/:active`(조상·형제 상태, `:not()` 안 포함), `::before/::after`+`content`.
+- [x] Phase 2 값·단위·색 — 완료: `#RGB #RGBA #RRGGBB #RRGGBBAA`(CSS 순서로 전면 마이그레이션, 데모·테스트·문서 포함), `rgb/rgba/hsl/hsla/hwb`, CSS 색 이름 148개 + `mc-*` 팔레트, `currentColor`, 단위 `em rem pt pc in cm mm q vw vh vmin vmax`, `calc/min/max/clamp`(퍼센트 없는 식), 숏핸드 `border`, `border-width`, `margin-*`, `padding-*`. `%` 가 섞인 calc 는 크기 속성에서 레이아웃 단계에 평가(`Size` 의 percent+offset). 남음: `font`/`transition`/`background` 숏핸드
 - [x] Phase 3 박스 모델·레이아웃 (퍼센트가 섞인 calc 제외) — `min-/max-*`, `box-sizing`, 테두리가 레이아웃 공간 차지(안쪽 여백에 더해짐, 골든 재생성), `margin:auto`(row/column 주축·교차축), flex 완성(`flex-wrap`, `grow`/`flex-grow`, `flex-shrink`(명시한 항목만), `flex-basis`, `flex` 숏핸드, `order`, `justify-content`/`align-items` 별칭, `space-around/evenly`, `row-gap`/`column-gap`), `display:flex`+`flex-direction`(모든 태그), `position: relative|absolute|fixed` + top/right/bottom/left(부모 상자 기준), `z-index`(그리기·히트 순서), `aspect-ratio`, grid(`grid-template-columns/rows`, `fr`, `repeat()`, `minmax()`, `grid-column/row`의 span·시작 줄, `justify-self`/`align-self`, 기존 `columns` 유지)
 - [x] Phase 4 렌더링 — **`UiGfx` API 는 늘리지 않고** 기존 `fillRect`/세로 `fillGradient` 만으로 구현(`render/BoxPainter`): `border-radius`(행 단위 근사), `background: linear-gradient()`/`background-image`(다중 정지점, 가장 가까운 축), `box-shadow`(번짐 층 근사), 변별 테두리(두께·색), `border-style: dashed|dotted`, `outline`+`outline-offset`. 이유: McGfx 를 실기 검증 없이 건드리지 않고, 두 렌더러에서 동일하며 골든으로 검증 가능. 한계: 안티앨리어싱 없음, 둥근 클립 없음, inset 그림자·radial/conic 없음, 이미지 모서리 라운딩 없음
 - [x] Phase 5 텍스트 — `layout/TextStyle`: `font-size`(배율), `line-height`, `letter-spacing`, `font-weight`(겹쳐 그리기), `white-space`+줄바꿈, `text-transform`, `text-overflow: ellipsis`, `text-decoration`, `vertical-align`, `text-shadow: none`. 한계: `font-family`/italic 없음, 위젯(textfield 등) 글자는 미적용, grid 칸 줄바꿈 높이 미반영
-- [x] Phase 6 애니메이션 — 레이아웃 속성 애니메이션(`Interpolator.LAYOUT`): 스타일 해석 직후 훅(`LayoutEngine.setStyleAnimator`)으로 전환/키프레임/명령형을 덧입히고, 움직이는 동안 `UiDocument` 가 매 프레임 재배치. 그리기 속성에 `border-radius box-shadow outline-*` 추가, 여러 값(`margin: 4 8`)·색이 섞인 값 보간. 남음: `steps()`, 다중 animation, `animation-play-state`
-- [~] Phase 7 도구·문서 — 완료: `docs/uicss-reference.md`. 에디터 패널 접힌 섹션 3개(크기·배치 / 글자 / 효과, `PropertyModel`). 남음: 값 출처 표시, `:hover` 강제 미리보기, `@media` 조건 평가 표시, 규칙 편집기의 신규 문법 안내 (에디터 `PropertyModel`/`StyleText` 신규 문법 대응 포함)
+- [x] Phase 6 애니메이션 — 레이아웃 속성 애니메이션(`Interpolator.LAYOUT`): 스타일 해석 직후 훅(`LayoutEngine.setStyleAnimator`)으로 전환/키프레임/명령형을 덧입히고, 움직이는 동안 `UiDocument` 가 매 프레임 재배치. 그리기 속성에 `border-radius box-shadow outline-*` 추가, 여러 값(`margin: 4 8`)·색이 섞인 값 보간. `steps()` 이징. 남음: 다중 animation, `animation-play-state`
+- [x] Phase 7 도구·문서 — 완료: `docs/uicss-reference.md`. 에디터 패널 접힌 섹션 3개(크기·배치 / 글자 / 효과, `PropertyModel`). 값 출처 툴팁(`StyleResolver.explain`), `:hover/:active/:focus` 강제 미리보기, 위젯 글자 스타일. 남음: `@media` 조건 평가 표시, 규칙 편집기의 신규 문법 안내 (에디터 `PropertyModel`/`StyleText` 신규 문법 대응 포함)
 
 ### 구현 메모
 - `red` 등 색 이름은 이제 CSS 표준값(`#FF0000`). 옛 마인크래프트 팔레트는 `mc-red` 등으로 접근.
@@ -81,3 +81,13 @@
 - 에디터: `StyleTextTest`·`EditorStyleRulesTest` 회귀, 신규 문법이 규칙 편집을 깨지 않는지.
 - 실기: `backend-mc26`의 `demo.uicss`/위젯 데모에 신규 기능 쇼케이스, Fabric client GameTest(`EditorClientGameTest`), Vulkan/GL 확인.
 - 레이아웃 메모: `flex-shrink` 기본값은 CSS(1)와 달리 0(기존 문서 호환). `position:fixed` 는 absolute 와 동일(부모 기준). absolute 의 기준은 항상 바로 위 부모.
+
+## 남은 일 (2026-11 기준)
+
+- 레이아웃: `fixed` 를 뷰포트 기준으로, absolute 의 기준 조상(가장 가까운 positioned 조상), grid 칸·컨테이너 auto 높이의 줄바꿈 반영, `row-reverse`, `align-content`
+- 렌더링: 안티앨리어싱, 둥근 클립, inset 그림자, radial/conic, 이미지 모서리, 필요하면 `UiGfx` 프리미티브(rounded rect 등) 추가 + `McGfx` 실기 검증
+- 텍스트: `font-family`/italic, 위젯 `textfield`/`select` 입력 글자
+- 애니메이션: 다중 `animation`, `animation-play-state`
+- 선택자: `:has()`, 레이아웃에 영향을 주는 상태 규칙
+- 도구: `@media` 조건 평가 표시, 새 문법에 대한 규칙 편집기 안내, 프로퍼티 레지스트리(타입 검증)
+- 검증: 이 작업 전체는 core 단위/골든 테스트로만 확인했다. Fabric/NeoForge 실기(Vulkan·OpenGL)와 에디터 UI 조작은 직접 확인하지 못했다.

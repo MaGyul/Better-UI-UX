@@ -4,6 +4,7 @@ import dev.magyul.betteruiux.api.Cursor;
 import dev.magyul.betteruiux.api.TextMetrics;
 import dev.magyul.betteruiux.api.UiGfx;
 import dev.magyul.betteruiux.core.layout.LayoutBox;
+import dev.magyul.betteruiux.core.layout.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -80,6 +81,21 @@ public final class BuiltinWidgets {
 
         int style(String key, int def) { return box() == null ? def : box().style.color(key, def); }
 
+        /** 위젯 글자 스타일: font-size, font-weight, letter-spacing, text-transform 을 따른다(그리기에만 반영, 위젯 크기는 그대로). */
+        TextStyle textStyle() { return TextStyle.of(box() == null ? new dev.magyul.betteruiux.core.layout.StyleMap() : box().style, tm); }
+
+        void drawStyled(UiGfx g, String text, int x, int y, int color, boolean shadow) {
+            TextStyle ts = textStyle();
+            ts.draw(g, ts.transform(text), x, y, color, shadow);
+        }
+
+        int styledWidth(String text) {
+            TextStyle ts = textStyle();
+            return ts.width(ts.transform(text));
+        }
+
+        int styledLine() { return textStyle().lineHeight(); }
+
         boolean focused() { return doc.isFocused(el); }
 
         void changed() { doc.fireChange(el); }
@@ -126,7 +142,7 @@ public final class BuiltinWidgets {
                 else g.fillRect(x + 2, by + 2, BOX - 4, BOX - 4, c);
             }
             if (!label().isEmpty()) {
-                g.drawText(label(), x + BOX + GAP, y + (h - tm.lineHeight()) / 2, en ? style("color", C_TEXT) : C_DIM, true);
+                drawStyled(g, label(), x + BOX + GAP, y + (h - styledLine()) / 2, en ? style("color", C_TEXT) : C_DIM, true);
             }
             if (focused()) outline(g, x - 2, by - 2, BOX + 4, BOX + 4, C_FOCUS);
         }
@@ -207,7 +223,7 @@ public final class BuiltinWidgets {
             g.fillRect(tx, y, 4, h, en ? 0xFFFFFFFF : C_DIM);
             String label = attr("text", "");
             String shown = (label.isEmpty() ? "" : label + ": ") + fmt(value());
-            g.drawText(shown, x + (w - tm.width(shown)) / 2, y + (h - tm.lineHeight()) / 2 + 1, en ? C_TEXT : C_DIM, true);
+            drawStyled(g, shown, x + (w - styledWidth(shown)) / 2, y + (h - styledLine()) / 2 + 1, en ? style("color", C_TEXT) : C_DIM, true);
             if (focused()) outline(g, x - 1, y - 1, w + 2, h + 2, C_FOCUS);
         }
 
@@ -284,7 +300,7 @@ public final class BuiltinWidgets {
             g.fillRect(x + 1, y + 1, w - 2, h - 2, style("background", C_BG));
             g.fillRect(x + 1, y + 1, (int) Math.round((w - 2) * ratio), h - 2, style("bar-color", C_ACCENT));
             String label = attr("text", "");
-            if (!label.isEmpty()) g.drawText(label, x + (w - tm.width(label)) / 2, y + (h - tm.lineHeight()) / 2 + 1, C_TEXT, true);
+            if (!label.isEmpty()) drawStyled(g, label, x + (w - styledWidth(label)) / 2, y + (h - styledLine()) / 2 + 1, style("color", C_TEXT), true);
         }
     }
 
@@ -619,7 +635,7 @@ public final class BuiltinWidgets {
                 boolean on = i == active(), hot = f.hovered() && f.mouseY() >= y && f.mouseY() < y + hh && f.mouseX() >= x + s[0] && f.mouseX() < x + s[0] + s[1];
                 g.fillRect(x + s[0], y, s[1], hh, on ? 0xFF3A3F55 : hot ? 0xFF2A2D3E : 0xFF1A1C28);
                 g.fillRect(x + s[0], y, s[1], 1, on ? C_ACCENT : C_BORDER);
-                g.drawText(title(tabs.get(i), i), x + s[0] + 7, y + (hh - tm.lineHeight()) / 2 + 1, on ? C_TEXT : C_DIM, true);
+                drawStyled(g, title(tabs.get(i), i), x + s[0] + 7, y + (hh - styledLine()) / 2 + 1, on ? style("color", C_TEXT) : C_DIM, true);
             }
         }
 

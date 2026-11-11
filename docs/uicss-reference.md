@@ -66,6 +66,21 @@ CSS3 의 게임 UI 에 의미 있는 부분집합. 구현 계획과 진행 상�
   `auto`/`fill` ↔ 숫자처럼 보간할 수 없는 쌍은 중간에서 값이 바뀐다.
 - 전환은 "처음 본 스타일"에서는 시작하지 않는다 → `transition` 선언은 기본 규칙(`button { transition: ... }`)에 둔다.
 
+## 경고와 진단
+
+- 시트의 **알 수 없는 속성**은 경고로 남는다(`스타일: 알 수 없는 속성 'colour' (혹시 'color'?)`). 값은 그대로 저장되므로 동작은 막지 않는다.
+  `--변수` 와 `-벤더` 접두 속성은 경고하지 않는다.
+- 위젯(`checkbox radio slider progress tabs`)의 글자는 `font-size font-weight letter-spacing text-transform color` 를 따른다.
+  그리기에만 반영되고 위젯의 기본 크기는 그대로다. `textfield`/`select` 의 입력 글자는 캐럿 계산 때문에 적용하지 않는다.
+- 애니메이션 이징: `linear ease ease-in ease-out ease-in-out cubic-bezier() steps(n[, jump-*]) step-start step-end spring`.
+- 크기 속성은 `calc(100% - 20px)` 처럼 퍼센트가 섞인 식도 받는다(`width height min/max-* flex-basis top/right/bottom/left`; 일차식만, `%` 끼리 곱셈 불가).
+
+## 에디터 연동
+
+속성 패널의 값 칸에 마우스를 올리면 "출처: …" 툴팁이 뜬다 — 인라인인지, 어느 시트 규칙인지(숏핸드 포함), XML 속성인지, 태그 기본값인지, 상속인지, 상태 규칙이 덮어쓰는지.
+View 메뉴의 상태 미리보기로 `:hover :active :focus` 를 선택한 요소에 강제로 보여 줄 수 있다. 자세한 내용은 [editor.md](editor.md).
+
 ## 아직 없는 것
 
-`:focus`, `::before/::after`, 퍼센트가 섞인 `calc()`, `inset` 그림자, `radial/conic` 그라디언트, 둥근 클립, `filter`/`backdrop-filter`, 3D 변환.
+`:has()`, `font-family`/italic, `inset` 그림자, `radial/conic` 그라디언트, 둥근 클립, `filter`/`backdrop-filter`, 3D 변환, 다중 `animation`/`animation-play-state`,
+레이아웃에 영향을 주는 `:hover` 규칙(상태 규칙은 그리기에만 적용), 프로퍼티 레지스트리 기반의 값 타입 검증(속성 이름만 검사한다).

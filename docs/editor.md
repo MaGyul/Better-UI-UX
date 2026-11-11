@@ -198,3 +198,9 @@ UI 화면을 연 채로 **F8** 을 누르면 에디터가 켜집니다. 편집 �
 - **효과**: `border-style`, `border-radius`, `box-shadow`, `outline-width/color/offset`
 
 숫자 칸은 `-`/`+` 와 ↑/↓(Shift = 8)로 조절한다. 지원 범위와 문법은 [uicss-reference.md](uicss-reference.md).
+
+### 값 출처와 상태 미리보기
+
+- 속성 칸 위에 마우스를 올리면 툴팁에 "출처: …" 가 나온다(인라인 / 시트 규칙 `.card { width: 9 }` / XML 속성 / 태그 기본값 / 부모에서 상속,
+  `:hover` 같은 상태 규칙이 따로 덮어쓰면 그것도).
+- View → "상태 미리보기: hover / active / focus" 는 선택한 요소를 그 상태로 강제로 그린다(`.card:hover .title` 처럼 조상·형제 상태 규칙도 함께 보인다).
