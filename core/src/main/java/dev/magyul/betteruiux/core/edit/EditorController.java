@@ -69,8 +69,6 @@ public final class EditorController {
 
     private static final Set<String> CONTAINERS = Set.of("screen", "panel", "row", "column", "stack", "fragment", "grid", "scroll", "tabs", "tab", "dialog");
 
-    private record TreeRow(LayoutBox box, int depth, boolean hasKids, boolean collapsed, String key) {}
-
     /** 놓을 자리. {@code refIndex} 는 그 앞에 넣을 형제의 요소 번호(-1 이면 맨 뒤). 사각형은 문서 좌표(트리/휴지통은 화면 좌표). */
     private record Drop(int parentIndex, int refIndex, Rect highlight, Rect line, boolean valid, boolean trash,
                         boolean onCanvas) {}
@@ -135,8 +133,7 @@ public final class EditorController {
     private boolean panelsVisible = true;
     private boolean leftCollapsed, rightCollapsed;
     private boolean grid;
-    private int outlinerScroll;
-    private final Set<String> collapsed = new HashSet<>();
+    private final Outliner outliner = new Outliner();
     private int lastRevealed = -2;
     /** 현재 화면 이동 위치(그리기/히트 테스트에 쓴다)와 목표 위치(부드러운 이동 중이면 현재가 목표를 따라간다). */
     private int panX, panY, targetPanX, targetPanY;
@@ -1118,7 +1115,7 @@ public final class EditorController {
             return true;
         }
         if (leftVisible() && x < LEFT_W && y >= rowsTop() - 2) {
-            outlinerScroll = Math.max(0, outlinerScroll - (int) Math.signum(amount) * 3);
+            outliner.scroll = Math.max(0, outliner.scroll - (int) Math.signum(amount) * 3);
             return true;
         }
         if (rightVisible() && x >= viewW - RIGHT_W && y >= TOOLBAR_H && propMaxScroll > 0) {
@@ -1336,11 +1333,11 @@ public final class EditorController {
     }
 
     private Drop treeDrop(int x, int y, int movingIndex) {
-        List<TreeRow> rows = treeRows();
-        int i = (y - rowsTop() + 1) / ROW_H + outlinerScroll;
-        if (i < 0 || i >= rows.size() || i - outlinerScroll >= visibleRows()) return null;
+        List<Outliner.Row> rows = treeRows();
+        int i = (y - rowsTop() + 1) / ROW_H + outliner.scroll;
+        if (i < 0 || i >= rows.size() || i - outliner.scroll >= visibleRows()) return null;
         LayoutBox rb = rows.get(i).box();
-        Rect rowRect = new Rect(0, rowsTop() + (i - outlinerScroll) * ROW_H - 1, LEFT_W, ROW_H);
+        Rect rowRect = new Rect(0, rowsTop() + (i - outliner.scroll) * ROW_H - 1, LEFT_W, ROW_H);
         double frac = (y - rowRect.y()) / (double) ROW_H;
         boolean container = CONTAINERS.contains(rb.tag());
         boolean root = rb.parent == null;
@@ -2023,9 +2020,9 @@ public final class EditorController {
 
     /** 속성 하나를 값으로 바꾼다(빈 값이면 속성 제거). */
     private void applyValue(String key, String raw) {
-        if (key.equals(FILTER_KEY)) {                                      // 구조 트리 검색어
-            treeFilter = raw;
-            outlinerScroll = 0;
+        if (key.equals(Outliner.FILTER_KEY)) {                                      // 구조 트리 검색어
+            outliner.filter = raw;
+            outliner.scroll = 0;
             return;
         }
         LayoutBox box = selectedBox();
@@ -2221,82 +2218,18 @@ public final class EditorController {
     // ================= 구조 트리(접기/펼치기) =================
 
     /** 접힘 상태를 편집으로 요소 번호가 바뀌어도 유지하려고 id 가 있으면 id, 없으면 루트부터의 자식 순번 경로를 키로 쓴다. */
-    private static String keyOf(LayoutBox b) {
-        if (b.id() != null) return "#" + b.id();
-        StringBuilder path = new StringBuilder();
-        for (LayoutBox x = b; displayParent(x) != null; x = displayParent(x)) {
-            path.insert(0, "/" + displayChildren(displayParent(x)).indexOf(x));
-        }
-        return "r" + path;
-    }
-
-    private List<TreeRow> treeRows() {
-        List<TreeRow> out = new ArrayList<>();
-        buildRows(doc.layout(), 0, out);
-        return out;
-    }
-
-    private static final String FILTER_KEY = "§filter";
-    private String treeFilter = "";
+    private List<Outliner.Row> treeRows() { return outliner.rows(doc.layout(), activeFilter(), EditorController::rowLabel); }
 
     /** 지금 적용할 검색어(편집 중이면 입력 중인 글자로 바로 걸러진다). */
     private String activeFilter() {
-        return (FILTER_KEY.equals(editKey) ? fieldText.buf.toString() : treeFilter).trim().toLowerCase();
+        return (Outliner.FILTER_KEY.equals(editKey) ? fieldText.buf.toString() : outliner.filter).trim().toLowerCase();
     }
 
-    private boolean subtreeMatches(LayoutBox b, String f) {
-        if (rowLabel(b).toLowerCase().contains(f)) return true;
-        for (LayoutBox k : displayChildren(b)) if (subtreeMatches(k, f)) return true;
-        return false;
-    }
-
-    private void buildFiltered(LayoutBox b, int depth, List<TreeRow> out, String f) {
-        if (!subtreeMatches(b, f)) return;
-        List<LayoutBox> kids = displayChildren(b);
-        out.add(new TreeRow(b, depth, !kids.isEmpty(), false, keyOf(b)));
-        for (LayoutBox k : kids) buildFiltered(k, depth + 1, out, f);
-    }
-
-    private void buildRows(LayoutBox b, int depth, List<TreeRow> out) {
-        String f = activeFilter();
-        if (!f.isEmpty()) {
-            buildFiltered(b, depth, out, f);
-            return;
-        }
-        List<LayoutBox> kids = displayChildren(b);
-        String key = keyOf(b);
-        boolean isCollapsed = !kids.isEmpty() && collapsed.contains(key);
-        out.add(new TreeRow(b, depth, !kids.isEmpty(), isCollapsed, key));
-        if (!isCollapsed) for (LayoutBox k : kids) buildRows(k, depth + 1, out);
-    }
-
-    private void toggleCollapsed(String key) {
-        if (!collapsed.remove(key)) collapsed.add(key);
-    }
-
-    private void collapseAll() {
-        for (TreeRow r : treeRows()) {
-            if (r.hasKids() && r.box().parent != null) collapsed.add(r.key());
-        }
-        outlinerScroll = 0;
-    }
-
-    private void expandAll() { collapsed.clear(); }
+    private void collapseAll() { outliner.collapseAll(doc.layout(), activeFilter(), EditorController::rowLabel); }
 
     /** 선택이 바뀌면(캔버스 클릭 등) 그 요소가 보이도록 조상 행을 펼치고 스크롤한다. */
-    private void revealSelected(List<TreeRow> rows) {
-        LayoutBox sb = selectedBox();
-        if (sb == null) return;
-        boolean changed = false;
-        for (LayoutBox a = displayParent(sb); a != null; a = displayParent(a)) changed |= collapsed.remove(keyOf(a));
-        List<TreeRow> now = changed ? treeRows() : rows;
-        for (int i = 0; i < now.size(); i++) {
-            if (now.get(i).box().node.sourceIndex() == selected) {
-                if (i < outlinerScroll) outlinerScroll = i;
-                else if (i >= outlinerScroll + visibleRows()) outlinerScroll = i - visibleRows() + 1;
-                break;
-            }
-        }
+    private void revealSelected(List<Outliner.Row> rows) {
+        outliner.reveal(rows, selectedBox(), selected, visibleRows(), doc.layout(), activeFilter(), EditorController::rowLabel);
     }
 
     // ================= 화면 이동(팬) =================
@@ -2681,14 +2614,14 @@ public final class EditorController {
         g.drawText("구조", 4, headerY + 3, C_DIM, false);
         Rect filterField = new Rect(26, headerY + 2, LEFT_W - 26 - 30, 9);                 // 검색 칸
         g.fillRect(filterField.x(), filterField.y(), filterField.w(), filterField.h(), C_FIELD);
-        if (FILTER_KEY.equals(editKey)) {
+        if (Outliner.FILTER_KEY.equals(editKey)) {
             outline(g, filterField, C_SEL);
             editRect = filterField;
             paintEditText(g, filterField);
         } else {
-            boolean has = !treeFilter.isEmpty();
-            g.drawText(has ? fit(treeFilter, filterField.w() - 4) : "검색", filterField.x() + 3, filterField.y() + 1, has ? C_SEL : C_DIM, false);
-            regions.add(new Region(filterField, () -> startEdit(FILTER_KEY, treeFilter, filterField)));
+            boolean has = !outliner.filter.isEmpty();
+            g.drawText(has ? fit(outliner.filter, filterField.w() - 4) : "검색", filterField.x() + 3, filterField.y() + 1, has ? C_SEL : C_DIM, false);
+            regions.add(new Region(filterField, () -> startEdit(Outliner.FILTER_KEY, outliner.filter, filterField)));
         }
         Rect expand = new Rect(LEFT_W - 14, headerY + 2, 10, 9), collapse = new Rect(LEFT_W - 26, headerY + 2, 10, 9);
         g.fillRect(collapse.x(), collapse.y(), collapse.w(), collapse.h(), C_BTN);
@@ -2696,10 +2629,10 @@ public final class EditorController {
         g.fillRect(expand.x(), expand.y(), expand.w(), expand.h(), C_BTN);
         g.drawText("+", expand.x() + 3, expand.y() + 1, C_TEXT, false);
         regions.add(new Region(collapse, this::collapseAll));
-        regions.add(new Region(expand, this::expandAll));
+        regions.add(new Region(expand, outliner::expandAll));
 
         // 트리
-        List<TreeRow> rows = treeRows();
+        List<Outliner.Row> rows = treeRows();
         if (lastRevealed != selected) {
             lastRevealed = selected;
             revealSelected(rows);
@@ -2707,13 +2640,13 @@ public final class EditorController {
         }
         int visible = visibleRows();
         if (rows.isEmpty()) g.drawText("일치하는 요소가 없어요", 6, rowsTop() + 4, C_DIM, false);
-        outlinerScroll = Math.max(0, Math.min(outlinerScroll, Math.max(0, rows.size() - visible)));
+        outliner.scroll = Math.max(0, Math.min(outliner.scroll, Math.max(0, rows.size() - visible)));
         int top = rowsTop();
         g.pushClip(0, top - 1, LEFT_W - 1, viewH - top + 1);
-        for (int i = outlinerScroll; i < rows.size() && i < outlinerScroll + visible; i++) {
-            TreeRow row = rows.get(i);
+        for (int i = outliner.scroll; i < rows.size() && i < outliner.scroll + visible; i++) {
+            Outliner.Row row = rows.get(i);
             LayoutBox b = row.box();
-            int y = top + (i - outlinerScroll) * ROW_H;
+            int y = top + (i - outliner.scroll) * ROW_H;
             int idx = b.node.sourceIndex();
             boolean sel = idx == selected || multi.contains(idx);
             boolean hot = mouseX >= 0 && mouseX < LEFT_W && mouseY >= y - 1 && mouseY < y - 1 + ROW_H && dnd == null;
@@ -2739,7 +2672,7 @@ public final class EditorController {
             }));
             if (row.hasKids()) {
                 final String key = row.key();
-                regions.add(new Region(new Rect(x - 1, y - 1, 10, ROW_H), () -> toggleCollapsed(key)));
+                regions.add(new Region(new Rect(x - 1, y - 1, 10, ROW_H), () -> outliner.toggle(key)));
             }
         }
         g.popClip();
