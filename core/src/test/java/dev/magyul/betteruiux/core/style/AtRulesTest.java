@@ -82,7 +82,8 @@ class AtRulesTest {
         assertTrue(Stylesheet.supports("(frobnicate: 1) or (height: 1)"));
         assertTrue(Stylesheet.supports("not (frobnicate: 1)"));
         assertTrue(Stylesheet.supports("selector(a:nth-child(2n))"));
-        assertFalse(Stylesheet.supports("selector(a::before)"));
+        assertTrue(Stylesheet.supports("selector(a::before)"));
+        assertFalse(Stylesheet.supports("selector(a::first-line)"));
         Stylesheet s = Stylesheet.parse("@supports (width: 1) { a { color: red } } @supports (zzz: 1) { b { color: red } }");
         assertEquals(1, s.rules().size());
     }

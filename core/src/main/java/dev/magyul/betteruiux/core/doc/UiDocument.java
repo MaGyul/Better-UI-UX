@@ -491,6 +491,7 @@ public final class UiDocument {
         if (!b.visible() || !b.contains(x, y)) return null;
         java.util.List<LayoutBox> order = b.paintOrder();
         for (int i = order.size() - 1; i >= 0; i--) {
+            if (order.get(i).synthetic) continue;                 // ::before/::after 상자는 클릭 대상이 아니다(주인 요소가 받는다)
             LayoutBox r = hit(order.get(i), x, y);
             if (r != null) return r;
         }

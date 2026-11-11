@@ -68,6 +68,35 @@ public final class LayoutEngine {
         return root;
     }
 
+    /**
+     * {@code ::before} / {@code ::after}: label/button 은 글자 앞뒤에 내용을 붙이고, 컨테이너는 첫/마지막 자식으로
+     * 가상 label 상자를 끼운다(그 상자의 스타일은 가상 요소 규칙의 선언들). 이미지·위젯 같은 리프에는 만들지 않는다.
+     */
+    private void addPseudoBoxes(LayoutBox b) {
+        boolean textual = b.tag().equals("label") || b.tag().equals("button");
+        if (!textual && isLeaf(b)) return;
+        for (String which : new String[] {"before", "after"}) {
+            StyleMap ps = resolver.pseudoStyle(b, which);
+            if (ps == null) continue;
+            String content = ps.get("content");
+            if (textual) {
+                if (which.equals("before")) b.textBefore = content;
+                else b.textAfter = content;
+                continue;
+            }
+            UiNode n = new UiNode("label");
+            for (var e : ps.entries().entrySet()) if (!e.getKey().equals("content")) n.attributes().put(e.getKey(), e.getValue());
+            n.attributes().put("text", content);
+            LayoutBox pb = new LayoutBox(n);
+            pb.parent = b;
+            pb.synthetic = true;
+            pb.pseudo = which;
+            if (which.equals("before")) b.children.add(0, pb);
+            else b.children.add(pb);
+            for (int i = 0; i < b.children.size(); i++) b.children.get(i).index = i;
+        }
+    }
+
     /** 레이아웃 대상이 아닌 메타 요소(스타일 정의 등). */
     private static boolean isMeta(String tag) {
         return tag.equals("style") || tag.equals("link") || tag.equals("template") || tag.equals("script");
@@ -88,6 +117,7 @@ public final class LayoutEngine {
 
     private void resolveStyles(LayoutBox b) {
         resolver.resolve(b);
+        if (!b.synthetic) addPseudoBoxes(b);
         for (LayoutBox c : b.children) resolveStyles(c);
         if (b.tag().equals("tabs") && b.widget instanceof BuiltinWidgets.Tabs tabs) {   // 선택된 탭만 보인다
             int active = tabs.active(), i = 0;
@@ -114,7 +144,15 @@ public final class LayoutEngine {
     }
 
     /** 바인딩({@code {이름}})까지 치환된 표시용 텍스트. */
-    public String textOf(LayoutBox b) { return interpolator.apply(rawText(b)); }
+    public String textOf(LayoutBox b) { return interpolator.apply(displayText(b)); }
+
+    /** 화면에 그릴 글자: {@code ::before}/{@code ::after} 내용을 앞뒤에 붙인 것(바인딩 치환 전). 에디터의 글자 칸은 {@link #rawText}. */
+    public static String displayText(LayoutBox b) {
+        String t = rawText(b);
+        if (b.textBefore != null) t = b.textBefore + t;
+        if (b.textAfter != null) t = t + b.textAfter;
+        return t;
+    }
 
     /** 안쪽 여백 + 테두리 두께(테두리는 이제 레이아웃 공간을 차지한다). */
     private Insets padding(LayoutBox b) {

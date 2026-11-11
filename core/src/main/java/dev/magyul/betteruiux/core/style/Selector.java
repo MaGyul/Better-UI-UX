@@ -30,7 +30,8 @@ public final class Selector {
         public boolean dynamic() { return DYNAMIC.contains(name); }
     }
 
-    public record Compound(String tag, String id, List<String> classes, List<AttrSel> attrs, List<Pseudo> pseudos) {}
+    /** {@code element}: {@code ::before} / {@code ::after} (없으면 null). 마지막 단계에만 올 수 있다. */
+    public record Compound(String tag, String id, List<String> classes, List<AttrSel> attrs, List<Pseudo> pseudos, String element) {}
 
     public enum Combinator { DESCENDANT, CHILD, ADJACENT, SIBLING }
 
@@ -147,6 +148,14 @@ public final class Selector {
         }
         if (steps.isEmpty() || pendingExplicit) throw new IllegalArgumentException("불완전한 선택자: " + src);
 
+        for (int k = 0; k < steps.size() - 1; k++) {
+            if (steps.get(k).compound().element() != null) {
+                throw new IllegalArgumentException("가상 요소는 선택자의 마지막에만 쓸 수 있습니다: " + src);
+            }
+        }
+        if (nested && steps.get(steps.size() - 1).compound().element() != null) {
+            throw new IllegalArgumentException("가상 요소는 :not()/:is() 안에서 쓸 수 없습니다: " + src);
+        }
         return new Selector(steps, src);
     }
 
@@ -159,6 +168,7 @@ public final class Selector {
         List<String> classes = new ArrayList<>();
         List<AttrSel> attrs = new ArrayList<>();
         List<Pseudo> pseudos = new ArrayList<>();
+        String element = null;
         int i = 0, n = s.length();
         int j = i;
         while (j < n && (nameChar(s.charAt(j)) || s.charAt(j) == '*')) j++;
@@ -178,10 +188,20 @@ public final class Selector {
                 else classes.add(name);
                 i = e;
             } else if (c == ':') {
-                if (i + 1 < n && s.charAt(i + 1) == ':') {
-                    throw new IllegalArgumentException("가상 요소 '" + s.substring(i) + "' 은(는) 지원하지 않습니다 (" + whole + ")");
+                boolean doubleColon = i + 1 < n && s.charAt(i + 1) == ':';
+                int e = i + (doubleColon ? 2 : 1);
+                int nameStart = e;
+                while (e < n && nameChar(s.charAt(e))) e++;
+                String el = s.substring(nameStart, e).toLowerCase();
+                if (el.equals("before") || el.equals("after")) {            // ::before / ::after (옛 문법 :before 도 허용)
+                    element = el;
+                    i = e;
+                    continue;
                 }
-                int e = i + 1;
+                if (doubleColon) {
+                    throw new IllegalArgumentException("지원하지 않는 가상 요소 '" + s.substring(i) + "' (" + whole + ")");
+                }
+                e = i + 1;
                 while (e < n && nameChar(s.charAt(e))) e++;
                 String name = s.substring(i + 1, e).toLowerCase();
                 if (name.isEmpty()) throw new IllegalArgumentException("잘못된 선택자: " + whole);
@@ -206,7 +226,7 @@ public final class Selector {
                 throw new IllegalArgumentException("잘못된 선택자: " + whole);
             }
         }
-        return new Compound(tag, id, classes, attrs, pseudos);
+        return new Compound(tag, id, classes, attrs, pseudos, element);
     }
 
     private static int closingParen(String s, int open) {
@@ -280,6 +300,7 @@ public final class Selector {
             if (c.id() != null) ids++;
             mid += c.classes().size() + c.attrs().size();
             if (c.tag() != null) types++;
+            if (c.element() != null) types++;
             for (Pseudo p : c.pseudos()) {
                 switch (p.name()) {
                     case "where" -> { }
@@ -296,6 +317,9 @@ public final class Selector {
         }
         return (int) (Math.min(ids, BASE - 1) * BASE * BASE + Math.min(mid, BASE - 1) * BASE + Math.min(types, BASE - 1));
     }
+
+    /** {@code ::before} / {@code ::after} 면 그 이름, 아니면 null. */
+    public String pseudoElement() { return steps.get(steps.size() - 1).compound().element(); }
 
     /** 대상 요소의 동적 의사 클래스(알파벳순, 중복 제거). 예: {@code ["active","hover"]} */
     public Set<String> dynamicPseudos() {

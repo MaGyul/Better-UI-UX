@@ -15,6 +15,12 @@ public final class LayoutBox {
     /** 렌더되는 형제들 사이에서의 순서(0부터). */
     public int index;
     public int x, y, w, h;
+    /** {@code ::before}/{@code ::after} 로 만든 가상 상자(문서에 없다 → 선택/클릭/편집 대상이 아니다). */
+    public boolean synthetic;
+    /** label/button 에 {@code ::before}/{@code ::after} 가 있으면 글자 앞뒤에 붙는 내용(없으면 null). */
+    public String textBefore, textAfter;
+    /** 가상 상자일 때 "before" 또는 "after". */
+    public String pseudo;
     /** 커스텀 태그면 그 위젯, 아니면 null. */
     public UiWidget widget;
 

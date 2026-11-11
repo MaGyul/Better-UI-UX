@@ -65,7 +65,7 @@ public final class StyleResolver {
         List<Applied> staticRules = new ArrayList<>();
         List<Entry> dynamicEntries = new ArrayList<>();
         for (Entry e : entries) {
-            if (!mediaOk(e.media())) continue;
+            if (!mediaOk(e.media()) || box.synthetic || e.selector().pseudoElement() != null) continue;
             if (e.selector().hasDynamic()) {                 // :hover/:active/:focus 가 어느 단계에든 있는 규칙: 그리기 때 판정
                 if (e.selector().maybeMatches(box.node)) dynamicEntries.add(e);
                 continue;
@@ -200,6 +200,27 @@ public final class StyleResolver {
             String v = m.get(key);
             if (v != null) m.put(key, CssMath.resolve(v, env));
         }
+    }
+
+    /**
+     * {@code ::before} / {@code ::after} 의 계산된 스타일. {@code content} 가 없거나 none 이면 null.
+     * 값은 {@code box.style} 의 {@code --변수} 로 치환한다(동적 의사 클래스가 붙은 가상 요소 규칙은 쓰지 않는다).
+     */
+    public StyleMap pseudoStyle(LayoutBox box, String which) {
+        List<Applied> rules = new ArrayList<>();
+        for (Entry e : entries) {
+            if (!which.equals(e.selector().pseudoElement()) || !mediaOk(e.media()) || e.selector().hasDynamic()) continue;
+            if (!e.selector().matches(box)) continue;
+            for (Stylesheet.Declaration d : e.declarations()) rules.add(new Applied(d, e.selector().specificity(), e.ordinal()));
+        }
+        if (rules.isEmpty()) return null;
+        StyleMap m = new StyleMap();
+        apply(m, rules);
+        substituteVars(m, box.style);
+        String content = ContentValue.eval(m.get("content"), box.node);
+        if (content == null) return null;
+        m.put("content", content);
+        return m;
     }
 
     /** 내장 태그의 기본 모양(속성/스타일시트가 있으면 그것이 이긴다). */

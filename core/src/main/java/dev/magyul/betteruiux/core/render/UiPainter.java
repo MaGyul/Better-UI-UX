@@ -156,7 +156,7 @@ public final class UiPainter {
     }
 
     private void paintText(LayoutBox b, StyleMap s, UiGfx g, float opacity, boolean dim) {
-        String t = interpolator.apply(LayoutEngine.rawText(b));
+        String t = interpolator.apply(LayoutEngine.displayText(b));
         if (t.isEmpty()) return;
         boolean button = b.tag().equals("button");
         int color = withOpacity(s.color("color", dim ? 0xFF888888 : 0xFFFFFFFF), opacity);

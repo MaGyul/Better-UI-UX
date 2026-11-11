@@ -166,7 +166,8 @@ final class StyleText {
         for (int n = 0; n < rules.size(); n++) {
             for (String one : Selector.splitList(rules.get(n).selector())) {
                 try {
-                    if (Selector.parse(one.trim()).matches(box)) {
+                    Selector parsed = Selector.parse(one.trim());
+                    if (parsed.pseudoElement() == null && parsed.matches(box)) {
                         hits.add(n);
                         break;
                     }
