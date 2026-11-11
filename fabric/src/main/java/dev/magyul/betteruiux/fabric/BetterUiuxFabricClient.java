@@ -29,9 +29,12 @@ public final class BetterUiuxFabricClient implements ClientModInitializer {
         // 서버 동기화(채널은 공통 진입점이 등록): 접속하면 인사를 보내고, 서버 메시지는 렌더 스레드에서 처리한다.
         ClientSync.init(baseDir);
         ClientSync.setSender(ClientPlayNetworking::send);
-        ClientPlayNetworking.registerGlobalReceiver(SyncPayload.TYPE, (payload, context) -> ClientSync.onPayload(payload));
+        // 개발용(-Dbetteruiux.noclientsync=true): 서버 동기화 채널을 받지 않는 클라이언트를 흉내 낸다(이 모드가 없는 클라이언트가 접속해도 서버가 멀쩡한지 확인).
+        if (!Boolean.getBoolean("betteruiux.noclientsync")) {
+            ClientPlayNetworking.registerGlobalReceiver(SyncPayload.TYPE, (payload, context) -> ClientSync.onPayload(payload));
+        }
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-            if (ClientPlayNetworking.canSend(SyncPayload.TYPE)) ClientSync.onJoin();
+            if (ClientPlayNetworking.canSend(SyncPayload.TYPE) && !Boolean.getBoolean("betteruiux.noclientsync")) ClientSync.onJoin();
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientSync.onDisconnect());
         // XML HUD: 설정(config.toml 의 [hud] ids)에 적은 문서를 인게임 HUD 맨 위에 그린다.
