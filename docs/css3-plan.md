@@ -17,7 +17,7 @@
 - [x] Phase 4 렌더링 — **`UiGfx` API 는 늘리지 않고** 기존 `fillRect`/세로 `fillGradient` 만으로 구현(`render/BoxPainter`): `border-radius`(행 단위 근사), `background: linear-gradient()`/`background-image`(다중 정지점, 가장 가까운 축), `box-shadow`(번짐 층 근사), 변별 테두리(두께·색), `border-style: dashed|dotted`, `outline`+`outline-offset`. 이유: McGfx 를 실기 검증 없이 건드리지 않고, 두 렌더러에서 동일하며 골든으로 검증 가능. 한계: 안티앨리어싱 없음, 둥근 클립 없음, inset 그림자·radial/conic 없음, 이미지 모서리 라운딩 없음
 - [x] Phase 5 텍스트 — `layout/TextStyle`: `font-size`(배율), `line-height`, `letter-spacing`, `font-weight`(겹쳐 그리기), `white-space`+줄바꿈, `text-transform`, `text-overflow: ellipsis`, `text-decoration`, `vertical-align`, `text-shadow: none`. 한계: `font-family`/italic 없음, 위젯(textfield 등) 글자는 미적용, grid 칸 줄바꿈 높이 미반영
 - [ ] Phase 6 애니메이션
-- [~] Phase 7 도구·문서 — 완료: `docs/uicss-reference.md`. 남음: 에디터 패널에 새 속성 행(`min/max`, `border-radius` 등), 값 출처 표시, `:hover` 강제 미리보기 (에디터 `PropertyModel`/`StyleText` 신규 문법 대응 포함)
+- [~] Phase 7 도구·문서 — 완료: `docs/uicss-reference.md`. 에디터 패널 접힌 섹션 3개(크기·배치 / 글자 / 효과, `PropertyModel`). 남음: 값 출처 표시, `:hover` 강제 미리보기, `@media` 조건 평가 표시, 규칙 편집기의 신규 문법 안내 (에디터 `PropertyModel`/`StyleText` 신규 문법 대응 포함)
 
 ### 구현 메모
 - `red` 등 색 이름은 이제 CSS 표준값(`#FF0000`). 옛 마인크래프트 팔레트는 `mc-red` 등으로 접근.

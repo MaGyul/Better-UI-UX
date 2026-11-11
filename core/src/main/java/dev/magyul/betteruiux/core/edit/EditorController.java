@@ -2745,7 +2745,7 @@ public final class EditorController {
     // ---- 오른쪽: 속성 패널 ----
 
     private int propScroll, propMaxScroll;
-    private final Set<String> collapsedSections = new HashSet<>();
+    private final Set<String> collapsedSections = new HashSet<>(PropertyModel.DEFAULT_COLLAPSED);
 
     private void paintProperties(UiGfx g) {
         int x0 = viewW - RIGHT_W, top = TOOLBAR_H;
@@ -2898,11 +2898,14 @@ public final class EditorController {
             int base = px != null ? px : switch (key) {
                 case "width" -> box.w;
                 case "height" -> box.h;
+                case "font-size" -> 8;
                 default -> 0;
             };
             int v = base + dir * (big ? 8 : 1);
             if (key.equals("width") || key.equals("height")) v = Math.max(1, v);
-            else if (key.equals("gap") || key.equals("border")) v = Math.max(0, v);
+            else if (key.equals("gap") || key.equals("border") || key.equals("grow") || key.equals("flex-shrink")
+                    || key.startsWith("min-") || key.startsWith("max-") || key.startsWith("outline-")) v = Math.max(0, v);
+            else if (key.equals("font-size")) v = Math.max(2, v);
             next = Integer.toString(v);
         }
         applyValue(key, next);

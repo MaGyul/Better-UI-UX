@@ -186,3 +186,15 @@ UI 화면을 연 채로 **F8** 을 누르면 에디터가 켜집니다. 편집 �
 - `File` → `새 화면: 빈 화면/대화상자` 는 **파일을 바로 만들지 않는다.** 제목에 `(새 파일 - 저장 전)` 이 붙은 채로 열리고, 처음 저장(Ctrl+S 또는 `Save`)할 때 `new_N.xml` 이 생긴다.
   고치지 않고 닫거나 다른 화면으로 가면 아무 파일도 남지 않는다. 고친 뒤 닫으려 하면 평소처럼 저장 여부를 묻는다.
 - 빈 에디터에는 `Save`/패널이 없고 `File`(과 `Exit`)만 있다. 에디터가 꺼져 있으면(`config.toml` 의 `[editor] enabled`) 안내만 나온다.
+
+## 고급 CSS 속성 (속성 패널의 접힌 섹션)
+
+선택한 요소의 속성 패널 맨 아래에 접힌 섹션 세 개가 있다. 헤더를 눌러 펼친다. 값은 일반 속성과 같은 규칙으로 저장된다
+(이미 `style=""` 에 있으면 거기를, 시트가 정한 값이면 inline 으로 덮어쓰기, XML 속성이면 속성을).
+
+- **크기·배치**: `min/max-width/height`, `box-sizing`, `position`, `z-index`, (flex 안에서) `grow`·`flex-shrink`·`align-self`·`order`,
+  `flex-wrap`, (grid) `grid-template-columns/rows`·`grid-column`·`grid-row`
+- **글자**(label/button): `font-size`, `font-weight`, `line-height`, `letter-spacing`, `text-align`, `vertical-align`, `white-space`, `text-transform`, `text-overflow`, `text-decoration`
+- **효과**: `border-style`, `border-radius`, `box-shadow`, `outline-width/color/offset`
+
+숫자 칸은 `-`/`+` 와 ↑/↓(Shift = 8)로 조절한다. 지원 범위와 문법은 [uicss-reference.md](uicss-reference.md).
