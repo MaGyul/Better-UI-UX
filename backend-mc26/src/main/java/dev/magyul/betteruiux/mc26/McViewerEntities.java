@@ -52,10 +52,7 @@ final class McViewerEntities {
         }
         Set<Integer> present = new HashSet<>();
         EntityRenderDispatcher dispatcher = mc.getEntityRenderDispatcher();
-        CameraRenderState camera = new CameraRenderState();
-        // 이름표처럼 카메라를 바라보는 것들이 보는 방향을 알도록, 뷰 회전의 역을 준다.
-        camera.orientation = new Quaternionf().rotateY((float) Math.toRadians(-yaw)).rotateX((float) Math.toRadians(pitch))
-                .rotateZ((float) Math.toRadians(-180.0));
+        CameraRenderState camera = camera(yaw, pitch);
         for (McvEntity me : w.entities()) {
             present.add(me.id());
             if (!w.inView(me.x(), me.y(), me.z())) continue;
@@ -75,6 +72,14 @@ final class McViewerEntities {
             pose.popPose();
         }
         entities.keySet().removeIf(id -> !present.contains(id));            // 스크립트가 지운 엔티티
+    }
+
+    /** 이름표처럼 카메라를 바라보는 것들이 보는 방향을 알도록, 뷰 회전의 역을 방향으로 준다. */
+    static CameraRenderState camera(float yaw, float pitch) {
+        CameraRenderState camera = new CameraRenderState();
+        camera.orientation = new Quaternionf().rotateY((float) Math.toRadians(-yaw)).rotateX((float) Math.toRadians(pitch))
+                .rotateZ((float) Math.toRadians(-180.0));
+        return camera;
     }
 
     private Entity create(ClientLevel level, McvEntity me) {

@@ -92,6 +92,36 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                     function onBlockHover(e) { ui.setText('#h', e.block ? 'hover ' + e.x + ',' + e.y + ',' + e.z : 'hover none'); }
                     function onBlockClick(e) { ui.setText('#c', e.block ? 'click ' + e.x + ',' + e.y + ',' + e.z + ',' + e.face : 'click none'); }
                     """);
+            Files.writeString(base.resolve("ui/gt_mcv5.uiml"), """
+                    <screen>
+                      <script src="gt_mcv5.uijs"/>
+                      <mc-viewer id="view" anchor="center" width="260" height="200"/>
+                    </screen>
+                    """);
+            Files.writeString(base.resolve("ui/gt_mcv5.uijs"), """
+                    function onInit() {
+                      var w = mcv.createWorld(6, 3, 6);
+                      w.fill(0, 0, 0, 5, 0, 5, 'white_concrete');
+                      w.setBlock(1, 1, 1, 'chest[facing=south]');
+                      w.setBlock(3, 1, 1, 'ender_chest[facing=south]');
+                      w.setBlock(1, 1, 3, 'red_bed[facing=south,part=foot]');
+                      w.setBlock(1, 1, 4, 'red_bed[facing=south,part=head]');
+                      w.setBlock(4, 1, 4, 'oak_sign[rotation=8]', '{front_text:{messages:["Hello","viewer","",""]}}');
+                      w.setBlock(4, 1, 2, 'shulker_box');
+                    }
+                    """);
+            Files.writeString(base.resolve("ui/gt_mcv6.uiml"), """
+                    <screen>
+                      <script src="gt_mcv6.uijs"/>
+                      <mc-viewer id="view" anchor="center" width="260" height="200"/>
+                    </screen>
+                    """);
+            Files.writeString(base.resolve("ui/gt_mcv6.uijs"), """
+                    function onInit() {
+                      var w = mcv.createWorld(6, 3, 6);
+                      w.fill(0, 0, 0, 5, 0, 5, 'white_concrete');
+                    }
+                    """);
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -158,6 +188,22 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             check(Integer.parseInt(shown.trim()) > 20, "onTick 이 계속 불려야 한다(레이블 " + shown + ")");
 
             // 상호작용: 스크립트가 project 로 알려 준 화면 좌표(빨간 블록 중심)에 마우스를 올리고 클릭하면 그 블록이 맞아야 한다.
+            // 블록 엔티티(상자·침대·표지판 ...)는 블록 모델이 비어 있어 전용 렌더러가 그린다: 같은 바닥에 그것들을 놓으면 화면이 눌러 달라진다.
+            BufferedImage plain = openAndShoot(ctx, "gt_mcv6", "mc-viewer-be-plain");
+            BufferedImage rich = openAndShoot(ctx, "gt_mcv5", "mc-viewer-block-entities");
+            LayoutBox bv = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            int beDiff = 0;
+            for (int gy = bv.y; gy < bv.y + bv.h; gy++) {
+                for (int gx = bv.x; gx < bv.x + bv.w; gx++) {
+                    int x = (int) Math.min(plain.getWidth() - 1, Math.round(gx * s * sx)), y = (int) Math.min(plain.getHeight() - 1, Math.round(gy * s * sx));
+                    int a = plain.getRGB(x, y), b = rich.getRGB(x, y);
+                    int d = Math.abs((a >> 16 & 0xFF) - (b >> 16 & 0xFF)) + Math.abs((a >> 8 & 0xFF) - (b >> 8 & 0xFF)) + Math.abs((a & 0xFF) - (b & 0xFF));
+                    if (d > 60) beDiff++;
+                }
+            }
+            System.out.println("[mc-viewer test] blockEntity diff=" + beDiff);
+            check(beDiff > 1500, "블록 엔티티(상자·침대·표지판)가 그려져야 한다(달라진 픽셀 " + beDiff + ")");
+
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));
             ctx.waitTicks(40);
@@ -202,6 +248,13 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             check(demoRed > 50, "데모의 빨간 블록이 그려져야 한다(" + demoRed + ")");
 
         }
+    }
+
+    private BufferedImage openAndShoot(ClientGameTestContext ctx, String id, String shotName) {
+        ctx.runOnClient(mc -> UiOpener.open(id, base, false));
+        ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals(id));
+        ctx.waitTicks(40);
+        return read(ctx.takeScreenshot(shotName));
     }
 
     private static String text(ClientGameTestContext ctx, String selector) {

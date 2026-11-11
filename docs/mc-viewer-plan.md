@@ -122,8 +122,12 @@ world.setTickRate(~);
 - 테스트: `McvStructureTest`(gzip/비압축, 오프셋, 월드 밖 거부, 깨진 파일/폭탄, 호스트 이름 검증, SNBT), `McvScriptTest`(JS API·오류), 게임 테스트(기본 데모가 `demo_house.nbt` 를 불러와 그려짐)
 - 제약: 회전/반전 없음, 구조물 엔티티 무시
 
+## 후속 완료: 블록 엔티티 렌더
+- `McViewerBlockEntities`: `EntityBlock.newBlockEntity` 로 만들어 두고(블록 상태+NBT 가 바뀌면 재생성, 지워진 블록은 정리) `BlockEntityRenderDispatcher.tryExtractRenderState`/`submit` 으로 그린다. 거리 컬링은 `prepare(블록 중심)` 으로 무력화. 블록 NBT(SNBT)는 `loadWithComponents` 로 불러 준다.
+- 월드 접속 필요(엔티티와 같은 제약). 게임 테스트: 상자/엔더상자/셜커/침대/표지판 장면이 바닥만 있는 장면과 확연히 달라짐을 확인, 스크린샷 육안 확인
+
 ## 완료 후 남은 과제 (후속, 우선순위 순)
-- 상자 같은 **블록 엔티티** 렌더(현재 빈 칸으로 보임)
+- 블록 엔티티 **동작**(상자 뚜껑 열림 등; 렌더 자체는 완료)
 - **엔티티 맞히기**(raycast), 엔티티 조명이 어두운 문제(PiP는 렌더당 라이팅 하나)
 - **원근 투영**(별도 렌더 타깃 경로 필요), **타이틀 화면에서 엔티티**(가상 Level 필요)
 - 바이옴별 틴트, 반투명 블록 정렬, 면 단위 컬링(큰 월드 성능), 월드 스냅샷을 프레임마다 복사하는 비용 줄이기

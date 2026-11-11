@@ -35,9 +35,10 @@ import net.minecraft.world.level.block.state.properties.Property;
  */
 public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderState> {
     /** 블록 하나(상태 문자열)를 그릴 때 필요한 것들. 리소스가 다시 불러와지면 버린다. */
-    private record Resolved(List<BlockStateModelPart> parts, boolean translucent, boolean solid, int[] tints) { }
+    private record Resolved(List<BlockStateModelPart> parts, boolean translucent, boolean solid, int[] tints, BlockState state) { }
 
     private final McViewerEntities entities = new McViewerEntities();
+    private final McViewerBlockEntities blockEntities = new McViewerBlockEntities();
     private final Map<String, Resolved> cache = new HashMap<>();
     private BlockStateModelSet cachedFor;
 
@@ -69,18 +70,22 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
         pose.translate((float) -cx, (float) -cy, (float) -cz);
 
         Map<Long, McvBlock> blocks = w.blockSnapshot();
+        boolean beReady = blockEntities.begin(w, s.yaw(), s.pitch());
         for (Map.Entry<Long, McvBlock> e : blocks.entrySet()) {
             int[] p = McvWorld.unkey(e.getKey());
             if (!w.inView(p[0] + 0.5, p[1] + 0.5, p[2] + 0.5)) continue;
             Resolved r = resolve(models, e.getValue());
-            if (r == null || r.parts().isEmpty()) continue;
-            if (r.solid() && enclosed(w, blocks, p[0], p[1], p[2], models)) continue;    // 사방이 막힌 블록은 보이지 않는다
-            pose.pushPose();
-            pose.translate(p[0], p[1], p[2]);
-            collector.submitBlockModel(pose, r.translucent() ? Sheets.translucentBlockItemSheet() : Sheets.cutoutBlockItemSheet(),
-                    r.parts(), r.tints(), LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
-            pose.popPose();
+            if (r == null) continue;
+            if (!r.parts().isEmpty() && !(r.solid() && enclosed(w, blocks, p[0], p[1], p[2], models))) {   // 사방이 막힌 블록은 보이지 않는다
+                pose.pushPose();
+                pose.translate(p[0], p[1], p[2]);
+                collector.submitBlockModel(pose, r.translucent() ? Sheets.translucentBlockItemSheet() : Sheets.cutoutBlockItemSheet(),
+                        r.parts(), r.tints(), LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+                pose.popPose();
+            }
+            if (beReady) blockEntities.render(r.state(), e.getValue(), p[0], p[1], p[2], pose, collector);   // 상자·표지판 같은 블록 엔티티
         }
+        if (beReady) blockEntities.end();
         entities.render(w, s.yaw(), s.pitch(), pose, collector);
     }
 
@@ -107,7 +112,7 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
             List<BlockStateModelPart> parts = new ArrayList<>();
             model.collectParts(RandomSource.create(42L), parts);
             r = new Resolved(parts, model.hasMaterialFlag(net.minecraft.client.resources.model.geometry.BakedQuad.FLAG_TRANSLUCENT),
-                    state.isSolidRender(), tints(state));
+                    state.isSolidRender(), tints(state), state);
         }
         cache.put(key, r);
         return r;
