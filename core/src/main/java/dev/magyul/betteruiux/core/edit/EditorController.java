@@ -1534,8 +1534,8 @@ public final class EditorController {
             if (key == EditorKey.ESCAPE) xmlView.open = false;
             return true;
         }
-        if (menuNear != null) {
-            if (key == EditorKey.ESCAPE) closeMenu();
+        if (menu.isOpen()) {
+            if (key == EditorKey.ESCAPE) menu.close();
             return true;
         }
         if (key == EditorKey.F1 && editKey == null) {
@@ -2380,7 +2380,7 @@ public final class EditorController {
         }
         paintToolTip(g);
         tipNow = null;
-        paintMenu(g);
+        menu.paint(g, tm, viewW, viewH, ROW_H, mouseX, mouseY, regions);
         paintItemPicker(g);
         paintXmlView(g);
         help.paint(g, viewW, viewH, regions);
@@ -2560,14 +2560,14 @@ public final class EditorController {
                 new ToolItem("Redo", canRedoAny(), r -> redo(), C_BTN, 0),
                 new ToolItem("Dup", selected > 0, r -> duplicate(), C_BTN, 4),
                 new ToolItem("Del", selected > 0, r -> deleteSelected(), C_BTN, 0),
-                new ToolItem("Wrap", selected > 0, r -> openMenu(r, List.of("row", "column", "panel", "stack", "풀기(Unwrap)"), item -> {
+                new ToolItem("Wrap", selected > 0, r -> menu.open(r, List.of("row", "column", "panel", "stack", "풀기(Unwrap)"), item -> {
                     if (item.startsWith("풀기")) unwrapSelected();
                     else wrapSelected(item);
                 }), C_BTN, 0),
-                new ToolItem("Align", selected > 0, r -> openMenu(r, ALIGN_ITEMS, this::alignSelected), C_BTN, 0),
+                new ToolItem("Align", selected > 0, r -> menu.open(r, ALIGN_ITEMS, this::alignSelected), C_BTN, 0),
                 new ToolItem(grid ? "Grid:8" : "Grid:off", true, r -> grid = !grid, C_BTN, 4),
                 new ToolItem(autoAnchor ? "Anchor:auto" : "Anchor:keep", true, r -> autoAnchor = !autoAnchor, C_BTN, 0),
-                new ToolItem("View", true, r -> openMenu(r, viewItems(), item -> {
+                new ToolItem("View", true, r -> menu.open(r, viewItems(), item -> {
                     if (item.startsWith("크기:")) applySizeItem(item);
                     else if (item.startsWith("XML")) xmlView.open = true;
                     else if (item.contains("없음")) previewState = 0;
@@ -2599,7 +2599,7 @@ public final class EditorController {
             Rect r = new Rect(x, y, ovW, h);
             List<String> labels = new ArrayList<>();
             for (ToolItem it : hidden) labels.add(it.label());
-            x += button(g, x, y, "...", true, () -> openMenu(r, labels, label -> {
+            x += button(g, x, y, "...", true, () -> menu.open(r, labels, label -> {
                 for (ToolItem it : hidden) if (it.label().equals(label) && it.enabled()) it.action().accept(r);
             }));
         }
@@ -2911,7 +2911,7 @@ public final class EditorController {
             case ENUM -> {
                 g.drawText(fit(value.isBlank() ? "(기본)" : value, fieldW - 14), fieldX + 2, y + 1, value.isBlank() ? C_DIM : C_TEXT, false);
                 g.drawText("v", field.right() - 8, y + 1, C_DIM, false);
-                if (sees(panel, field)) regions.add(new Region(field, () -> openMenu(field, row.options(), v -> applyValue(key, v))));
+                if (sees(panel, field)) regions.add(new Region(field, () -> menu.open(field, row.options(), v -> applyValue(key, v))));
             }
             case NUMBER -> {
                 g.drawText(fit(value, fieldW - reserve), fieldX + 2, y + 1, C_TEXT, false);
@@ -2979,9 +2979,7 @@ public final class EditorController {
 
     // ---- 간단한 선택 메뉴(드롭다운) ----
 
-    private Rect menuNear;
-    private List<String> menuItems = List.of();
-    private java.util.function.Consumer<String> menuPick;
+    private final MenuOverlay menu = new MenuOverlay();
 
     private static List<String> viewItems() {
         List<String> l = new ArrayList<>(List.of("XML 보기", "상태 미리보기: 없음", "상태 미리보기: hover", "상태 미리보기: active", "도움말"));
@@ -2998,7 +2996,7 @@ public final class EditorController {
         List<String> screens = host.screens();
         for (int i = 0; i < screens.size() && i < 24; i++) items.add(OPEN_PREFIX + screens.get(i));
         for (String k : NEW_KINDS) items.add(NEW_PREFIX + k);
-        openMenu(near, items, item -> {
+        menu.open(near, items, item -> {
             if (session.isDirty()) {
                 setStatus("저장하지 않은 변경이 있어요 — 저장(Ctrl+S)한 뒤 다른 화면으로 전환하세요", true);
                 return;
@@ -3014,43 +3012,6 @@ public final class EditorController {
                 }
             }
         });
-    }
-
-    private void openMenu(Rect near, List<String> items, java.util.function.Consumer<String> pick) {
-        menuNear = near;
-        menuItems = items;
-        menuPick = pick;
-    }
-
-    private void closeMenu() {
-        menuNear = null;
-        menuItems = List.of();
-        menuPick = null;
-    }
-
-    private void paintMenu(UiGfx g) {
-        if (menuNear == null || menuItems.isEmpty()) return;
-        regions.add(new Region(new Rect(0, 0, viewW, viewH), this::closeMenu));   // 바깥을 누르면 닫는다
-        int w = menuNear.w();
-        for (String s : menuItems) w = Math.max(w, tm.width(s) + 10);
-        int h = menuItems.size() * ROW_H + 2;
-        int x = Math.max(2, Math.min(menuNear.x(), viewW - w - 2));
-        int y = menuNear.bottom() + 1;
-        if (y + h > viewH) y = Math.max(2, menuNear.y() - h - 1);
-        g.fillRect(x - 1, y - 1, w + 2, h + 2, C_SEL);
-        g.fillRect(x, y, w, h, 0xFF161820);
-        regions.add(new Region(new Rect(x, y, w, h), null));
-        for (int i = 0; i < menuItems.size(); i++) {
-            String item = menuItems.get(i);
-            Rect row = new Rect(x, y + 1 + i * ROW_H, w, ROW_H);
-            if (row.contains(mouseX, mouseY)) g.fillRect(row.x(), row.y(), row.w(), row.h(), C_ROW_SEL);
-            g.drawText(item, x + 4, row.y() + 1, C_TEXT, false);
-            regions.add(new Region(row, () -> {
-                var pick = menuPick;
-                closeMenu();
-                if (pick != null) pick.accept(item);
-            }));
-        }
     }
 
     // ---- 복사 / 붙여넣기 / 감싸기 ----
