@@ -54,4 +54,25 @@ class WidgetTextStyleTest {
         DrawList t = paint("<screen><tabs x='0' y='0' width='100' height='60' style='font-size: 12px'><tab title='One'/></tabs></screen>");
         assertTrue(t.commands().stream().anyMatch(c -> c instanceof DrawCommand.PushTransform tr && tr.scale() == 1.5f));
     }
+
+    @Test
+    void textfieldInputFollowsFontSizeAndColor() throws Exception {
+        DrawList l = paint("<screen><textfield x='0' y='0' width='100' height='24' value='abc' style='font-size: 16px; color: #00ff00'/></screen>");
+        assertEquals("abc", texts(l).get(0).text());
+        assertEquals(0xFF00FF00, texts(l).get(0).argb());
+        assertTrue(l.commands().stream().anyMatch(c -> c instanceof DrawCommand.PushTransform t && t.scale() == 2f));
+    }
+
+    @Test
+    void textfieldDoesNotTransformEditableText() throws Exception {
+        DrawList l = paint("<screen><textfield x='0' y='0' width='100' height='14' value='abc' style='text-transform: uppercase'/></screen>");
+        assertEquals("abc", texts(l).get(0).text());
+    }
+
+    @Test
+    void selectValueFollowsTheStyle() throws Exception {
+        DrawList l = paint("<screen><select x='0' y='0' width='100' height='14' value='abc' options='abc,def' style='text-transform: uppercase; color: #ff0000'/></screen>");
+        assertEquals("ABC", texts(l).get(0).text());
+        assertEquals(0xFFFF0000, texts(l).get(0).argb());
+    }
 }

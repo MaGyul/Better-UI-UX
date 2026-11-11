@@ -315,6 +315,9 @@ public final class BuiltinWidgets {
 
         TextField(UiElement el, UiDocument doc, TextMetrics tm) { super(el, doc, tm); }
 
+        /** 입력 글자의 폭: font-size / font-weight / letter-spacing 을 반영(text-transform 은 제외). */
+        private int tw(String text) { return textStyle().width(text); }
+
         private int maxLen() { return (int) Math.max(1, num("maxlength", 256)); }
 
         /** XML 의 value 가 바뀌었으면(Java API 등) 모델에 반영한다. */
@@ -337,7 +340,7 @@ public final class BuiltinWidgets {
 
         @Override public int intrinsicWidth() { return 120; }
 
-        @Override public int intrinsicHeight() { return tm.lineHeight() + 6; }
+        @Override public int intrinsicHeight() { return styledLine() + 6; }
 
         @Override public boolean focusable() { return enabled(); }
 
@@ -352,26 +355,26 @@ public final class BuiltinWidgets {
             String s = model.text();
             int maxW = w - 8, cur = model.cursor();
             viewStart = Math.min(viewStart, cur);
-            while (viewStart < cur && tm.width(s.substring(viewStart, cur)) > maxW) viewStart++;
+            while (viewStart < cur && tw(s.substring(viewStart, cur)) > maxW) viewStart++;
             int end = s.length();
-            while (end > cur && tm.width(s.substring(viewStart, end)) > maxW) end--;
+            while (end > cur && tw(s.substring(viewStart, end)) > maxW) end--;
             textX = x + 4;
-            int ty = y + (h - tm.lineHeight()) / 2 + 1;
+            int ty = y + (h - styledLine()) / 2 + 1;
             if (s.isEmpty() && !foc) {
                 String ph = attr("placeholder", "");
-                if (!ph.isEmpty()) g.drawText(ph, textX, ty, C_DIM, false);
+                if (!ph.isEmpty()) textStyle().draw(g, ph, textX, ty, C_DIM, false);
                 return;
             }
             if (foc && model.hasSelection()) {
                 int a = Math.max(viewStart, model.selStart()), b = Math.min(end, model.selEnd());
                 if (b > a) {
-                    int x1 = textX + tm.width(s.substring(viewStart, a)), x2 = textX + tm.width(s.substring(viewStart, b));
+                    int x1 = textX + tw(s.substring(viewStart, a)), x2 = textX + tw(s.substring(viewStart, b));
                     g.fillRect(x1, y + 2, x2 - x1, h - 4, 0xFF3A62B0);
                 }
             }
-            g.drawText(s.substring(viewStart, end), textX, ty, en ? style("color", C_TEXT) : C_DIM, false);
+            textStyle().draw(g, s.substring(viewStart, end), textX, ty, en ? style("color", C_TEXT) : C_DIM, false);   // text-transform 은 편집 중 글자 위치가 어긋나지 않게 적용하지 않는다
             if (foc && (f.nowMillis() / 500) % 2 == 0) {
-                g.fillRect(textX + tm.width(s.substring(viewStart, cur)), y + 2, 1, h - 4, C_TEXT);
+                g.fillRect(textX + tw(s.substring(viewStart, cur)), y + 2, 1, h - 4, C_TEXT);
             }
         }
 
@@ -380,7 +383,7 @@ public final class BuiltinWidgets {
             String s = model.text();
             int rel = mx - textX, best = viewStart, prev = 0;
             for (int i = viewStart + 1; i <= s.length(); i++) {
-                int w = tm.width(s.substring(viewStart, i));
+                int w = tw(s.substring(viewStart, i));
                 if (rel < w) return (rel - prev < w - rel) ? i - 1 : i;
                 prev = w;
                 best = i;
@@ -477,7 +480,7 @@ public final class BuiltinWidgets {
             if (b == null) return null;
             String s = model.text();
             int cur = Math.min(model.cursor(), s.length()), start = Math.min(viewStart, cur);
-            return new int[] {textX + tm.width(s.substring(start, cur)), b.y, b.h};
+            return new int[] {textX + tw(s.substring(start, cur)), b.y, b.h};
         }
     }
 
@@ -678,16 +681,16 @@ public final class BuiltinWidgets {
             return r;
         }
 
-        private int rowH() { return tm.lineHeight() + 4; }
+        private int rowH() { return styledLine() + 4; }
 
         @Override
         public int intrinsicWidth() {
-            int w = tm.width(attr("value", ""));
-            for (String o : options()) w = Math.max(w, tm.width(o));
+            int w = styledWidth(attr("value", ""));
+            for (String o : options()) w = Math.max(w, styledWidth(o));
             return w + 22;
         }
 
-        @Override public int intrinsicHeight() { return tm.lineHeight() + 6; }
+        @Override public int intrinsicHeight() { return styledLine() + 6; }
 
         @Override public boolean focusable() { return enabled(); }
 
@@ -699,7 +702,7 @@ public final class BuiltinWidgets {
             g.fillRect(x, y, w, h, !en ? C_DIM : f.hovered() || open ? C_BORDER_HOT : style("border-color", C_BORDER));
             g.fillRect(x + 1, y + 1, w - 2, h - 2, style("background", 0xFF202230));
             String v = attr("value", "");
-            g.drawText(v.isEmpty() ? attr("placeholder", "") : v, x + 5, y + (h - tm.lineHeight()) / 2 + 1, v.isEmpty() || !en ? C_DIM : style("color", C_TEXT), false);
+            drawStyled(g, v.isEmpty() ? attr("placeholder", "") : v, x + 5, y + (h - styledLine()) / 2 + 1, v.isEmpty() || !en ? C_DIM : style("color", C_TEXT), false);
             g.drawText(open ? "^" : "v", x + w - 10, y + (h - tm.lineHeight()) / 2 + 1, C_DIM, false);
             if (focused()) outline(g, x - 1, y - 1, w + 2, h + 2, C_FOCUS);
         }
@@ -728,7 +731,7 @@ public final class BuiltinWidgets {
                 if (hot) hoverRow = i;
                 if (hot || i == keyRow) g.fillRect(r[0], ry, r[2], rowH(), 0xFF3A4A80);
                 else if (opts.get(i).equals(attr("value", ""))) g.fillRect(r[0], ry, r[2], rowH(), 0xFF262A40);
-                g.drawText(opts.get(i), r[0] + 5, ry + 3, C_TEXT, false);
+                drawStyled(g, opts.get(i), r[0] + 5, ry + 2 + (rowH() - 4 - styledLine()) / 2 + 1, C_TEXT, false);
             }
         }
 
