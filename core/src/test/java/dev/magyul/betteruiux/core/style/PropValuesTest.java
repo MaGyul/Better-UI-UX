@@ -67,4 +67,38 @@ class PropValuesTest {
         assertTrue(PropValues.suggest("background").stream().anyMatch(x -> x.startsWith("linear-gradient")));
         assertTrue(PropValues.suggest("border").contains("1 solid #FFFFFF"));
     }
+
+    @Test
+    void flexTransitionAnimationAndTracksAreChecked() {
+        for (String[] ok : new String[][] {{"flex", "1"}, {"flex", "1 1 0"}, {"flex", "0 0 auto"}, {"flex", "none"}, {"flex", "1 1 50%"},
+                {"grid-template-columns", "1fr 2fr"}, {"grid-template-columns", "repeat(3, 1fr)"}, {"grid-template-columns", "100px minmax(50px, 1fr) auto"},
+                {"grid-template-rows", "20% auto"}, {"grid-template-columns", "none"}, {"grid-template-columns", "repeat(2, 1fr 40px)"},
+                {"transition", "all 0.2s"}, {"transition", "opacity 0.3s ease"}, {"transition", "background 150ms linear 50ms, width 0.2s"},
+                {"transition", "none"}, {"transition", "opacity 0.3s cubic-bezier(0.1, 0.7, 1, 0.1)"}, {"transition", "margin 0.2s steps(4)"},
+                {"animation", "pulse 1s"}, {"animation", "pulse 1s ease-in-out 200ms infinite alternate forwards"}, {"animation", "a 1s, b 2s linear"},
+                {"animation", "none"}, {"animation", "spin 2s linear 3 paused"}}) {
+            assertNull(PropValues.check(ok[0], ok[1]), ok[0] + ": " + ok[1]);
+        }
+        assertNotNull(PropValues.check("flex", "1 2 3 4"));
+        assertNotNull(PropValues.check("flex", "fast"));
+        assertNotNull(PropValues.check("grid-template-columns", "1fr abc"));
+        assertNotNull(PropValues.check("grid-template-columns", "repeat(x, 1fr)"));
+        assertNotNull(PropValues.check("grid-template-columns", "minmax(1fr)"));
+        assertTrue(PropValues.check("transition", "opacity").contains("지속 시간"));
+        assertTrue(PropValues.check("transition", "display 1s").contains("전환할 수 없는"));
+        assertNotNull(PropValues.check("transition", "opacity 1s 2s 3s"));
+        assertNotNull(PropValues.check("transition", "opacity foo 1s"));
+        assertTrue(PropValues.check("animation", "1s").contains("이름"));
+        assertTrue(PropValues.check("animation", "pulse").contains("지속 시간"));
+        assertNotNull(PropValues.check("animation", "pulse other 1s"));
+        assertNotNull(PropValues.check("animation", "pulse 1s ease linear"));
+    }
+
+    @Test
+    void suggestionsExistForTheNewTypes() {
+        assertTrue(PropValues.suggest("transition").stream().anyMatch(x -> x.startsWith("opacity")));
+        assertTrue(PropValues.suggest("animation").contains("none"));
+        assertTrue(PropValues.suggest("grid-template-columns").contains("repeat(3, 1fr)"));
+        assertTrue(PropValues.suggest("flex").contains("1"));
+    }
 }

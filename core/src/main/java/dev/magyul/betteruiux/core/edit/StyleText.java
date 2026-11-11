@@ -80,7 +80,7 @@ final class StyleText {
             if (close < 0) break;
             String selector = new String(m, i, open - i).trim();
             if (!selector.isEmpty() && !selector.startsWith("@")) {
-                if (out != null) out.add(new Rule(selector, open + 1, close, decls(m, open + 1, close), media));
+                if (out != null) addRule(m, text, selector, open + 1, close, media, out, 0);
             } else if (selector.startsWith("@media") || selector.startsWith("@supports")) {
                 // 조건 블록 안의 규칙도 편집 대상. @media 의 조건은 규칙에 붙여 두었다가 패널에서 지금 켜져 있는지 보여 준다.
                 scan(text, open + 1, close, out, kfOut, selector.startsWith("@media") ? selector.substring(6).trim() : media);
@@ -90,6 +90,33 @@ final class StyleText {
                 kfOut.add(new Kf(selector.substring("@keyframes".length()).trim(), open + 1, close, stops));
             }
             i = close + 1;
+        }
+    }
+
+    /**
+     * 규칙 하나를 목록에 더한다. 본문에 CSS 중첩 규칙({@code &:hover { }}, {@code .child { }}, {@code @media { }})이 있으면 부모의 선언만 부모 규칙으로 두고,
+     * 중첩 규칙은 부모와 합친 선택자(예: {@code a:hover})의 규칙으로 따로 더한다(위치는 원문 그대로라 값 고치기·선언 추가가 중첩 블록 안에서 일어난다).
+     */
+    private static void addRule(char[] m, String text, String selector, int bodyStart, int bodyEnd, String media, List<Rule> out, int depth) {
+        dev.magyul.betteruiux.core.style.NestedCss.Split sp =
+                dev.magyul.betteruiux.core.style.NestedCss.split(new String(m, bodyStart, bodyEnd - bodyStart), bodyStart);
+        if (sp.nested().isEmpty() || depth > 8) {
+            out.add(new Rule(selector, bodyStart, bodyEnd, decls(m, bodyStart, bodyEnd), media));
+            return;
+        }
+        char[] masked = m.clone();                                          // 부모의 선언을 읽을 때 중첩 블록은 빈칸으로 가린다
+        for (dev.magyul.betteruiux.core.style.NestedCss.Nested nst : sp.nested()) {
+            for (int k = nst.preludeStart(); k <= nst.bodyEnd() && k < masked.length; k++) if (masked[k] != (char) 10) masked[k] = ' ';
+        }
+        List<Decl> own = decls(masked, bodyStart, bodyEnd);
+        if (!own.isEmpty()) out.add(new Rule(selector, bodyStart, bodyEnd, own, media));
+        for (dev.magyul.betteruiux.core.style.NestedCss.Nested nst : sp.nested()) {
+            String pre = nst.prelude(), low = pre.toLowerCase();
+            if (low.startsWith("@media")) {
+                out.add(new Rule(selector, nst.bodyStart(), nst.bodyEnd(), decls(m, nst.bodyStart(), nst.bodyEnd()), pre.substring(6).trim()));
+            } else if (!pre.startsWith("@") && !pre.isEmpty()) {
+                addRule(m, text, dev.magyul.betteruiux.core.style.NestedCss.combine(selector, pre), nst.bodyStart(), nst.bodyEnd(), media, out, depth + 1);
+            }
         }
     }
 

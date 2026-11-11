@@ -184,7 +184,8 @@ public final class Stylesheet {
                 sheet.warnings.add("스타일: '" + selectorText.split("[ \t\r\n]+")[0] + "' 은(는) 지원하지 않아 무시합니다");
                 continue;
             }
-            List<Declaration> decls = parseDeclarations(body);
+            NestedCss.Split nestedSplit = NestedCss.split(body, 0);        // CSS 중첩: 본문 안의 규칙(&:hover { }, .child { }, @media { })은 따로 떼어 아래에서 평평하게 푼다
+            List<Declaration> decls = parseDeclarations(nestedSplit.declarations());
             for (Declaration d : decls) {
                 String hint = unknownHint(d.prop());
                 if (hint != null && hint.isEmpty()) {                    // 알려진 속성: 값이 명백히 잘못됐으면 경고(값은 그대로 둔다)
@@ -198,12 +199,34 @@ public final class Stylesheet {
                     sheet.warnings.add("스타일: 알 수 없는 속성 '" + d.prop() + "'" + (hint == null ? "" : " (혹시 '" + hint + "'?)"));
                 }
             }
-            for (String single : Selector.splitList(selectorText)) {
-                try {
-                    sheet.rules.add(new Rule(Selector.parse(single.trim()), decls, media));
-                } catch (IllegalArgumentException e) {
-                    sheet.warnings.add("스타일: " + e.getMessage());
+            if (!decls.isEmpty() || nestedSplit.nested().isEmpty()) {
+                for (String single : Selector.splitList(selectorText)) {
+                    try {
+                        sheet.rules.add(new Rule(Selector.parse(single.trim()), decls, media));
+                    } catch (IllegalArgumentException e) {
+                        sheet.warnings.add("스타일: " + e.getMessage());
+                    }
                 }
+            }
+            for (NestedCss.Nested nst : nestedSplit.nested()) {
+                if (depth >= MAX_NESTING) {
+                    sheet.warnings.add("스타일: 규칙이 너무 깊이 중첩됐습니다 (" + selectorText + ")");
+                    break;
+                }
+                String pre = nst.prelude();
+                String low = pre.toLowerCase();
+                String synthetic;
+                if (low.startsWith("@media") || low.startsWith("@supports")) {            // 규칙 안의 조건 블록: 그 안의 선언은 부모 선택자에 적용
+                    synthetic = pre + " { " + selectorText + " { " + nst.body() + " } }";
+                } else if (pre.startsWith("@")) {
+                    sheet.warnings.add("스타일: 규칙 안의 '" + pre.split("[ ]+")[0] + "' 은(는) 지원하지 않아 무시합니다");
+                    continue;
+                } else if (pre.isEmpty()) {
+                    continue;
+                } else {
+                    synthetic = NestedCss.combine(selectorText, pre) + " { " + nst.body() + " }";
+                }
+                sheet.parseBlock(synthetic, media, depth + 1);
             }
         }
     }

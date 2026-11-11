@@ -12,7 +12,28 @@ import javax.xml.stream.XMLStreamReader;
 public final class UiParser {
     private UiParser() {}
 
+    private static final java.util.regex.Pattern STYLE_BLOCK = java.util.regex.Pattern.compile("(<style(?:[ \t\r\n][^>]*)?>)(.*?)(</style>)", java.util.regex.Pattern.DOTALL);
+    private static final java.util.regex.Pattern LONE_AMP = java.util.regex.Pattern.compile("&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)");
+
+    /**
+     * {@code <style>} 안의 CSS 중첩({@code &:hover { }})에 쓰는 {@code &} 가 XML 에서는 엔티티 시작이라 파싱이 깨진다. CDATA 로 감싸지 않은
+     * style 블록 안의 단독 {@code &} 를 {@code &amp;} 로 바꿔 준다(이미 엔티티인 것과 CDATA 블록은 그대로).
+     */
+    static String escapeStyleAmpersands(String xml) {
+        if (xml.indexOf('&') < 0) return xml;
+        java.util.regex.Matcher m = STYLE_BLOCK.matcher(xml);
+        StringBuilder out = new StringBuilder();
+        while (m.find()) {
+            String body = m.group(2);
+            if (!body.contains("<![CDATA[")) body = LONE_AMP.matcher(body).replaceAll("&amp;");
+            m.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(m.group(1) + body + m.group(3)));
+        }
+        m.appendTail(out);
+        return out.toString();
+    }
+
     public static UiNode parse(String xml) throws UiParseException {
+        xml = escapeStyleAmpersands(xml);
         XMLInputFactory f = XMLInputFactory.newFactory();
         f.setProperty(XMLInputFactory.SUPPORT_DTD, false);
         f.setProperty(XMLInputFactory.IS_COALESCING, true); // CDATA(<style> 안의 CSS 등)를 일반 텍스트와 합친다

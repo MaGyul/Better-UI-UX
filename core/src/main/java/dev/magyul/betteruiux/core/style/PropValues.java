@@ -14,9 +14,11 @@ import java.util.regex.Pattern;
 final class PropValues {
     private PropValues() {}
 
-    private enum Type { LENGTH, NUMBER, COLOR, ENUM, BOX, RADIUS, BORDER, SHADOW, BACKGROUND, WEIGHT }
+    private enum Type { LENGTH, NUMBER, COLOR, ENUM, BOX, RADIUS, BORDER, SHADOW, BACKGROUND, WEIGHT, FLEX, TRACKS, TRANSITION, ANIMATION }
 
     private static final Pattern LENGTH = Pattern.compile("-?([0-9]+[.]?[0-9]*|[.][0-9]+)(px|%|em|rem|vw|vh|vmin|vmax|pt|deg|s|ms)?");
+    /** 단독 min()/max() 함수(minmax() 는 제외). */
+    private static final Pattern MINMAX_FN = Pattern.compile("(^|[^a-z-])(min|max)[(]");
     private static final Set<String> GLOBAL = Set.of("inherit", "initial", "unset", "revert");
     private static final Set<String> LENGTH_WORDS = Set.of("auto", "fill", "none", "normal", "min-content", "max-content", "thin", "medium", "thick");
     private static final Set<String> BORDER_STYLES = Set.of("solid", "dashed", "dotted", "double", "hidden", "groove", "ridge", "inset", "outset");
@@ -51,6 +53,11 @@ final class PropValues {
         TYPES.put("text-shadow", Type.SHADOW);
         TYPES.put("background", Type.BACKGROUND);
         TYPES.put("font-weight", Type.WEIGHT);
+        TYPES.put("flex", Type.FLEX);
+        TYPES.put("grid-template-columns", Type.TRACKS);
+        TYPES.put("grid-template-rows", Type.TRACKS);
+        TYPES.put("transition", Type.TRANSITION);
+        TYPES.put("animation", Type.ANIMATION);
         enumOf("position", "static", "relative", "absolute", "fixed", "sticky");
         enumOf("display", "block", "inline", "inline-block", "flex", "inline-flex", "grid", "inline-grid", "none", "contents");
         enumOf("flex-wrap", "nowrap", "wrap", "wrap-reverse");
@@ -74,6 +81,30 @@ final class PropValues {
         ENUMS.put(prop, Set.of(values));
     }
 
+    /** {@code grid-template-*} 의 트랙 목록에서 읽을 수 없는 항목을 찾는다(없으면 null): 길이, fr, %, auto, min-content, repeat(N, …), minmax(a, b). */
+    private static String badTrack(String list) {
+        for (String tok : CssMath.tokens(list)) {
+            if (tok.startsWith("repeat(") && tok.endsWith(")")) {
+                List<String> parts = Selector.splitList(tok.substring(7, tok.length() - 1));
+                if (parts.size() != 2 || !parts.get(0).trim().matches("[0-9]+")) return "repeat(횟수, 트랙…) 형식이 아닙니다: " + tok;
+                String inner = badTrack(parts.get(1).trim());
+                if (inner != null) return inner;
+            } else if (tok.startsWith("minmax(") && tok.endsWith(")")) {
+                List<String> parts = Selector.splitList(tok.substring(7, tok.length() - 1));
+                if (parts.size() != 2) return "minmax(최소, 최대) 형식이 아닙니다: " + tok;
+                for (String p : parts) {
+                    String bad = badTrack(p.trim());
+                    if (bad != null) return bad;
+                }
+            } else if (tok.endsWith("fr") && LENGTH.matcher(tok.substring(0, tok.length() - 2)).matches()) {
+                continue;
+            } else if (!LENGTH.matcher(tok).matches() && !Set.of("auto", "min-content", "max-content").contains(tok) && !tok.startsWith("fit-content(")) {
+                return "트랙 크기(예: 100px, 1fr, 20%, auto, repeat(3, 1fr))가 아닙니다: " + tok;
+            }
+        }
+        return null;
+    }
+
     /** 속성의 값 후보(열거형이면 가능한 값, 그 밖에는 흔한 키워드). 알 수 없는 속성이면 빈 목록. 자동 완성용. */
     static java.util.List<String> suggest(String prop) {
         Type t = TYPES.get(prop);
@@ -90,6 +121,10 @@ final class PropValues {
             case SHADOW -> out.addAll(java.util.List.of("0 2 4 #000000AA", "0 0 8 #000000FF", "inset 0 0 6 #000000AA", "none"));
             case BACKGROUND -> out.addAll(java.util.List.of("transparent", "#000000", "#FFFFFF", "linear-gradient(#FF0000, #0000FF)",
                     "radial-gradient(#FF0000, #0000FF)", "conic-gradient(#FF0000, #00FF00, #0000FF)", "none"));
+            case FLEX -> out.addAll(java.util.List.of("1", "0 0 auto", "1 1 0", "none", "auto"));
+            case TRACKS -> out.addAll(java.util.List.of("1fr 1fr", "repeat(3, 1fr)", "100px 1fr", "auto 1fr", "minmax(50px, 1fr) 2fr"));
+            case TRANSITION -> out.addAll(java.util.List.of("all 0.2s", "opacity 0.3s ease", "background 0.15s linear", "width 0.2s ease-out", "none"));
+            case ANIMATION -> out.addAll(java.util.List.of("name 1s", "name 1s infinite", "name 0.5s ease-in-out alternate infinite", "none"));
             case WEIGHT -> out.addAll(java.util.List.of("normal", "bold", "bolder", "lighter", "400", "700"));
         }
         out.add("inherit");
@@ -104,8 +139,7 @@ final class PropValues {
         String v = rawValue.trim();
         String low = v.toLowerCase(Locale.ROOT);
         if (low.endsWith("!important")) low = low.substring(0, low.length() - 10).trim();
-        if (low.isEmpty() || GLOBAL.contains(low) || low.contains("var(") || low.contains("calc(") || low.contains("min(")
-                || low.contains("max(") || low.contains("clamp(") || low.contains("attr(") || low.contains("{{")) {
+        if (low.isEmpty() || GLOBAL.contains(low) || low.contains("var(") || low.contains("calc(") || MINMAX_FN.matcher(low).find() || low.contains("clamp(") || low.contains("attr(") || low.contains("{{")) {
             return null;
         }
         switch (t) {
@@ -162,6 +196,22 @@ final class PropValues {
                 if (toks.size() == 1 && !COLOR_WORDS.contains(low) && Colors.tryParse(v) == null && !low.matches("(repeating-)?(linear|radial|conic)-gradient[(].*[)]") && !low.startsWith("url(")) {
                     return "색이나 그라디언트(linear-gradient(...))가 아닙니다";
                 }
+            }
+            case FLEX -> {
+                List<String> toks = CssMath.tokens(low);
+                if (toks.size() > 3) return "값은 1~3개(grow shrink basis)입니다";
+                for (String tok : toks) if (!LENGTH.matcher(tok).matches() && !Set.of("auto", "none", "initial", "fill", "content").contains(tok)) return "숫자나 길이가 아닙니다: " + tok;
+            }
+            case TRACKS -> {
+                if (low.equals("none")) return null;
+                String bad = badTrack(low);
+                if (bad != null) return bad;
+            }
+            case TRANSITION -> {
+                return dev.magyul.betteruiux.core.anim.AnimSyntax.checkTransition(low);
+            }
+            case ANIMATION -> {
+                return dev.magyul.betteruiux.core.anim.AnimSyntax.checkAnimation(low);
             }
             case WEIGHT -> {
                 if (!Set.of("normal", "bold", "bolder", "lighter").contains(low) && !LENGTH.matcher(low).matches()) return "normal, bold 또는 숫자(100~900)가 아닙니다";

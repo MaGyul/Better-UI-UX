@@ -103,7 +103,27 @@ View 메뉴의 상태 미리보기로 `:hover :active :focus` 를 선택한 요�
 
 - **부드러운 가장자리**: 둥근 모서리의 채움·테두리(실선, 네 변 두께 같음)·번지는 `box-shadow`·그라디언트(`linear/radial/conic`)는 셰이더로 안티앨리어싱되어 한 번에 그려진다(반지름이 서로 달라도 된다). `inset` 그림자와 둥근 이미지/영상(텍스처 전체)도 셰이더로 그려진다. 점선 테두리, 네 변 두께가 다른 테두리, 이미지의 일부 영역(`uv`)은 사각형 근사로 그려진다.
 
+## CSS 중첩
+
+규칙 안에 규칙을 쓸 수 있다(CSS Nesting).
+
+```css
+.card {
+  padding: 4;
+  &:hover { background: #333344; }      /* .card:hover */
+  .title { color: #FFFFFF; }            /* .card .title */
+  > .icon { width: 16; }                /* .card > .icon */
+  & + & { margin-top: 4; }              /* .card + .card */
+  @media (max-width: 300) { padding: 1; }
+}
+```
+
+- `&` 는 부모 선택자다. `&` 가 없으면 부모의 후손으로 본다(`> + ~` 로 시작하면 그 관계). 부모가 여럿(`a, b`)이거나 `&` 가 맨 앞이 아닌 곳에 있으면 `:is(부모)` 로 푼다.
+- 규칙 안의 `@media`/`@supports` 는 부모 선택자에 대한 조건 규칙이 된다. 그 밖의 `@` 규칙은 지원하지 않는다(경고).
+- XML `<style>` 안에서 `&` 를 그냥 써도 된다(자동으로 `&amp;` 처리). `<![CDATA[ ]]>` 로 감싼 경우는 그대로다.
+- 에디터의 속성 패널은 중첩 규칙을 합친 선택자(`.card:hover`)로 보여 주고, 그 자리(중첩 블록 안)에서 고치고 선언을 더한다.
+
 ## 아직 없는 것
 
 `filter`/`backdrop-filter`, 3D 변환,
-모든 속성에 대한 값 타입 검증(길이/숫자/색/열거형과 `margin padding border border-radius box-shadow background font-weight` 만 검사한다).
+모든 속성에 대한 값 타입 검증(길이/숫자/색/열거형과 `margin padding border border-radius box-shadow background font-weight flex grid-template-* transition animation` 만 검사한다).
