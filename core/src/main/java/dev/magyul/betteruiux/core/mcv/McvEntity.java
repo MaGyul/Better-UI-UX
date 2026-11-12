@@ -75,14 +75,140 @@ public final class McvEntity {
     public void setNbtSnapshot(String snbt) { this.nbtSnapshot = snbt; }
 
     void setPosition(double x, double y, double z) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
+        synchronized (this) {
+            this.x = this.prevX = x;
+            this.y = this.prevY = y;
+            this.z = this.prevZ = z;
+        }
     }
 
     void setRotation(float yaw, float pitch) {
-        this.yaw = yaw;
-        this.pitch = pitch;
+        synchronized (this) {
+            this.yaw = this.prevYaw = yaw;
+            this.pitch = this.prevPitch = pitch;
+            this.headYaw = this.prevHeadYaw = Float.NaN;             // 몸을 돌리면 머리도 따라간다
+        }
+    }
+
+    // ---- 이동 모션(틱마다 월드가 진행한다) ----
+
+    public static final int MAX_MOVE_TICKS = 1_000_000;
+    public static final double MAX_VELOCITY = 8.0;                   // 틱당 블록 수
+    private static final float TURN_PER_TICK = 40f;                  // 이동 방향으로 몸을 돌리는 최대 속도(도/틱)
+
+    private double prevX, prevY, prevZ;
+    private float prevYaw, prevPitch, prevHeadYaw = Float.NaN, headYaw = Float.NaN;   // 머리 방향이 NaN 이면 몸을 따른다
+    private double targetX, targetY, targetZ;
+    private int remaining;                                           // moveTo 로 남은 틱(0 이면 계획 없음)
+    private double vx, vy, vz;                                       // setVelocity 의 틱당 이동량
+    private volatile float stepSpeed;                                // 지난 틱에 가로로 움직인 거리(걷기 애니메이션 속도)
+
+    /** {@code ticks} 틱 동안 일정한 속도로 목표까지 이동한다(이전 이동 계획·속도는 대체). 0 이하면 그 자리로 순간이동. */
+    synchronized void moveTo(double tx, double ty, double tz, int ticks) {
+        if (ticks > MAX_MOVE_TICKS) throw new IllegalArgumentException("이동 틱이 너무 큽니다(" + MAX_MOVE_TICKS + ")");
+        vx = vy = vz = 0;
+        if (ticks <= 0) {
+            remaining = 0;
+            setPosition(tx, ty, tz);
+            return;
+        }
+        targetX = tx;
+        targetY = ty;
+        targetZ = tz;
+        remaining = ticks;
+    }
+
+    /** 이동 계획을 취소하고 속도를 0 으로 한다(그 자리에 멈춘다). */
+    synchronized void stopMoving() {
+        remaining = 0;
+        vx = vy = vz = 0;
+    }
+
+    /** 틱당 이동량(블록/틱). 이동 계획은 대체되고, 멈추려면 stop. */
+    synchronized void setVelocity(double dx, double dy, double dz) {
+        if (!(Math.abs(dx) <= MAX_VELOCITY && Math.abs(dy) <= MAX_VELOCITY && Math.abs(dz) <= MAX_VELOCITY)) {
+            throw new IllegalArgumentException("속도는 틱당 -" + MAX_VELOCITY + " ~ " + MAX_VELOCITY + " 블록이어야 합니다");
+        }
+        remaining = 0;
+        vx = dx;
+        vy = dy;
+        vz = dz;
+    }
+
+    /** 머리만 그 지점을 바라보게 한다(몸은 그대로). pitch 도 함께 맞춘다. 몸을 돌리면(setRotation) 머리는 다시 몸을 따른다. */
+    synchronized void lookAt(double px, double py, double pz, double eyeHeight) {
+        double dx = px - x, dy = py - (y + eyeHeight), dz = pz - z;
+        double flat = Math.sqrt(dx * dx + dz * dz);
+        if (flat < 1e-6 && Math.abs(dy) < 1e-6) return;
+        headYaw = flat < 1e-6 ? yaw : (float) Math.toDegrees(Math.atan2(-dx, dz));
+        pitch = (float) -Math.toDegrees(Math.atan2(dy, flat));
+    }
+
+    public synchronized boolean moving() { return remaining > 0 || vx != 0 || vy != 0 || vz != 0; }
+
+    /** 지난 틱에 가로로 움직인 거리(블록/틱). */
+    public float stepSpeed() { return stepSpeed; }
+
+    /** 한 틱 진행한다(월드의 시계가 부른다). 이전 틱 값을 남겨 렌더가 그 사이를 보간한다. */
+    synchronized void tick() {
+        prevX = x;
+        prevY = y;
+        prevZ = z;
+        prevYaw = yaw;
+        prevPitch = pitch;
+        prevHeadYaw = headYaw;
+        double dx = 0, dy = 0, dz = 0;
+        if (remaining > 0) {
+            dx = (targetX - x) / remaining;
+            dy = (targetY - y) / remaining;
+            dz = (targetZ - z) / remaining;
+            if (--remaining == 0) {
+                x = targetX;
+                y = targetY;
+                z = targetZ;
+            } else {
+                x += dx;
+                y += dy;
+                z += dz;
+            }
+        } else if (vx != 0 || vy != 0 || vz != 0) {
+            dx = vx;
+            dy = vy;
+            dz = vz;
+            x += dx;
+            y += dy;
+            z += dz;
+        }
+        double flat = Math.sqrt(dx * dx + dz * dz);
+        stepSpeed = (float) flat;
+        if (flat > 1e-4 && !Boolean.FALSE.equals(fields.get("faceMovement"))) {
+            float want = (float) Math.toDegrees(Math.atan2(-dx, dz));
+            float diff = ((want - yaw + 540f) % 360f) - 180f;
+            yaw += Math.max(-TURN_PER_TICK, Math.min(TURN_PER_TICK, diff));
+        }
+    }
+
+    // ---- 그릴 때 쓰는 보간 값(partial = 지금 틱이 얼마나 진행됐는지, 0~1) ----
+
+    public synchronized double renderX(float partial) { return prevX + (x - prevX) * partial; }
+
+    public synchronized double renderY(float partial) { return prevY + (y - prevY) * partial; }
+
+    public synchronized double renderZ(float partial) { return prevZ + (z - prevZ) * partial; }
+
+    public synchronized float renderYaw(float partial) { return lerpAngle(prevYaw, yaw, partial); }
+
+    public synchronized float renderPitch(float partial) { return prevPitch + (pitch - prevPitch) * partial; }
+
+    /** 머리 방향. lookAt 을 안 했으면 몸 방향과 같다. */
+    public synchronized float renderHeadYaw(float partial) {
+        float prev = Float.isNaN(prevHeadYaw) ? prevYaw : prevHeadYaw, cur = Float.isNaN(headYaw) ? yaw : headYaw;
+        return lerpAngle(prev, cur, partial);
+    }
+
+    private static float lerpAngle(float a, float b, float t) {
+        float d = ((b - a + 540f) % 360f) - 180f;
+        return a + d * t;
     }
 
     /** 이름이 올바르고 값이 숫자/불리언/짧은 글자일 때만 저장한다. 위치·회전은 필드가 아니라 전용 메서드로 바꾼다. */
@@ -108,6 +234,7 @@ public final class McvEntity {
             case "yaw" -> (double) yaw;
             case "pitch" -> (double) pitch;
             case "type" -> type;
+            case "moving" -> moving();
             default -> fields.get(name);
         };
     }

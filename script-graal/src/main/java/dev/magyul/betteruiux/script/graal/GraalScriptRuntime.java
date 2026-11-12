@@ -76,6 +76,11 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                 var methods = {
                   setPosition: function (x, y, z) { return call('setPosition', [x, y, z]); },
                   setRotation: function (yaw, pitch) { return call('setRotation', [yaw, pitch]); },
+                  moveTo: function (x, y, z, ticks) { return call('moveTo', [x, y, z, ticks == null ? 0 : ticks]); },
+                  walkTo: function (x, y, z, blocksPerSecond) { return call('walkTo', [x, y, z, blocksPerSecond == null ? 2 : blocksPerSecond]); },
+                  setVelocity: function (x, y, z) { return call('setVelocity', [x, y, z]); },
+                  stop: function () { return call('stop', []); },
+                  lookAt: function (x, y, z) { return call('lookAt', [x, y, z]); },
                   remove: function () { return call('remove', []); },
                   mergeNbt: function (snbt) { return call('mergeNbt', [String(snbt)]); },
                   getNbt: function () { return call('getNbt', []); },

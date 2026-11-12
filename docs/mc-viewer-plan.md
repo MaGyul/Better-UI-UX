@@ -206,6 +206,13 @@ world.setTickRate(~);
 - 테스트: 물 웅덩이 파란 픽셀 0 → 3080, 용암 주황 픽셀 0 → ~900 (게임 테스트).
 - 알려진 한계: 전도체는 물·틀을 읽어 활성 상태로 틱이 돌지만 화면에서 몇 픽셀 크기라 자동 단언은 못 했다(스크린샷 conduit-active/inactive 로 육안 확인용).
 
+## 엔티티 이동 모션 (완료, 엔티티 동작 1단계)
+- 코어: `McvEntity.tick()` 이 월드 시계(`McvWorld.advance`)의 틱마다 이동 계획(`moveTo`/`walkTo`)과 속도(`setVelocity`)를 진행한다. 진행 방향으로 몸을 돌리고(틱당 최대 40°, `faceMovement=false` 로 끔), 직전 틱 값을 남겨 렌더가 `entityPartial()`(시계가 멈추면 1)로 위치·회전·머리를 보간한다.
+- 머리: `lookAt` 은 머리 yaw/pitch 만 바꾼다(`setRotation` 하면 머리가 다시 몸을 따른다).
+- 백엔드: `McViewerEntities` 가 보간한 값을 진짜 엔티티에 넣고, 지난 틱 이동 속도로 `walkAnimation.update` 를 월드 틱마다 돌려 걷는 애니메이션이 나온다.
+- 후속 2~3단계(물리, 바닐라 AI)는 아직. 팔 휘두르기(`swing`)는 바닐라가 엔티티 틱에서 진행시키는 상태라 이번에 넣지 않았다.
+- 테스트: `McvEntityMotionTest`(8개), `McvScriptTest`, 게임 테스트(걸어간 소 vs 선 소, 차이 516픽셀).
+
 ## 완료 후 남은 과제 (후속, 우선순위 순)
 - 면 단위 컬링(큰 월드 성능), 월드 스냅샷을 프레임마다 복사하는 비용 줄이기
 - NeoForge 실행 확인(컴파일만 확인됨)

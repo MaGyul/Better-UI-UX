@@ -49,6 +49,7 @@ final class McViewerEntities {
 
     private final Map<McvWorld, Map<Integer, Optional<Entity>>> live = new WeakHashMap<>();
     private final Set<String> warned = new HashSet<>();
+    private final Map<McvWorld, Map<Integer, Long>> walked = new WeakHashMap<>();   // 걷기 애니메이션을 마지막으로 진행한 월드 틱
     private Level cachedLevel;
 
     void render(McvWorld w, Quaternionf orientation, PoseStack pose, SubmitNodeCollector collector) {
@@ -61,11 +62,14 @@ final class McViewerEntities {
         if (level == null) return;
         Map<Integer, Optional<Entity>> entities = live.computeIfAbsent(w, k -> new HashMap<>());
         Set<Integer> present = new HashSet<>();
+        Map<Integer, Long> walkTicks = walked.computeIfAbsent(w, k -> new HashMap<>());
+        float partial = w.entityPartial();                                   // 이동 모션을 보간하는 비율
         EntityRenderDispatcher dispatcher = mc.getEntityRenderDispatcher();
         CameraRenderState camera = camera(orientation);
         for (McvEntity me : w.entities()) {
             present.add(me.id());
-            if (!w.inView(me.x(), me.y(), me.z())) continue;
+            double rx = me.renderX(partial), ry = me.renderY(partial), rz = me.renderZ(partial);
+            if (!w.inView(rx, ry, rz)) continue;
             Optional<Entity> slot = entities.get(me.id());
             if (slot == null) {
                 slot = Optional.ofNullable(create(level, me));
@@ -73,14 +77,15 @@ final class McViewerEntities {
             }
             if (slot.isEmpty()) continue;
             Entity e = slot.get();
-            sync(e, me, w);
+            sync(e, me, w, partial, rx, ry, rz);
+            if (e instanceof LivingEntity le) animateWalk(le, me, w, walkTicks);
             applyNbt(e, me, level);
             me.setBounds(e.getBbWidth(), e.getBbHeight());               // 이제 화면의 엔티티를 맞힐 수 있다(core 의 raycast 가 이 크기를 쓴다)
             EntityRenderState state = dispatcher.extractEntity(e, w.partialTick());   // 틱 사이를 보간해 부드럽게(ageInTicks = tickCount + partial)
             state.lightCoords = LightCoordsUtil.FULL_BRIGHT;
             showNameTag(e, state);
             pose.pushPose();
-            pose.translate(me.x(), me.y(), me.z());
+            pose.translate(rx, ry, rz);
             dispatcher.submit(state, camera, 0, 0, 0, pose, collector);
             pose.popPose();
         }
@@ -134,20 +139,21 @@ final class McViewerEntities {
     }
 
     /** 데이터 모델 → 엔티티. 이전/현재 값을 같게 해서 보간 없이 지금 값 그대로 그려진다. */
-    private static void sync(Entity e, McvEntity me, McvWorld w) {
-        e.setPos(me.x(), me.y(), me.z());
-        e.xo = e.xOld = me.x();
-        e.yo = e.yOld = me.y();
-        e.zo = e.zOld = me.z();
-        e.setYRot(me.yaw());
-        e.setXRot(me.pitch());
-        e.yRotO = me.yaw();
-        e.xRotO = me.pitch();
+    private static void sync(Entity e, McvEntity me, McvWorld w, float partial, double rx, double ry, double rz) {
+        float yaw = me.renderYaw(partial), pitch = me.renderPitch(partial), head = me.renderHeadYaw(partial);
+        e.setPos(rx, ry, rz);
+        e.xo = e.xOld = rx;
+        e.yo = e.yOld = ry;
+        e.zo = e.zOld = rz;
+        e.setYRot(yaw);
+        e.setXRot(pitch);
+        e.yRotO = yaw;
+        e.xRotO = pitch;
         if (e instanceof LivingEntity le) {
-            le.setYBodyRot(me.yaw());
-            le.setYHeadRot(me.yaw());
-            le.yBodyRotO = me.yaw();
-            le.yHeadRotO = me.yaw();
+            le.setYBodyRot(yaw);
+            le.setYHeadRot(head);
+            le.yBodyRotO = yaw;
+            le.yHeadRotO = head;
         }
         e.tickCount = (int) w.tickCount();
         // 필드는 스크립트가 값을 준 것만 적용한다(안 준 것은 NBT 병합 등으로 바뀐 값을 그대로 둔다).
@@ -160,6 +166,14 @@ final class McViewerEntities {
         }
         if (f.containsKey("customNameVisible")) e.setCustomNameVisible(Boolean.TRUE.equals(f.get("customNameVisible")));
         if (f.containsKey("invisible")) e.setInvisible(Boolean.TRUE.equals(f.get("invisible")));
+    }
+
+    /** 월드 틱이 진행된 만큼 걷기 애니메이션을 진행한다(바닐라는 엔티티 틱에서 한다). 한 번에 너무 많이 밀렸으면 몇 번만 따라간다. */
+    private static void animateWalk(LivingEntity le, McvEntity me, McvWorld w, Map<Integer, Long> walkTicks) {
+        long now = w.tickCount(), last = walkTicks.getOrDefault(me.id(), now);
+        walkTicks.put(me.id(), now);
+        float target = Math.min(me.stepSpeed() * 4f, 1f);                  // LivingEntity.updateWalkAnimation 과 같은 식
+        for (long t = Math.min(now - last, 4); t > 0; t--) le.walkAnimation.update(target, 0.4f, 1.0f);
     }
 
     /**

@@ -224,6 +224,24 @@ cam.setPosition(2.5, 4, -6);   // 눈 위치를 직접 정한다(1인칭): 이�
 - 명령은 **기본 거부**다. 서버/모드팩이 허용 목록을 명시해야 한다.
 - 에디터 안에서는 스크립트가 실행되지 않는다(문서 구조만 편집).
 
+## 엔티티 이동 모션
+
+엔티티는 월드 틱 시계(`setTickRate`)에 맞춰 움직이고, 틱 사이는 보간돼 부드럽다. 걷는 애니메이션(다리·팔)도 이동 속도에 맞춰 자동으로 돈다.
+
+```js
+cow.moveTo(8, 1, 3, 40);        // 40틱에 걸쳐 일정한 속도로 이동(0 이하면 순간이동)
+cow.walkTo(8, 1, 3, 2);         // 초당 2블록 속도로 걷기(틱 속도 기준으로 틱 수를 계산)
+cow.setVelocity(0.1, 0, 0);     // 틱당 이동량. stop() 전까지 계속 간다(최대 틱당 8블록)
+cow.stop();                     // 이동 계획·속도를 지운다
+cow.lookAt(x, y, z);            // 머리(와 pitch)만 그쪽으로. setRotation 을 부르면 머리가 다시 몸을 따른다
+cow.moving                      // 이동 중이면 true (onTick 에서 도착 여부를 확인할 때)
+cow.faceMovement = false;       // 기본은 이동 방향으로 몸을 돌린다(틱당 최대 40°). 끄면 몸 방향 유지
+cow.pose = 'sleeping';          // 포즈 필드(standing/crouching/sleeping/swimming 등)
+```
+
+- 새 `moveTo`/`walkTo`/`setVelocity` 는 이전 이동을 대체한다. `setPosition` 은 순간이동이고 진행 중인 `moveTo` 는 새 위치에서 목표로 이어 간다.
+- 물리(중력·충돌)와 AI(길찾기)는 없다: 움직임은 모두 스크립트가 지시한 것만 한다. 위젯이 안 보이는 동안은 시계가 멈춘다.
+
 ## 유체(물·용암)
 
 `setBlock(x,y,z,'water')`, `'lava'` 와 `waterlogged=true` 블록, 부분 수위(`water[level=3]`)는 바닐라 유체 렌더러로 그려진다.

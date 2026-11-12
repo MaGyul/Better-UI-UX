@@ -52,6 +52,27 @@ class McvScriptTest {
     }
 
     @Test
+    void entityMotionIsDrivenByTheWorldClock() throws Exception {
+        rt.load("t.uijs", """
+                var cow;
+                function go() {
+                  var w = mcv.createWorld(12, 4, 4);
+                  cow = w.spawnEntity(1, 1, 1, 'cow');
+                  cow.moveTo(5, 1, 1, 8);
+                  ui.log(String(cow.moving) + '|' + cow.x);
+                }
+                function after() { ui.log(String(cow.moving) + '|' + cow.x); }
+                """);
+        assertTrue(call("go").contains("true|1"), "이동 계획만 걸렸을 뿐 아직 한 틱도 안 갔다");
+        var w = host.world(1);
+        w.advance(0, 100);
+        for (int i = 1; i <= 8; i++) w.advance(i * 50_000_000L, 100);
+        String out = call("after");
+        assertTrue(out.contains("false|5"), out);
+        assertTrue(w.entities().iterator().next().x() == 5.0);
+    }
+
+    @Test
     void entitiesAreUsedDirectlyWithoutMethodsOrFieldsObjects() throws Exception {
         rt.load("t.uijs", """
                 function go() {

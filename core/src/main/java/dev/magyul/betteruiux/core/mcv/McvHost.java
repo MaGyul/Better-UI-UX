@@ -354,6 +354,23 @@ public final class McvHost {
                 need(a, 2);
                 w.rotateEntity(id, (float) toDouble(a.get(0)), (float) toDouble(a.get(1)));
             }
+            case "moveTo" -> {
+                need(a, 4);
+                w.moveEntityTo(id, toDouble(a.get(0)), toDouble(a.get(1)), toDouble(a.get(2)), (int) toDouble(a.get(3)));
+            }
+            case "walkTo" -> {
+                need(a, 4);
+                w.walkEntityTo(id, toDouble(a.get(0)), toDouble(a.get(1)), toDouble(a.get(2)), toDouble(a.get(3)));
+            }
+            case "setVelocity" -> {
+                need(a, 3);
+                w.setEntityVelocity(id, toDouble(a.get(0)), toDouble(a.get(1)), toDouble(a.get(2)));
+            }
+            case "stop" -> w.stopEntity(id);
+            case "lookAt" -> {
+                need(a, 3);
+                w.entityLookAt(id, toDouble(a.get(0)), toDouble(a.get(1)), toDouble(a.get(2)));
+            }
             case "remove" -> w.removeEntity(id);
             case "mergeNbt" -> {
                 need(a, 1);

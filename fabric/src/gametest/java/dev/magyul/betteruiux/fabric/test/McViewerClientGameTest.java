@@ -314,6 +314,15 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                         + "  w.fill(2, 2, 2, 4, 4, 4, 'water');\n  w.setBlock(3, 3, 3, 'conduit');\n" + v[1]
                         + "  var cam = w.getCamera();\n  cam.setYaw(0);\n  cam.setPitch(0);\n  cam.setZoom(9);\n}\n");
             }
+            // 이동 모션: 소가 moveTo 로 걸어가면 같은 장면에서 가만히 선 소와 화면이 달라진다(걷는 애니메이션 포함).
+            for (String[] v : new String[][] {{"gt_mcv22a", "  cow.moveTo(8.5, 1, 1.5, 20);\n"}, {"gt_mcv22b", ""}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"300\" height=\"200\"/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(10, 4, 4, '#view');\n  w.fill(0, 0, 0, 9, 0, 3, 'white_concrete');\n"
+                        + "  var cow = w.spawnEntity(1.5, 1, 1.5, 'cow');\n" + v[1]
+                        + "  var cam = w.getCamera();\n  cam.setYaw(0);\n  cam.setPitch(90);\n}\n");
+            }
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -634,6 +643,13 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             LayoutBox cvw = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
             int conduitDiff = diff(conduitOn, conduitOff, cvw.x + cvw.w / 2 - 14, cvw.y + cvw.h / 2 - 14, 28, 28, s, sx);
             System.out.println("[mc-viewer test] conduit centre diff=" + conduitDiff + " (참고용: 전도체가 몇 픽셀뿐이라 단언하지 않는다. 스크린샷 conduit-active/inactive 로 눈으로 확인)");
+
+            BufferedImage walked = openAndShoot(ctx, "gt_mcv22a", "mc-viewer-walk-moved", 100);
+            BufferedImage stood = openAndShoot(ctx, "gt_mcv22b", "mc-viewer-walk-still", 100);
+            LayoutBox wv = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            int walkDiff = diff(walked, stood, wv, s, sx);
+            System.out.println("[mc-viewer test] walk diff=" + walkDiff);
+            check(walkDiff > 300, "moveTo 로 걸어간 소는 가만히 선 소와 화면이 달라야 한다(달라진 픽셀 " + walkDiff + ")");
 
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));

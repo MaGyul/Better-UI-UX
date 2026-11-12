@@ -138,8 +138,12 @@ public final class McvWorld {
         tickFraction -= n;
         if (n > maxTicks) n = Math.max(0, maxTicks);
         tickCount += n;
+        if (n > 0) for (McvEntity e : entities.values()) for (int i = 0; i < n; i++) e.tick();   // 이동 모션
         return n;
     }
+
+    /** 엔티티 위치·회전을 보간할 때 쓰는 비율. 시계가 멈췄으면 마지막 틱의 값 그대로(1) 보여 준다. */
+    public synchronized float entityPartial() { return tickRate <= 0f ? 1f : (float) tickFraction; }
 
     /** 지금 틱이 얼마나 진행됐는지(0 이상 1 미만). 애니메이션 보간에 쓴다. */
     public synchronized float partialTick() { return (float) tickFraction; }
@@ -328,6 +332,30 @@ public final class McvWorld {
     public void moveEntity(int id, double x, double y, double z) {
         entity(id).setPosition(x, y, z);
         log(new Change.EntityMove(id, x, y, z));
+    }
+
+    /** 엔티티가 {@code ticks} 틱에 걸쳐 일정한 속도로 목표까지 이동하게 한다(0 이하면 순간이동). 진행은 월드 시계(틱 속도)를 따른다. */
+    public void moveEntityTo(int id, double x, double y, double z, int ticks) {
+        entity(id).moveTo(x, y, z, ticks);
+    }
+
+    /** 초당 {@code blocksPerSecond} 블록 속도로 걷게 한다(현재 틱 속도 기준으로 틱 수를 계산). */
+    public void walkEntityTo(int id, double x, double y, double z, double blocksPerSecond) {
+        if (!(blocksPerSecond > 0)) throw new IllegalArgumentException("걷는 속도는 0 보다 커야 합니다");
+        McvEntity e = entity(id);
+        double dist = Math.sqrt(Math.pow(x - e.x(), 2) + Math.pow(y - e.y(), 2) + Math.pow(z - e.z(), 2));
+        double perTick = blocksPerSecond / Math.max(1f, tickRate);
+        e.moveTo(x, y, z, (int) Math.min(McvEntity.MAX_MOVE_TICKS, Math.max(1, Math.ceil(dist / perTick))));
+    }
+
+    public void stopEntity(int id) { entity(id).stopMoving(); }
+
+    public void setEntityVelocity(int id, double dx, double dy, double dz) { entity(id).setVelocity(dx, dy, dz); }
+
+    /** 엔티티의 머리가 그 지점을 바라보게 한다(눈높이는 충돌 상자 높이의 0.85배로 어림, 아직 크기를 모르면 1.5). */
+    public void entityLookAt(int id, double x, double y, double z) {
+        McvEntity e = entity(id);
+        e.lookAt(x, y, z, e.bbHeight() > 0 ? e.bbHeight() * 0.85 : 1.5);
     }
 
     public void rotateEntity(int id, float yaw, float pitch) {
