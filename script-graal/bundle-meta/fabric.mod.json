@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "better_uiux_script",
+  "version": "${version}",
+  "name": "Better UI/UX - Script runtime (GraalJS)",
+  "description": "Optional JavaScript runtime for Better UI/UX documents. Sandboxed GraalJS (about 37 MB). Cannot limit memory use: only enable scripting for UI packs you trust.",
+  "license": "All-Rights-Reserved",
+  "environment": "client",
+  "depends": {
+    "better_uiux": "*",
+    "minecraft": "~26.3",
+    "java": ">=25"
+  }
+}

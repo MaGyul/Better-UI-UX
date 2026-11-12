@@ -1,0 +1,29 @@
+<!-- /uiux open demo -->
+<!-- use: blur | dim | block:<id> | none  (쉼표로 섞어 쓰면 적은 순서대로 쌓임. 예: use="block:minecraft:dirt,blur,dim") -->
+<screen use="blur">
+  <link rel="style" href="demo.uicss" />
+
+  <!-- 반복되는 조각은 template/use 로. ${이름} 은 매개변수, ${이름:기본값} 은 기본값이 있는 매개변수 -->
+  <template id="btn">
+    <button class="${cls:}" text="${text}" onClick="${action}" />
+  </template>
+
+  <panel class="card" anchor="center" width="210" height="130">
+    <column gap="6" width="fill" height="fill" align="center">
+      <label class="title" text="Better UI/UX" />
+      <row gap="6" align="center">
+        <image src="minecraft:textures/item/diamond.png" tex="16 16" width="16" height="16" />
+        <label text="XML + CSS 로 만든 화면" />
+      </row>
+      <!-- {clicks} 는 Java(UiApi/BackendBuiltins)가 공급하는 바인딩 값 -->
+      <label class="muted" text="Hello 클릭 수: {clicks}" />
+      <spacer height="fill" />
+      <row gap="6" justify="center">
+        <use template="btn" text="Hello" action="hello" />
+        <use template="btn" text="Close" action="close" cls="danger" />
+      </row>
+    </column>
+  </panel>
+
+  <label class="muted" anchor="bottom-right" margin="4" text="demo.uiml" />
+</screen>

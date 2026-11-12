@@ -1,0 +1,36 @@
+/* demo.uiml 의 스타일. config/better-uiux/ui/demo.uicss 를 만들면 이 파일을 덮어쓰고, 저장 즉시 화면에 반영된다. */
+:root {
+  --accent: #FFFF55;
+  --panel: #202030E0;
+  --border: #8888FFFF;
+}
+
+@keyframes enter {
+  from { opacity: 0; translate-y: 10 }
+  to   { opacity: 1; translate-y: 0 }
+}
+@keyframes pulse {
+  from { opacity: 0.55 }
+  to   { opacity: 1 }
+}
+
+/* 화면이 열릴 때(핫리로드 포함) 살짝 올라오며 나타난다 */
+panel.card {
+  background: var(--panel);
+  border: 1;
+  border-color: var(--border);
+  padding: 8;
+  animation: enter 300ms ease-out both;
+}
+
+.title { color: var(--accent); animation: pulse 1.2s ease-in-out infinite alternate; }
+.muted { color: #808080; }
+
+/* 호버/눌림은 색과 크기가 부드럽게 전환된다 */
+button {
+  background: #505070FF;
+  transition: background 120ms ease-out, scale 100ms ease-out;
+}
+button:hover { background: #7070A0FF; scale: 1.06; }
+button:active { background: #303050FF; scale: 0.94; }
+button.danger:hover { background: #A04040FF; }

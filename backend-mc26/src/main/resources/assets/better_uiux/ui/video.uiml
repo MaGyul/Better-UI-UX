@@ -1,0 +1,26 @@
+<screen use="blur,dim">
+  <style>
+    .card { background: #181A24E0; border: 1; border-color: #3A3F55FF; padding: 8; }
+    .dim  { color: #B0B0C0FF; }
+  </style>
+
+  <panel class="card" anchor="center" width="250" height="190">
+    <column gap="6" width="fill" height="fill">
+      <label text="영상 데모 (file: mp4, H.264, 소리 없음)" />
+      <separator />
+      <row gap="10" align="center">
+        <column gap="2" align="center">
+          <video src="file:demo.mp4" />                        <!-- 크기를 안 정하면 영상 원래 크기 -->
+          <label class="dim" text="원래 크기" />
+        </column>
+        <column gap="2" align="center">
+          <video src="file:demo.mp4" width="64" height="36" />
+          <label class="dim" text="64x36" />
+        </column>
+      </row>
+      <label class="dim" text="config/better-uiux/images/ 에 mp4(H.264) 를 넣고 file:이름.mp4 로 쓰세요." />
+      <spacer height="fill" />
+      <button text="닫기" onClick="close" />
+    </column>
+  </panel>
+</screen>

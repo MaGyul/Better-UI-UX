@@ -1,0 +1,94 @@
+package dev.magyul.betteruiux.core.edit;
+
+import dev.magyul.betteruiux.core.doc.UiDocument;
+import dev.magyul.betteruiux.core.xml.UiParseException;
+import java.io.IOException;
+
+/** 에디터가 바깥(게임/파일 시스템)에 부탁하는 일. 마인크래프트 백엔드가 구현한다. */
+public interface EditorHost {
+    /**
+     * XML 텍스트로 문서를 만든다(include/스타일 로드, 모드의 onDocumentOpened 훅 적용 포함).
+     * 레이아웃은 에디터가 호출하므로 하지 않아도 된다.
+     *
+     * @throws UiParseException XML 문법 오류
+     */
+    UiDocument load(String text) throws UiParseException;
+
+    /** 텍스트를 저장한다(원자적 쓰기). */
+    void save(String text) throws IOException;
+
+    /** 도구 모음에 표시할 이름(예: demo.uiml). */
+    String title();
+
+    /**
+     * 속성 칸 편집을 시작/끝낼 때 호출된다. 게임이 SDL 기반이면 글자 입력(IME 포함)을 받기 위해 "텍스트 입력 시작"을
+     * 따로 켜야 하므로, 백엔드가 여기서 켜고 끈다(켜지 않으면 키 이벤트만 오고 글자는 들어오지 않는다).
+     *
+     * @param active (x,y,w,h) 입력 칸의 화면 위치(조합 중인 글자 창을 띄울 위치). active 가 false 면 무시.
+     */
+    default void textInput(boolean active, int x, int y, int w, int h) { }
+
+    /**
+     * 속성 칸의 자동 완성 후보. {@code key} 가 {@code onClick} 이면 등록된 이벤트(액션) id 목록을 돌려준다.
+     * 후보가 없으면 빈 목록.
+     */
+    default java.util.List<String> suggestions(String key) { return java.util.List.of(); }
+
+    /** 시스템 클립보드 읽기(Ctrl+V). 지원하지 않으면 빈 문자열. */
+    default String clipboard() { return ""; }
+
+    /** 시스템 클립보드 쓰기(Ctrl+C / Ctrl+X). */
+    default void setClipboard(String text) { }
+
+    /** 저장해 둔 에디터 사용자 설정(패널 접힘 등). 키: leftCollapsed, rightCollapsed, toolbarHidden. */
+    default java.util.Map<String, String> loadPrefs() { return java.util.Map.of(); }
+
+    /** 에디터 사용자 설정이 바뀌었을 때 저장한다. */
+    default void savePrefs(java.util.Map<String, String> prefs) { }
+
+    /** 디스크에 있는 현재 파일 내용(없으면 null). 저장할 때 에디터 밖에서 바뀌었는지 확인하는 데 쓴다. */
+    default String diskText() { return null; }
+
+    /** 서버로 발행할 수 있는 상태인가(서버에 모드가 있어 서버 기능이 켜져 있을 때). */
+    default boolean canPublish() { return false; }
+
+    /** 현재 문서(저장된 파일)를 서버로 발행한다. 권한은 서버가 확인하고 결과는 채팅 메시지로 알린다. */
+    default void publish() { }
+
+    /** 저장하지 않은 편집 내용을 임시로 보관한다(게임이 죽어도 복구할 수 있게). 실제 파일은 건드리지 않는다. */
+    default void autosave(String text) { }
+
+    /** 이전 실행에서 남은 자동 저장본(없으면 null). */
+    default String readAutosave() { return null; }
+
+    /** 문서가 {@code <link>} 로 불러오는 스타일시트 파일(.uicss)의 글. 없거나 읽을 수 없으면 null. */
+    default String readFile(String name) { return null; }
+
+    /** 스타일시트 파일을 바로 저장한다(편집기에서 외부 규칙을 고칠 때). */
+    default void writeFile(String name, String text) throws IOException { throw new IOException("이 환경에서는 파일을 쓸 수 없어요"); }
+
+    /** 열린 화면이 하나도 없는 빈 에디터인가(파일 고르기 안내만 보이고, 저장·패널은 없다). */
+    default boolean isBlank() { return false; }
+
+    /** 자동 저장본을 지운다(저장했거나 버렸을 때). */
+    default void clearAutosave() { }
+
+    /** 열 수 있는 다른 UI id 목록(지금 편집 중인 것은 제외). */
+    default java.util.List<String> screens() { return java.util.List.of(); }
+
+    /** 같은 에디터에서 다른 UI 로 전환한다(저장하지 않은 변경이 없을 때만 부른다). */
+    default void switchTo(String id) { }
+
+    /**
+     * 새 UI 파일을 만들고 id 를 돌려준다.
+     *
+     * @param kind 0 빈 화면, 1 대화상자(패널+글자+닫기 버튼)
+     */
+    default String createScreen(int kind) throws IOException { return null; }
+
+    /** 에디터를 닫아 달라는 요청(툴바의 Exit 버튼, 아무것도 선택하지 않고 Esc). */
+    default void requestExit() { }
+
+    /** true 면 선택한 요소를 가운데로 옮길 때 화면이 부드럽게 미끄러진다(게임 화면용). 테스트는 즉시 이동. */
+    default boolean panAnimation() { return false; }
+}

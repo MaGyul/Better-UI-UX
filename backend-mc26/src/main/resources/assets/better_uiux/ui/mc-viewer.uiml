@@ -1,0 +1,18 @@
+<screen use="blur,dim">
+  <script src="mc-viewer.uijs"/>
+  <style>
+    .card { background: #181A24E0; border: 1; border-color: #3A3F55FF; padding: 8; }
+    .hint { color: #9AA0B8FF; }
+  </style>
+
+  <panel class="card" anchor="center" width="320" height="260">
+    <column gap="4" width="fill" height="fill">
+      <label text="mc-viewer 데모" />
+      <label class="hint" text="드래그: 회전 · 휠: 확대 · 좌클릭: 블록 놓기 · 우클릭: 블록 부수기" />
+      <separator />
+      <mc-viewer id="view" width="fill" height="fill" />
+      <label id="info" class="hint" text="블록 위에 마우스를 올려 보세요" />
+      <button text="닫기" onClick="close" />
+    </column>
+  </panel>
+</screen>

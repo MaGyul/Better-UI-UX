@@ -1,0 +1,53 @@
+// mc-viewer 데모: 체커 바닥 위의 집(구조물 파일)과 돌아다니는 돼지. 월드는 Java 에 있고 여기서는 mcv 로 조작만 한다.
+// 필요: config.toml 의 [scripting] enabled = true. 소(엔티티)는 월드에 접속한 상태에서만 보인다.
+var world, pig;
+
+function onInit() {
+  world = mcv.createWorld(11, 6, 11, '#view');      // 만들면서 id 가 view 인 <mc-viewer> 에 연결한다(world.attach('#view') 와 같다)
+
+  // 체커 무늬 바닥
+  for (var x = 0; x < 11; x++) {
+    for (var z = 0; z < 11; z++) {
+      world.setBlock(x, 0, z, (x + z) % 2 === 0 ? 'white_concrete' : 'light_gray_concrete');
+    }
+  }
+
+  // 구조물 파일(.nbt)을 통째로 놓는다. 기본 제공 'demo_house' 는 5x4x5 집이다.
+  // 내 파일은 config/better-uiux/structures/<이름>.nbt 에 두면 된다(스트럭처 블록으로 저장한 파일 그대로).
+  world.loadStructure('demo_house', 0, 0, 0);
+  world.setBlock(9, 1, 1, 'grass_block');
+
+  pig = world.spawnEntity(7.5, 1, 5, 'pig');
+  world.setTickRate(20);
+
+  var cam = world.getCamera();
+  cam.setYaw(225);
+  cam.setPitch(30);
+}
+
+// 돼지가 집 옆을 한 바퀴 돈다(틱마다 호출된다).
+function onTick(tick) {
+  var a = tick * 0.04;
+  pig.setPosition(7.5 + Math.cos(a) * 2.5, 1, 7.5 + Math.sin(a) * 2.5);
+  pig.setRotation(a * 180 / Math.PI + 90, 0);
+}
+
+function onBlockHover(e) {
+  ui.setText('#info', e.block ? e.id + '  (' + e.x + ', ' + e.y + ', ' + e.z + ') ' + e.face : '블록 위에 마우스를 올려 보세요');
+}
+
+var NEIGHBOR = {up: [0, 1, 0], down: [0, -1, 0], north: [0, 0, -1], south: [0, 0, 1], west: [-1, 0, 0], east: [1, 0, 0]};
+
+function onBlockClick(e) {
+  if (!e.block) return;
+  try {
+    if (e.button === 0) {                              // 좌클릭: 맞힌 면 쪽에 블록 놓기
+      var n = NEIGHBOR[e.face];
+      world.setBlock(e.x + n[0], e.y + n[1], e.z + n[2], 'oak_planks');
+    } else if (e.button === 2 && e.y > 0) {            // 우클릭: 부수기(바닥은 남긴다)
+      world.setBlock(e.x, e.y, e.z, 'air');
+    }
+  } catch (err) {
+    ui.setText('#info', String(err.message));          // 월드 밖 같은 오류는 JS 예외로 온다
+  }
+}

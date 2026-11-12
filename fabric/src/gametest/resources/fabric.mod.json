@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "better-uiux-test",
+  "version": "1.0.0",
+  "name": "Better UI/UX GameTest",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "dev.magyul.betteruiux.fabric.test.EditorClientGameTest",
+      "dev.magyul.betteruiux.fabric.test.Css3ClientGameTest",
+      "dev.magyul.betteruiux.fabric.test.Css3AdvancedClientGameTest",
+      "dev.magyul.betteruiux.fabric.test.Css3VisualClientGameTest",
+      "dev.magyul.betteruiux.fabric.test.Css3BehaviorClientGameTest",
+      "dev.magyul.betteruiux.fabric.test.McViewerClientGameTest"
+    ]
+  },
+  "depends": {
+    "better_uiux": "*"
+  }
+}
