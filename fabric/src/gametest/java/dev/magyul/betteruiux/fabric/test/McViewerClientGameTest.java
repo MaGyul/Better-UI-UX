@@ -292,6 +292,28 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                         + "  var w = mcv.createWorld(5, 4, 5);\n  w.fill(0, 0, 0, 4, 0, 4, 'white_concrete');\n  " + v[1] + "\n"
                         + (v[0].equals("gt_mcv19c") || v[0].equals("gt_mcv19d") ? "  w.getCamera().setZoom(3);\n" : "") + "}\n");
             }
+            String pools = "  w.fill(0, 1, 0, 6, 2, 6, 'stone_bricks');\n  w.fill(8, 1, 0, 12, 1, 4, 'stone_bricks');\n";
+            String pourWater = "  w.fill(1, 1, 1, 5, 2, 5, 'water');\n  w.fill(9, 1, 1, 11, 1, 3, 'lava');\n";
+            for (String[] v : new String[][] {{"gt_mcv20a", pourWater}, {"gt_mcv20b", ""}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"300\" height=\"200\"/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(15, 4, 9, '#view');\n  w.fill(0, 0, 0, 14, 0, 8, 'white_concrete');\n" + pools + v[1]
+                        + "  w.getCamera().setYaw(0);\n  w.getCamera().setPitch(90);\n}\n");
+            }
+            // 전도체: 물 3x3x3 + 프리즈머린 틀. 틀이 16개 이상이면 활성(눈이 열리고 껍질이 돈다), 미만이면 비활성. 정면(수평)에서 본다(틀의 면 중앙이 비어 있어 전도체가 보인다).
+            String frameAll = "  for (var x = 1; x <= 5; x++) for (var y = 1; y <= 5; y++) for (var z = 1; z <= 5; z++) {\n"
+                    + "    var e = (x === 1 || x === 5 ? 1 : 0) + (y === 1 || y === 5 ? 1 : 0) + (z === 1 || z === 5 ? 1 : 0);\n"
+                    + "    if (e >= 2) w.setBlock(x, y, z, 'prismarine_bricks');\n  }\n";
+            String frameFew = "  w.fill(1, 1, 1, 1, 1, 5, 'prismarine_bricks');\n  w.fill(5, 1, 1, 5, 1, 5, 'prismarine_bricks');\n";   // 10개 < 16
+            for (String[] v : new String[][] {{"gt_mcv21a", frameAll}, {"gt_mcv21b", frameFew}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"300\" height=\"300\"/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(7, 7, 7, '#view');\n  w.fill(0, 0, 0, 6, 0, 6, 'white_concrete');\n"
+                        + "  w.fill(2, 2, 2, 4, 4, 4, 'water');\n  w.setBlock(3, 3, 3, 'conduit');\n" + v[1]
+                        + "  var cam = w.getCamera();\n  cam.setYaw(0);\n  cam.setPitch(0);\n  cam.setZoom(9);\n}\n");
+            }
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -596,6 +618,23 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             System.out.println("[mc-viewer test] spawner mob diff=" + mobDiff);
             check(mobDiff > 30, "스포너 안에 몹이 보여야 한다(몹 데이터 없는 스포너와 달라진 픽셀 " + mobDiff + ")");
 
+            // 유체: 같은 웅덩이에 물과 용암을 부으면 파란 픽셀(물)과 주황 픽셀(용암)이 눈에 띄게 늘어난다(위에서 내려다본 장면, 나머지는 같다).
+            BufferedImage poolsFull = openAndShoot(ctx, "gt_mcv20a", "mc-viewer-fluids");
+            BufferedImage poolsEmpty = openAndShoot(ctx, "gt_mcv20b", "mc-viewer-fluids-empty");
+            LayoutBox fv = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            int blueFull = colorCount(poolsFull, fv, s, sx, 0), blueEmpty = colorCount(poolsEmpty, fv, s, sx, 0);
+            int lavaFull = colorCount(poolsFull, fv, s, sx, 1), lavaEmpty = colorCount(poolsEmpty, fv, s, sx, 1);
+            System.out.println("[mc-viewer test] fluids blue " + blueEmpty + " -> " + blueFull + ", lava " + lavaEmpty + " -> " + lavaFull);
+            check(blueFull - blueEmpty > 800, "물이 파랗게 그려져야 한다(파란 픽셀 " + blueEmpty + " → " + blueFull + ")");
+            check(lavaFull - lavaEmpty > 300, "용암이 주황색으로 그려져야 한다(주황 픽셀 " + lavaEmpty + " → " + lavaFull + ")");
+
+            // 전도체 활성: 물 속에서 틀이 충분하면 눈이 열리고 껍질이 돈다(중앙 영역이 비활성일 때와 달라야 한다). 월드를 읽는 틱(물/틀 판정)이 가상 레벨에서 돈다는 뜻.
+            BufferedImage conduitOn = openAndShoot(ctx, "gt_mcv21a", "mc-viewer-conduit-active", 140);
+            BufferedImage conduitOff = openAndShoot(ctx, "gt_mcv21b", "mc-viewer-conduit-inactive", 140);
+            LayoutBox cvw = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            int conduitDiff = diff(conduitOn, conduitOff, cvw.x + cvw.w / 2 - 14, cvw.y + cvw.h / 2 - 14, 28, 28, s, sx);
+            System.out.println("[mc-viewer test] conduit centre diff=" + conduitDiff + " (참고용: 전도체가 몇 픽셀뿐이라 단언하지 않는다. 스크린샷 conduit-active/inactive 로 눈으로 확인)");
+
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));
             ctx.waitTicks(40);
@@ -696,6 +735,20 @@ public class McViewerClientGameTest implements FabricClientGameTest {
         return sum / n;
     }
 
+    /** 뷰어 영역에서 색 종류별 픽셀 수: 0 = 물의 파랑(하늘보다 짙고 초록기가 적다), 1 = 용암의 주황. */
+    private static int colorCount(BufferedImage img, LayoutBox v, int guiScale, double sx, int kind) {
+        int n = 0;
+        for (int gy = v.y; gy < v.y + v.h; gy++) {
+            for (int gx = v.x; gx < v.x + v.w; gx++) {
+                int x = (int) Math.min(img.getWidth() - 1, Math.round(gx * guiScale * sx)), y = (int) Math.min(img.getHeight() - 1, Math.round(gy * guiScale * sx));
+                int p = img.getRGB(x, y), r = p >> 16 & 0xFF, g = p >> 8 & 0xFF, b = p & 0xFF;
+                boolean hit = kind == 0 ? b > r + 60 && b > g + 25 && b < 235 && g < 170 : r > 200 && g > 70 && g < 190 && b < 90;
+                if (hit) n++;
+            }
+        }
+        return n;
+    }
+
     /** 스크린샷의 뷰어 영역에서 빨간 픽셀 수(빨간 콘크리트). */
     private static int redCount(BufferedImage img, LayoutBox v, int guiScale, double sx) {
         int n = 0;
@@ -711,9 +764,14 @@ public class McViewerClientGameTest implements FabricClientGameTest {
 
     /** 두 스크린샷의 뷰어 영역에서 눈에 띄게 다른 픽셀 수. */
     private static int diff(BufferedImage a, BufferedImage b, LayoutBox v, int guiScale, double sx) {
+        return diff(a, b, v.x, v.y, v.w, v.h, guiScale, sx);
+    }
+
+    /** 두 스크린샷의 GUI 좌표 사각형 안에서 눈에 띄게 다른 픽셀 수. */
+    private static int diff(BufferedImage a, BufferedImage b, int rx, int ry, int rw, int rh, int guiScale, double sx) {
         int n = 0;
-        for (int gy = v.y; gy < v.y + v.h; gy++) {
-            for (int gx = v.x; gx < v.x + v.w; gx++) {
+        for (int gy = ry; gy < ry + rh; gy++) {
+            for (int gx = rx; gx < rx + rw; gx++) {
                 int x = (int) Math.min(a.getWidth() - 1, Math.round(gx * guiScale * sx)), y = (int) Math.min(a.getHeight() - 1, Math.round(gy * guiScale * sx));
                 int p = a.getRGB(x, y), q = b.getRGB(x, y);
                 int d = Math.abs((p >> 16 & 0xFF) - (q >> 16 & 0xFF)) + Math.abs((p >> 8 & 0xFF) - (q >> 8 & 0xFF)) + Math.abs((p & 0xFF) - (q & 0xFF));

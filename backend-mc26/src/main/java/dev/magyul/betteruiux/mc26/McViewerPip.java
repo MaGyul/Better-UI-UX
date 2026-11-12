@@ -22,6 +22,8 @@ import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.block.BlockStateModelSet;
+import net.minecraft.client.renderer.block.FluidRenderer;
+import net.minecraft.client.renderer.block.FluidStateModelSet;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -94,7 +96,7 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
         }
 
         Map<Long, McvBlock> blocks = w.blockSnapshot();
-        McViewerTintGetter tintGetter = w.hasBiomes() ? tintGetter(w) : null;      // 바이옴을 정하지 않은 월드는 계산 없이 기본 색
+        McViewerTintGetter tintGetter = tintGetter(w);                              // 바이옴 틴트와 유체(이웃 블록을 읽는다)가 쓴다. 가상 레벨이 준비 중이면 null
         boolean beReady = blockEntities.begin(w, billboard);
         for (Map.Entry<Long, McvBlock> e : blocks.entrySet()) {
             int[] p = McvWorld.unkey(e.getKey());
@@ -108,6 +110,7 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
                         r.parts(), biomeTints(r, tintGetter, w, p[0], p[1], p[2]), LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
                 stack.popPose();
             }
+            if (tintGetter != null && !r.state().getFluidState().isEmpty()) submitFluid(collector, stack, tintGetter, r.state(), p[0], p[1], p[2]);   // 물·용암(·물에 잠긴 블록의 물)
             if (beReady) blockEntities.render(w, r.state(), e.getValue(), p[0], p[1], p[2], stack, collector);   // 상자·표지판 같은 블록 엔티티
         }
         if (beReady) blockEntities.end();
@@ -180,13 +183,60 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
         if (state != null && !state.isAir()) {
             BlockStateModel model = models.get(state);
             List<BlockStateModelPart> parts = new ArrayList<>();
-            model.collectParts(RandomSource.create(42L), parts);
+            // 모델이 없는 블록(물·용암 같은 유체 블록은 렌더 모양이 INVISIBLE)은 "없는 모델(보라색 격자)"을 그리지 않는다. 유체는 따로 그린다.
+            if (state.getRenderShape() != net.minecraft.world.level.block.RenderShape.INVISIBLE) model.collectParts(RandomSource.create(42L), parts);
             r = new Resolved(parts, model.hasMaterialFlag(net.minecraft.client.resources.model.geometry.BakedQuad.FLAG_TRANSLUCENT),
                     state.isSolidRender(), tints(state), state,
                     Minecraft.getInstance().getBlockColors().getTintSources(state));
         }
         cache.put(key, r);
         return r;
+    }
+
+    // ---- 유체(물·용암) ----
+
+    private FluidRenderer fluidRenderer;
+    private FluidStateModelSet fluidModelsFor;
+    private final Map<McvBlock, BlockState> stateCache = new HashMap<>();
+
+    /** 뷰어 월드의 블록 → 블록 상태(문자열 파싱이 비싸서 캐시한다). 레지스트리가 바뀌어 모델 목록이 새로 만들어지면 같이 버린다. */
+    private BlockState cachedState(McvBlock b) {
+        BlockState s = stateCache.get(b);
+        if (s == null && !stateCache.containsKey(b)) {
+            s = toState(b);
+            stateCache.put(b, s);
+        }
+        return s;
+    }
+
+    /**
+     * 유체 블록 하나를 그린다. 바닐라 {@link FluidRenderer}(청크 메시를 만들 때 쓰는 것)가 이웃 유체/블록을 보고 면을 자르고 윗면 높이와
+     * 흐름 방향을 정해 사각형을 내보내면, 그것을 {@code submitCustomGeometry} 로 받아 그린다. 물은 반투명, 용암은 불투명 패스다.
+     * 렌더러는 위치를 청크 구역 안 좌표({@code pos & 15})로 쓰므로 구역 원점으로 옮겨 놓고 그린다. 조명은 최대 밝기로 고정한다.
+     */
+    private void submitFluid(SubmitNodeCollector collector, PoseStack stack, McViewerTintGetter getter, BlockState state, int x, int y, int z) {
+        Minecraft mc = Minecraft.getInstance();
+        FluidStateModelSet models = mc.getModelManager().getFluidStateModelSet();
+        if (models != fluidModelsFor) {
+            fluidRenderer = new FluidRenderer(models);
+            fluidModelsFor = models;
+        }
+        net.minecraft.world.level.material.FluidState fluid = state.getFluidState();
+        net.minecraft.client.renderer.chunk.ChunkSectionLayer layer = models.get(fluid).layer();
+        net.minecraft.client.renderer.rendertype.RenderType type = switch (layer) {
+            case TRANSLUCENT -> net.minecraft.client.renderer.rendertype.RenderTypes.translucentMovingBlock();
+            case CUTOUT -> net.minecraft.client.renderer.rendertype.RenderTypes.cutoutMovingBlock();
+            default -> net.minecraft.client.renderer.rendertype.RenderTypes.solidMovingBlock();
+        };
+        BlockPos pos = new BlockPos(x, y, z);
+        FluidRenderer renderer = fluidRenderer;
+        stack.pushPose();
+        stack.translate(x - (x & 15), y - (y & 15), z - (z & 15));
+        collector.submitCustomGeometry(stack, type, (pose, vc) -> {
+            McViewerFullBrightConsumer consumer = new McViewerFullBrightConsumer(vc, pose);
+            renderer.tesselate(getter, pos, l -> consumer, state, fluid);
+        });
+        stack.popPose();
     }
 
     // ---- 바이옴 색조 ----
@@ -209,6 +259,7 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
             biomeRegistryFor = lookup.get();
         }
         var registry = lookup.get();
+        Holder<Biome> plains = registry.get(net.minecraft.world.level.biome.Biomes.PLAINS).orElse(null);
         return new McViewerTintGetter(pos -> {
             String id = w.biomeAt(pos.getX(), pos.getY(), pos.getZ());
             if (id == null) return null;
@@ -223,7 +274,7 @@ public final class McViewerPip extends PictureInPictureRenderer<McViewerRenderSt
                 biomeHolders.put(id, h);
             }
             return h;
-        }, level instanceof McViewerFakeLevel fl ? fl.getLightEngine() : level.getLightEngine());
+        }, plains, level instanceof McViewerFakeLevel fl ? fl.getLightEngine() : level.getLightEngine(), w, this::cachedState);
     }
 
     /**
