@@ -23,6 +23,9 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
+import dev.magyul.betteruiux.core.mcv.McvBlock;
+import dev.magyul.betteruiux.core.mcv.McvWorld;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkSource;
@@ -66,6 +69,49 @@ final class McViewerFakeLevel extends Level {
         if (levelData instanceof ClientLevel.ClientLevelData d) d.setGameTime(gameTime);
     }
 
+    // ---- 뷰어 월드와의 연결: 블록 엔티티가 "월드를 읽는" 동작(비콘 피라미드·빔, 전도체 틀, 불 주변 ...)을 위해 ----
+
+    private McvWorld bound;
+    private final java.util.Map<McvBlock, BlockState> stateCache = new java.util.HashMap<>();
+
+    /**
+     * 지금 틱을 돌리는 뷰어 월드를 연결한다. 연결해 두면 {@code getBlockState}/{@code getFluidState}/{@code getHeight} 가 그 월드의 블록을 답한다
+     * (비콘이 아래 피라미드와 위쪽 하늘을 보고 빔을 정하는 것처럼). 월드 밖은 공기다. 블록 엔티티는 따로 두지 않는다(null).
+     * 렌더 스레드에서 월드마다 바꿔 가며 쓴다.
+     */
+    void bind(McvWorld world) { this.bound = world; }
+
+    private BlockState stateAt(int x, int y, int z) {
+        McvWorld w = bound;
+        if (w == null || x < 0 || y < 0 || z < 0 || x >= w.sizeX() || y >= w.sizeY() || z >= w.sizeZ()) return Blocks.AIR.defaultBlockState();
+        McvBlock b = w.getBlock(x, y, z);
+        if (b.isAir()) return Blocks.AIR.defaultBlockState();
+        BlockState s = stateCache.get(b);
+        if (s == null) {
+            s = McViewerPip.toState(b);
+            if (s == null) s = Blocks.AIR.defaultBlockState();
+            stateCache.put(b, s);
+        }
+        return s;
+    }
+
+    @Override public BlockState getBlockState(BlockPos pos) { return stateAt(pos.getX(), pos.getY(), pos.getZ()); }
+
+    @Override public net.minecraft.world.level.material.FluidState getFluidState(BlockPos pos) { return getBlockState(pos).getFluidState(); }
+
+    /** 기둥에서 가장 높은 블록의 위(바닐라 높이 지도와 같다: 가장 높은 블록 y + 1). 블록이 없으면 레벨의 최저 높이. */
+    @Override
+    public int getHeight(net.minecraft.world.level.levelgen.Heightmap.Types type, int x, int z) {
+        McvWorld w = bound;
+        if (w != null && x >= 0 && z >= 0 && x < w.sizeX() && z < w.sizeZ()) {
+            for (int y = w.sizeY() - 1; y >= 0; y--) if (!w.getBlock(x, y, z).isAir()) return y + 1;
+        }
+        return getMinY();
+    }
+
+    /** 스포너가 안의 몹을 보여 주고 돌리려면 "근처에 플레이어가 있다"고 답해야 한다(가상 레벨에는 플레이어가 없다). */
+    @Override public boolean hasNearbyAlivePlayer(double x, double y, double z, double range) { return true; }
+
     /** 모든 칸이 공기인 청크만 돌려주는 청크 공급자. */
     private final class FakeChunkSource extends ChunkSource {
         private final McViewerFakeLevel level;
@@ -100,9 +146,27 @@ final class McViewerFakeLevel extends Level {
 
     @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { }
 
-    @Override public void playSeededSound(Entity except, double x, double y, double z, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch, long seed) { }
+    private boolean muted;
 
-    @Override public void playSeededSound(Entity except, Entity sourceEntity, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch, long seed) { }
+    /** 지금 틱을 돌리는 월드가 소리를 껐는지(렌더 스레드에서 월드마다 바꿔 가며 쓴다). */
+    void setMuted(boolean muted) { this.muted = muted; }
+
+    /** 블록 엔티티의 틱/이벤트가 내는 소리(종 공명, 비콘, 전도체 ...)는 위치 없이 그대로 재생한다(진짜 월드와 좌표가 무관하므로). */
+    @Override public void playSeededSound(Entity except, double x, double y, double z, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch, long seed) {
+        if (!muted) McViewerSounds.play(sound.value(), volume, pitch);
+    }
+
+    @Override public void playSeededSound(Entity except, Entity sourceEntity, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch, long seed) {
+        if (!muted) McViewerSounds.play(sound.value(), volume, pitch);
+    }
+
+    @Override public void playLocalSound(double x, double y, double z, SoundEvent sound, SoundSource source, float volume, float pitch, boolean distanceDelay) {
+        if (!muted) McViewerSounds.play(sound, volume, pitch);
+    }
+
+    @Override public void playLocalSound(BlockPos pos, SoundEvent sound, SoundSource source, float volume, float pitch, boolean distanceDelay) {
+        if (!muted) McViewerSounds.play(sound, volume, pitch);
+    }
 
     @Override
     public void explode(Entity source, DamageSource damageSource, ExplosionDamageCalculator calculator, double x, double y, double z, float radius, boolean fire,

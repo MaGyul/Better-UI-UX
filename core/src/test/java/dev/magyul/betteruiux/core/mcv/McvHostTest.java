@@ -231,4 +231,20 @@ class McvHostTest {
         for (int i = 0; i < 80; i++) call(h, "{\"cmd\":\"fillBiome\",\"world\":" + w + ",\"x1\":0,\"y1\":0,\"z1\":0,\"x2\":0,\"y2\":0,\"z2\":0,\"biome\":\"plains\"}");
         assertTrue(mw.biomeAt(0, 0, 0) != null);
     }
+
+    @Test
+    void blockEventSoundsAreClaimedOnceAndTheWorldCanBeMuted() {
+        McvHost h = new McvHost();
+        int w = world(h, 4, 4, 4);
+        h.world(w).setBlock(1, 1, 1, McvBlock.parse("bell", null));
+        call(h, "{\"cmd\":\"blockEvent\",\"world\":" + w + ",\"x\":1,\"y\":1,\"z\":1,\"id\":1,\"param\":2}");
+        McvWorld.BlockEvent e = h.world(w).blockEventsAt(1, 1, 1).get(0);
+        assertTrue(e.claimSound(), "처음 한 번은 소리를 낸다");
+        assertFalse(e.claimSound(), "같은 이벤트의 소리는 두 번 나지 않는다(재생/렌더러 여러 개)");
+        assertFalse(h.world(w).muted(), "기본은 소리 켜짐");
+        assertTrue((Boolean) call(h, "{\"cmd\":\"setMuted\",\"world\":" + w + ",\"muted\":true}").get("ok"));
+        assertTrue(h.world(w).muted());
+        call(h, "{\"cmd\":\"setMuted\",\"world\":" + w + ",\"muted\":false}");
+        assertFalse(h.world(w).muted());
+    }
 }

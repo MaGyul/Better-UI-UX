@@ -39,7 +39,38 @@ public final class McvWorld {
      * 블록 이벤트(바닐라의 {@code blockEvent}: 상자 뚜껑 열기처럼 블록 엔티티에게 보내는 정수 두 개짜리 신호). {@code seq} 는 월드 전체에서 늘어나는
      * 번호다. 렌더러가 블록 엔티티를 (다시) 만들 때 이 기록을 순서대로 다시 보내 같은 상태가 되도록, 블록마다 최근 것을 남겨 둔다.
      */
-    public record BlockEvent(long seq, int id, int param) { }
+    public static final class BlockEvent {
+        /** 이벤트가 만들어진 뒤 이 시간(ns)이 지나면 소리는 더 내지 않는다(그려지지 않던 동안 쌓인 옛 이벤트의 소리가 한꺼번에 나는 것을 막는다). */
+        public static final long SOUND_MAX_AGE_NANOS = 2_000_000_000L;
+
+        private final long seq;
+        private final int id, param;
+        private final long createdNanos = System.nanoTime();
+        private final java.util.concurrent.atomic.AtomicBoolean sounded = new java.util.concurrent.atomic.AtomicBoolean();
+
+        BlockEvent(long seq, int id, int param) {
+            this.seq = seq;
+            this.id = id;
+            this.param = param;
+        }
+
+        public long seq() { return seq; }
+
+        public int id() { return id; }
+
+        public int param() { return param; }
+
+        /**
+         * 이 이벤트의 소리를 낼 권리를 <b>한 번만</b> 준다(렌더러 인스턴스가 여럿이거나 블록 엔티티가 다시 만들어져 같은 이벤트를 다시 받아도
+         * 소리는 한 번만 난다). 너무 오래된 이벤트에는 주지 않는다.
+         */
+        public boolean claimSound() {
+            return System.nanoTime() - createdNanos <= SOUND_MAX_AGE_NANOS && sounded.compareAndSet(false, true);
+        }
+
+        @Override
+        public String toString() { return "BlockEvent[seq=" + seq + ", id=" + id + ", param=" + param + "]"; }
+    }
 
     public static final int MAX_EVENTS_PER_BLOCK = 32;
 
@@ -180,6 +211,15 @@ public final class McvWorld {
         }
         return (int) volume;
     }
+
+    // ---- 소리 ----
+
+    private volatile boolean muted;
+
+    /** 이 월드의 블록 엔티티가 내는 소리(종, 상자 여닫기 ...)를 끈다. 기본은 켜져 있다. */
+    public void setMuted(boolean muted) { this.muted = muted; }
+
+    public boolean muted() { return muted; }
 
     // ---- 바이옴(잔디·잎·물 같은 블록의 색조에 쓰인다) ----
 

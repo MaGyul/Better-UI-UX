@@ -101,9 +101,13 @@ final class McViewerBlockEntities {
         BlockPos pos = new BlockPos(x, y, z);
         applyEvents(w, h, x, y, z);
         tick(w, h, pos, state);
+        if (level instanceof McViewerFakeLevel fl) fl.bind(w);              // 그릴 때도 월드를 읽는 렌더러(비콘 빔 높이 등)를 위해
         BlockEntityRenderDispatcher dispatcher = Minecraft.getInstance().getBlockEntityRenderDispatcher();
         dispatcher.prepare(new Vec3(x + 0.5, y + 0.5, z + 0.5));    // 거리 컬링이 "카메라 = 이 블록" 으로 판단하게(뷰어에는 거리 개념이 없다)
-        BlockEntityRenderState rs = dispatcher.tryExtractRenderState(h.entity, w.partialTick(), null, false);   // 틱 사이를 보간해 뚜껑이 부드럽게 열린다
+        // 틱 사이를 보간해 뚜껑이 부드럽게 열린다. 마지막 인자는 "오프스크린 패스": 디스패처는 렌더러의 shouldRenderOffScreen() 과 같은 패스에서만 상태를 주므로
+        // (비콘 빔, 엔드 게이트웨이 빔처럼 화면 밖에서도 그려야 하는 렌더러는 true), 일반 → 오프스크린 순으로 두 번 시도한다.
+        BlockEntityRenderState rs = dispatcher.tryExtractRenderState(h.entity, w.partialTick(), null, false);
+        if (rs == null) rs = dispatcher.tryExtractRenderState(h.entity, w.partialTick(), null, true);
         if (rs == null) return;                                      // 렌더러가 없는 블록 엔티티
         rs.lightCoords = LightCoordsUtil.FULL_BRIGHT;
         pose.pushPose();
@@ -119,6 +123,7 @@ final class McViewerBlockEntities {
             if (e.seq() <= h.appliedSeq) continue;
             try {
                 h.entity.triggerEvent(e.id(), e.param());
+                if (!w.muted() && e.claimSound()) eventSound(h.entity, e.id(), e.param());       // 소리는 한 번만(다시 만들어져 재생되는 이벤트는 조용히)
             } catch (RuntimeException ex) {
                 disable(h, "블록 이벤트를 처리하지 못했습니다", ex);
                 return;
@@ -144,10 +149,34 @@ final class McViewerBlockEntities {
                 h.ticker = ((EntityBlock) state.getBlock()).getTicker(level, state, (net.minecraft.world.level.block.entity.BlockEntityType) h.entity.getType());
             }
             if (h.ticker == null) return;
-            fake.setTime(now);
-            for (long i = Math.min(n, MAX_TICKS_PER_FRAME); i > 0; i--) h.ticker.tick(level, pos, state, h.entity);
+            fake.bind(w);
+            fake.setMuted(w.muted());
+            long count = Math.min(n, MAX_TICKS_PER_FRAME);
+            for (long i = 0; i < count; i++) {
+                fake.setTime(now - count + 1 + i);                         // 틱마다 게임 시간을 하나씩(비콘처럼 "80틱마다" 하는 동작이 건너뛰어지지 않게)
+                h.ticker.tick(level, pos, state, h.entity);
+            }
         } catch (RuntimeException ex) {
             disable(h, "블록 엔티티 틱을 돌리지 못했습니다", ex);
+        }
+    }
+
+    /**
+     * 블록 이벤트에 따라붙는 소리. 바닐라에서는 서버가 따로 재생하는 소리라(클라이언트는 애니메이션 이벤트만 받는다) 우리가 직접 내 준다.
+     * 값은 바닐라와 같다(상자류 볼륨 0.5·피치 0.9~1.0, 종 볼륨 2.0).
+     */
+    private static void eventSound(BlockEntity be, int id, int param) {
+        if (id != 1) return;
+        float pitch = 0.9f + (float) Math.random() * 0.1f;
+        boolean open = param > 0;
+        if (be instanceof net.minecraft.world.level.block.entity.ChestBlockEntity) {
+            McViewerSounds.play(open ? net.minecraft.sounds.SoundEvents.CHEST_OPEN : net.minecraft.sounds.SoundEvents.CHEST_CLOSE, 0.5f, pitch);
+        } else if (be instanceof net.minecraft.world.level.block.entity.EnderChestBlockEntity) {
+            McViewerSounds.play(open ? net.minecraft.sounds.SoundEvents.ENDER_CHEST_OPEN : net.minecraft.sounds.SoundEvents.ENDER_CHEST_CLOSE, 0.5f, pitch);
+        } else if (be instanceof net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity) {
+            McViewerSounds.play(open ? net.minecraft.sounds.SoundEvents.SHULKER_BOX_OPEN : net.minecraft.sounds.SoundEvents.SHULKER_BOX_CLOSE, 0.5f, pitch);
+        } else if (be instanceof net.minecraft.world.level.block.entity.BellBlockEntity) {
+            McViewerSounds.play(net.minecraft.sounds.SoundEvents.BELL_BLOCK, 2.0f, 1.0f);
         }
     }
 

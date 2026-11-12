@@ -270,6 +270,28 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                         + "  w.setBlock(2, 1, 1, 'red_stained_glass');\n  w.setBlock(2, 1, 4, 'blue_stained_glass');\n"
                         + "  var cam = w.getCamera();\n  cam.setProjection('" + v[2] + "');\n  cam.setYaw(" + v[1] + ");\n  cam.setPitch(0);\n}\n");
             }
+            for (String[] v : new String[][] {
+                    {"gt_mcv18a", ""},
+                    {"gt_mcv18b", "w.setMuted(true);"}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"240\" height=\"180\"/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(7, 3, 3);\n  w.fill(0, 0, 0, 6, 0, 2, 'white_concrete');\n  " + v[1] + "\n"
+                        + "  w.setBlock(0, 1, 1, 'bell[attachment=floor,facing=north]');\n  w.setBlock(2, 1, 1, 'chest[facing=south]');\n"
+                        + "  w.setBlock(4, 1, 1, 'ender_chest[facing=south]');\n  w.setBlock(6, 1, 1, 'shulker_box');\n"
+                        + "  w.ringBell(0, 1, 1, 'east');\n  w.setOpen(2, 1, 1, true);\n  w.setOpen(4, 1, 1, true);\n  w.setOpen(6, 1, 1, true);\n}\n");
+            }
+            for (String[] v : new String[][] {
+                    {"gt_mcv19a", "w.fill(0, 1, 0, 2, 1, 2, 'iron_block');\n  w.setBlock(1, 2, 1, 'beacon');"},
+                    {"gt_mcv19b", "w.setBlock(1, 2, 1, 'beacon');"},
+                    {"gt_mcv19c", "w.setBlock(2, 1, 2, 'spawner', '{SpawnData:{entity:{id:\"minecraft:zombie\"}}}');"},
+                    {"gt_mcv19d", "w.setBlock(2, 1, 2, 'spawner');"}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"240\" height=\"180\"/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(5, 4, 5);\n  w.fill(0, 0, 0, 4, 0, 4, 'white_concrete');\n  " + v[1] + "\n"
+                        + (v[0].equals("gt_mcv19c") || v[0].equals("gt_mcv19d") ? "  w.getCamera().setZoom(3);\n" : "") + "}\n");
+            }
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -545,6 +567,34 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             System.out.println("[mc-viewer test] glass r-b ortho red-near=" + rbScore[0] + " blue-near=" + rbScore[1] + " | perspective red-near=" + rbScore[2] + " blue-near=" + rbScore[3]);
             check(rbScore[0] > rbScore[1] + 6, "정사영: 빨간 유리가 앞인 뷰가 파란 유리가 앞인 뷰보다 더 붉어야 한다(" + rbScore[0] + " vs " + rbScore[1] + ")");
             check(rbScore[2] > rbScore[3] + 6, "원근: 빨간 유리가 앞인 뷰가 파란 유리가 앞인 뷰보다 더 붉어야 한다(" + rbScore[2] + " vs " + rbScore[3] + ")");
+
+            // 소리: 종/상자/엔더상자/셜커 상자 이벤트는 각각 소리를 정확히 한 번 낸다(여러 번 그려도, 렌더러가 여럿이어도). 음소거하면 나지 않는다.
+            net.minecraft.client.sounds.SoundEventListener noop = (sound, events, range) -> { };
+            ctx.runOnClient(mc -> dev.magyul.betteruiux.mc26.McViewerSounds.clearRecent());
+            openAndShoot(ctx, "gt_mcv18a", "mc-viewer-sounds", 60);
+            java.util.List<String> played = dev.magyul.betteruiux.mc26.McViewerSounds.recent();
+            System.out.println("[mc-viewer test] sounds=" + played);
+            for (String id : new String[] {"minecraft:block.bell.use", "minecraft:block.chest.open", "minecraft:block.ender_chest.open", "minecraft:block.shulker_box.open"}) {
+                check(java.util.Collections.frequency(played, id) == 1, "소리 " + id + " 는 정확히 한 번 나야 한다: " + played);
+            }
+            ctx.runOnClient(mc -> dev.magyul.betteruiux.mc26.McViewerSounds.clearRecent());
+            openAndShoot(ctx, "gt_mcv18b", "mc-viewer-sounds-muted", 60);
+            java.util.List<String> mutedPlayed = dev.magyul.betteruiux.mc26.McViewerSounds.recent();
+            System.out.println("[mc-viewer test] muted sounds=" + mutedPlayed);
+            check(mutedPlayed.isEmpty(), "world.setMuted(true) 이면 소리가 나면 안 된다: " + mutedPlayed);
+
+            // 월드 의존 블록 엔티티: 비콘은 아래 피라미드가 있어야 빔이 나오고(가상 레벨이 뷰어 월드의 블록을 읽는다), 스포너는 안의 몹을 보여 준다.
+            BufferedImage beamOn = openAndShoot(ctx, "gt_mcv19a", "mc-viewer-beacon-pyramid", 140);
+            BufferedImage beamOff = openAndShoot(ctx, "gt_mcv19b", "mc-viewer-beacon-nopyramid", 140);
+            LayoutBox beaconView = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            int beamDiff = diff(beamOn, beamOff, beaconView, s, sx);
+            System.out.println("[mc-viewer test] beacon beam diff=" + beamDiff);
+            check(beamDiff > 400, "철 피라미드 위의 비콘은 빔을 쏴야 한다(피라미드 없는 비콘과 달라진 픽셀 " + beamDiff + ")");
+            BufferedImage mobOn = openAndShoot(ctx, "gt_mcv19c", "mc-viewer-spawner-mob", 60);
+            BufferedImage mobOff = openAndShoot(ctx, "gt_mcv19d", "mc-viewer-spawner-empty", 60);
+            int mobDiff = diff(mobOn, mobOff, beaconView, s, sx);
+            System.out.println("[mc-viewer test] spawner mob diff=" + mobDiff);
+            check(mobDiff > 30, "스포너 안에 몹이 보여야 한다(몹 데이터 없는 스포너와 달라진 픽셀 " + mobDiff + ")");
 
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));

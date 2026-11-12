@@ -223,6 +223,10 @@ public final class McvHost {
                 return loadStructure(w, str(r, "name"), r.get("x") == null ? 0 : integer(r, "x"),
                         r.get("y") == null ? 0 : integer(r, "y"), r.get("z") == null ? 0 : integer(r, "z"));
             }
+            case "setMuted" -> {
+                w.setMuted(!Boolean.FALSE.equals(r.get("muted")));
+                return null;
+            }
             case "setBiome" -> {
                 w.setBiome(r.get("biome") instanceof String b ? b : null);
                 return null;

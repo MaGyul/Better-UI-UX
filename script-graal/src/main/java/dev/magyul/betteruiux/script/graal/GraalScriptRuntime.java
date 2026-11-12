@@ -120,6 +120,7 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                     if (d === undefined) throw new Error('방향은 down up north south west east 중 하나입니다: ' + dir);
                     H({cmd: 'blockEvent', world: w, x: x, y: y, z: z, id: 1, param: d});
                   },
+                  setMuted: function (muted) { H({cmd: 'setMuted', world: w, muted: muted !== false}); },
                   setBiome: function (biome) { H({cmd: 'setBiome', world: w, biome: biome == null ? null : String(biome)}); },
                   fillBiome: function (x1, y1, z1, x2, y2, z2, biome) { H({cmd: 'fillBiome', world: w, x1: x1, y1: y1, z1: z1, x2: x2, y2: y2, z2: z2, biome: String(biome)}); },
                   getBiome: function (x, y, z) { return H({cmd: 'getBiome', world: w, x: x, y: y, z: z}); },
