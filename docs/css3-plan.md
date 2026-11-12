@@ -120,3 +120,107 @@
 남은 큰 비용은 둥근 테두리(상자당 ~17): 모서리 행마다 사각형이 필요해서다. 한 화면에 장식 상자를 수백 개 쓰지 않는 것이 좋다.
 
 검증하지 못한 것(환경 한계): **다른 GPU/드라이버(AMD·Intel 등)** — 개발 PC 가 NVIDIA 한 대뿐이라 테스트할 수 없었다. 렌더링은 `fillRect`/`fillGradient` 같은 기본 프리미티브만 써서 드라이버 의존성이 낮을 것으로 예상하지만 확인된 것은 아니다.
+
+
+---
+
+# 2차 계획 — 남은 CSS3 중 쓰임새 있는 것 (2026-11-13 작성)
+
+1차(Phase 0~7)로 "게임 UI에 의미 있는 CSS3"의 약 75~80% 를 구현했다(속성 144개, 선택자/값/flex/grid 일부/그라디언트/셰이더 렌더링/애니메이션/중첩).
+이 장은 **남은 20~25% 중 실제로 쓰임새가 있는 것**만 골라 순서와 방법을 정해 둔 계획이다. 목표는 "CSS3 100%"가 아니라 마인크래프트 UI 제작자가 CSS 지식으로 기대하는 것을 먼저 채우는 것이다.
+
+## 원칙 (1차와 같다)
+
+- 한 기능의 완료 조건: ① core 단위 테스트 ② GameTest 픽셀/동작 검사(Vulkan·OpenGL 둘 다) + NeoForge 스모크 ③ `PropValues` 값 검증과 에디터 자동 완성 후보 ④ 필요하면 에디터 속성 패널 행 ⑤ `uicss-reference.md` 갱신.
+- 새 그리기 능력은 `UiGfx` 의 `default` 메서드로 더하고(없는 백엔드는 근사로 대체), 셰이더는 `round.fsh` 의 정의(define)로 확장한다.
+- 값 검증은 "명백히 잘못된 것만 경고"(값은 그대로 저장) 원칙을 유지한다.
+- 규모 표기: **S** 반나절 안팎, **M** 하루~이틀, **L** 사흘 이상(조사 포함).
+
+## 하지 않을 것 (결정)
+
+문서용 서식 맥락과 이 프로젝트의 UI 모델이 맞지 않거나 비용 대비 쓰임이 없는 것: `float`, `display: block/inline/inline-block` 흐름, 표 레이아웃(`display: table`), 다단(`columns`), `writing-mode`/방향성, 루비, 3D 변환(`perspective`, `rotateX/Y`), 인쇄(`@page`), `@font-face`(글꼴 파일 로딩은 마인크래프트 글꼴 제공자 체계와 충돌; 대신 리소스팩 글꼴을 `font-family: 네임스페이스:경로` 로 쓴다), `scroll-snap`, `will-change`/`contain`.
+
+## Phase 8A — 작은 것 모음 (S, 먼저)
+
+쓰임새는 크고 비용은 작은 것들.
+
+| 항목 | 내용 | 비고 |
+|---|---|---|
+| `pointer-events: none \| auto` | 히트 테스트에서 제외(장식용 겹침 요소가 클릭을 막지 않게) | `UiDocument.hitTest`, `cursor`/호버 계산 |
+| `visibility: hidden` | 자리는 유지하고 그리지 않음, 입력 제외 | 지금은 `visible="false"`(자리 없음)뿐 |
+| 롱핸드 | `transition-property/duration/timing-function/delay`, `animation-name/duration/timing-function/delay/iteration-count/direction/fill-mode` | 스크립트·에디터에서 한 값만 바꾸기 쉬워짐; 숏핸드와 합성 |
+| `font` 숏핸드 | `font: bold italic 12px/1.5 uniform` → 롱핸드 | `Shorthands` |
+| 글자 | `text-indent`, `word-break`/`overflow-wrap`, `text-decoration-color`/`-style`, `text-align: justify` 처리 | `TextStyle` |
+| 단위 | `ch`, `ex`, `cm/mm/in/pc`, `svw/svh/lvw/lvh/dvw/dvh`, `env()` 는 제외 | `CssMath` |
+| 색 | `color-mix()`, `hwb()`, `lab()/lch()/oklab()/oklch()`, `light-dark()` | `Colors`; 변환 후 sRGB |
+| `accent-color` | 체크박스/슬라이더/진행바 기본색 | 위젯 색 키(`check-color` 등)에 매핑 |
+| `@media` 확장 | `(hover: hover\|none)`, `(pointer: fine\|coarse)`, `(prefers-reduced-motion)`(게임의 "움직임 줄이기" 옵션 연동 가능하면), 게임 전용 `(min-gui-scale: N)` | `MediaQuery` |
+| 선택자 | `:focus-visible`(키보드로 포커스), `:placeholder-shown`, `:read-only`/`:read-write`, `:required`/`:optional`, `:nth-child(n of S)`, `::first-line`/`::first-letter`(선택) | `Selector` |
+| `scrollbar-color`, `scrollbar-width` | scroll 위젯 막대 색/굵기 | `BuiltinWidgets.Scroll` |
+
+완료 조건: 항목별 core 테스트 + `PropValues`/자동 완성 + 문서. GameTest 는 `pointer-events`/`visibility`/`:focus-visible`(실제 입력 필요)만 추가.
+
+## Phase 8B — transform 완성 (M)
+
+현재 `translate-x/y`, `scale`, `rotate` 만 있고 `pushTransform(tx,ty,scale,rotate,origin)` 로 균일 확대만 된다.
+
+- `UiGfx` 에 일반 아핀 변환 `pushMatrix(a,b,c,d,e,f)` 를 더한다(`default` 는 `pushTransform` 근사). 마인크래프트 쪽은 `GuiGraphicsExtractor.pose()` 의 `Matrix3x2fStack` 이 임의 2D 아핀을 받으므로 `McGfx` 에서 곱하면 된다.
+- 속성: `transform: translate() scale() scaleX/Y() rotate() skew() skewX/Y() matrix()` (함수 목록을 왼쪽부터 합성), `transform-origin`, 개별 `translate`/`scale`/`rotate` 속성(최신 CSS)도 허용.
+- 애니메이션/전환: 지금의 `translate-x` 등과 같이 보간(행렬 분해 보간은 하지 않고 함수별 보간; 함수 목록이 같을 때만).
+- **히트 테스트 보정**: 변환된 상자의 마우스 입력은 역변환해서 판정한다(지금은 문서에도 "입력에는 반영 안 됨"). 이것이 이 단계에서 가장 중요한 정확성 작업이다(`UiDocument.hitTest`, `:hover`).
+- 검증: core(행렬 합성, 역변환 히트 테스트) + GameTest 픽셀(기울인 상자의 모서리 위치) + 마우스 호버.
+
+## Phase 8C — 배경과 이미지 (M~L)
+
+- `background-image: url(...)`(문서 폴더·`file:` 이미지·텍스처 id; `UiSources` 경로 검증과 서버 번들 한도를 그대로 따른다. 원격 URL 은 허용하지 않는다), `background-size`(`cover/contain/auto/px/%`), `background-position`, `background-repeat`(`repeat/repeat-x/repeat-y/no-repeat/space/round` 중 앞 넷), `background-origin/clip`(border-box/padding-box), **여러 배경**(쉼표 목록; 그라디언트와 이미지 혼합), `background` 숏핸드 전체 파싱.
+- `object-fit`(`fill/contain/cover/none/scale-down`), `object-position` — `<image>`/`<video>` 용. 둘 다 "텍스처의 어느 영역을 어디에 그릴지"를 core 에서 계산한다.
+- 둥근 모서리와 함께 쓰려면 셰이더가 **모양 좌표와 텍스처 좌표를 분리**해야 한다. 지금은 UV 0..1 로 두 가지를 겸한다.
+  - **조사(먼저, 시간 제한)**: 정점 형식에 UV 를 하나 더 실을 수 있는지(예: `DefaultVertexFormat` 의 UV1/UV2 를 가진 형식) 또는 기하 쿼드를 텍스처 영역보다 크게 그리고 바깥을 잘라내는 방식으로 풀 수 있는지. 안 되면 타일은 사각형 클립 + 여러 번 그리기, 모서리는 기존 행 묶음 근사로 대체.
+- `border-image`(9-slice: `border-image: url(x) 4 fill`, `border-image-slice/width/repeat`): 마인크래프트식 패널·버튼 테두리에 가장 쓸모가 크다. 모서리 4 + 변 4 + 가운데 = `drawTexture` 최대 9번, 변은 stretch/repeat.
+- 검증: 위젯 기본 모양(체크박스/슬라이더/탭)도 이미지 배경으로 바꿀 수 있는지 시험 화면 하나. GameTest 픽셀(타일 반복 경계, cover 의 잘림).
+
+## Phase 8D — grid 보강 (M)
+
+현재: 트랙(`fr/repeat/minmax/auto/%`), span, 명시 배치, `justify-self`, gap.
+
+- `grid-template-areas` + `grid-area`(이름 → 줄 번호), `grid-auto-flow: row | column | dense`, `grid-auto-rows/columns`, `grid-row-start/end`·`grid-column-start/end` 롱핸드, 줄 이름(`[name]`), `place-items/place-content/place-self`, `justify-items/align-items`(칸 안 정렬의 기본값; CSS 기본은 stretch 이지만 지금은 start 로 둔 것을 정책으로 정할 것: `grid` 태그는 현행 유지, `display: grid` 인 일반 요소만 stretch).
+- `repeat(auto-fill | auto-fit, minmax(…))`: 컨테이너 폭에서 칸 수를 정한다(반응형 격자). 에디터에서 요청이 많을 것으로 예상.
+- 검증: core(`LayoutGridTest` 확장) + GameTest 위치 검사.
+
+## Phase 8E — filter / backdrop-filter (L, 조사부터)
+
+- 먼저 **시험(spike, 시간 제한)**: 현재 렌더 대상(프레임버퍼)의 일부 영역을 읽어 셰이더로 흐리게 한 뒤 그 영역에 다시 그리는 경로. `UiGfx.blurBackground()` 가 전체 화면 블러를 이미 쓰고 있어 마인크래프트 쪽에 블러 패스가 있다. 영역 지정(가위 `pushClip`)과 둥근 모양(`border-radius`)을 함께 쓸 수 있는지가 관건.
+- 성공하면: `backdrop-filter: blur(px) brightness() saturate()`(유리 패널) → 그다음 `filter`(이미지·상자 자신): `brightness/contrast/grayscale/sepia/invert/saturate/hue-rotate/opacity/drop-shadow`. 이미지에 한정한 색 필터는 기존 이미지 파이프라인의 정의(define)와 정점 색 곱으로 먼저 구현(프레임버퍼 읽기 불필요 → S~M).
+- 실패하면: `blur` 는 "지원 안 함"으로 확정하고 이미지 색 필터만 남긴다.
+- 검증: Vulkan·OpenGL 모두 픽셀(블러된 경계의 중간값), 성능(프레임 시간).
+
+## Phase 8F — 남은 후보 (결정 지점)
+
+8A~8E 를 끝낸 뒤 사용 사례를 보고 선택한다.
+
+| 항목 | 내용 | 규모 |
+|---|---|---|
+| `position: sticky` | scroll 컨테이너 안에서 `top/bottom` 에 붙기 | M |
+| `clip-path` | `inset()/circle()/ellipse()` 는 셰이더 SDF 로, `polygon()` 은 사각형 행 묶음 근사 | M~L |
+| `mix-blend-mode` / `background-blend-mode` | 파이프라인 블렌드 함수(`ADDITIVE`/`MULTIPLY` 등) 선택 | M |
+| 점선·변마다 다른 두께 + 둥근 테두리 | 셰이더 정의 확장 | S~M |
+| `@container` | 가장 가까운 컨테이너 크기 질의(레이아웃 두 번 돌리기) | L |
+| `@layer`, `@property`, `@scope` | 캐스케이드 레이어, 타입이 있는 변수, 범위 | M |
+| 카운터 | `counter-reset/increment`, `content: counter()` | M |
+| `:target`, `:lang`, `:any-link` | 쓰임 적음 | S |
+
+## 진행 체크리스트
+
+- [ ] 8A 작은 것 모음 (`pointer-events`, `visibility`, 롱핸드, `font` 숏핸드, 글자, 단위, 색 함수, `accent-color`, `@media` 확장, 선택자, 스크롤바)
+- [ ] 8B transform 완성 (`pushMatrix`, `transform`/`transform-origin`/`skew`, 히트 테스트 역변환)
+- [ ] 8C 배경·이미지 (UV 분리 조사 → `background-*`, 여러 배경, `object-fit`, `border-image`)
+- [ ] 8D grid 보강 (`areas`, `auto-flow`, `auto-fill/fit`, 칸 정렬)
+- [ ] 8E filter / backdrop-filter (프레임버퍼 읽기 시험 → 이미지 색 필터 → blur)
+- [ ] 8F 남은 후보 선택·구현
+
+## 위험과 선행 조건
+
+- **셰이더 확장은 GPU 의존성을 키운다**: 개발 PC 가 NVIDIA 하나뿐이라 다른 GPU 검증이 안 된다. 각 확장은 파이프라인 생성 실패 시 기존 근사로 대체되게 하고, 새 정의(define)마다 GameTest 로 양쪽 백엔드를 확인한다.
+- **히트 테스트와 변환**(8B)은 8C(이미지 배경 위 호버)·8E(필터)보다 먼저 끝내 둔다.
+- **파이프라인 수 상한**(현재 64): 배경 크기/위치가 정의로 들어가면 조합이 늘어난다. UV 변환은 정의가 아니라 정점/쿼드 쪽으로 풀고, 풀 수 없으면 상한과 대체 경로를 정한다.
+- **에디터 패널**: 새 속성마다 패널 행을 모두 만들면 패널이 길어진다. 자주 쓰는 것(`background-image/size/position`, `transform`, `grid-template-areas`)만 행으로 두고 나머지는 규칙 편집기 + 자동 완성으로 둔다.
