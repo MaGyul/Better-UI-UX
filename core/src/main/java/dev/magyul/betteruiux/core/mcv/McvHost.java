@@ -367,6 +367,7 @@ public final class McvHost {
                 w.setEntityVelocity(id, toDouble(a.get(0)), toDouble(a.get(1)), toDouble(a.get(2)));
             }
             case "stop" -> w.stopEntity(id);
+            case "jump" -> w.jumpEntity(id);
             case "lookAt" -> {
                 need(a, 3);
                 w.entityLookAt(id, toDouble(a.get(0)), toDouble(a.get(1)), toDouble(a.get(2)));

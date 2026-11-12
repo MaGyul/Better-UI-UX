@@ -138,7 +138,7 @@ public final class McvWorld {
         tickFraction -= n;
         if (n > maxTicks) n = Math.max(0, maxTicks);
         tickCount += n;
-        if (n > 0) for (McvEntity e : entities.values()) for (int i = 0; i < n; i++) e.tick();   // 이동 모션
+        if (n > 0) for (McvEntity e : entities.values()) for (int i = 0; i < n; i++) e.tick(this);   // 이동 모션·물리
         return n;
     }
 
@@ -349,6 +349,15 @@ public final class McvWorld {
     }
 
     public void stopEntity(int id) { entity(id).stopMoving(); }
+
+    public void jumpEntity(int id) { entity(id).jump(); }
+
+    private volatile McvCollisionShapes collisionShapes;
+
+    /** 물리를 켠 엔티티가 쓰는 블록 충돌 모양(백엔드가 바닐라 모양을 넣는다). null 이면 공기가 아닌 블록은 꽉 찬 큐브. */
+    public void setCollisionShapes(McvCollisionShapes shapes) { this.collisionShapes = shapes; }
+
+    McvCollisionShapes collisionShapes() { return collisionShapes; }
 
     public void setEntityVelocity(int id, double dx, double dy, double dz) { entity(id).setVelocity(dx, dy, dz); }
 

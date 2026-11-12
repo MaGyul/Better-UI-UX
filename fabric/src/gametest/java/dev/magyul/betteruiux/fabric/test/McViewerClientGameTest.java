@@ -323,6 +323,15 @@ public class McViewerClientGameTest implements FabricClientGameTest {
                         + "  var cow = w.spawnEntity(1.5, 1, 1.5, 'cow');\n" + v[1]
                         + "  var cam = w.getCamera();\n  cam.setYaw(0);\n  cam.setPitch(90);\n}\n");
             }
+            // 물리: 공중에 소환한 소가 physics=true 면 바닥으로 떨어져 서고(옆에서 본 장면이 달라진다), 아니면 공중에 그대로 떠 있다.
+            for (String[] v : new String[][] {{"gt_mcv23a", "  cow.physics = true;\n"}, {"gt_mcv23b", ""}}) {
+                Files.writeString(base.resolve("ui/" + v[0] + ".uiml"), "<screen><script src=\"" + v[0] + ".uijs\"/>"
+                        + "<mc-viewer id=\"view\" anchor=\"center\" width=\"300\" height=\"200\"/></screen>");
+                Files.writeString(base.resolve("ui/" + v[0] + ".uijs"), "function onInit() {\n"
+                        + "  var w = mcv.createWorld(6, 8, 3, '#view');\n  w.fill(0, 0, 0, 5, 0, 2, 'white_concrete');\n"
+                        + "  var cow = w.spawnEntity(2.5, 6, 1.5, 'cow');\n" + v[1]
+                        + "  var cam = w.getCamera();\n  cam.setYaw(0);\n  cam.setPitch(0);\n}\n");
+            }
             Files.writeString(base.resolve("ui/gt_mcv.uijs"), """
                     function onInit() {
                       var w = mcv.createWorld(5, 4, 5);
@@ -650,6 +659,13 @@ public class McViewerClientGameTest implements FabricClientGameTest {
             int walkDiff = diff(walked, stood, wv, s, sx);
             System.out.println("[mc-viewer test] walk diff=" + walkDiff);
             check(walkDiff > 300, "moveTo 로 걸어간 소는 가만히 선 소와 화면이 달라야 한다(달라진 픽셀 " + walkDiff + ")");
+
+            BufferedImage landed = openAndShoot(ctx, "gt_mcv23a", "mc-viewer-physics-landed", 120);
+            BufferedImage floating = openAndShoot(ctx, "gt_mcv23b", "mc-viewer-physics-floating", 120);
+            LayoutBox physv = ctx.computeOnClient(mc -> find(((UiScreen) mc.gui.screen()).document().layout(), "view"));
+            int physicsDiff = diff(landed, floating, physv, s, sx);
+            System.out.println("[mc-viewer test] physics diff=" + physicsDiff);
+            check(physicsDiff > 300, "물리를 켠 소는 바닥으로 떨어져 공중에 뜬 소와 화면이 달라야 한다(달라진 픽셀 " + physicsDiff + ")");
 
             ctx.runOnClient(mc -> UiOpener.open("gt_mcv4", base, false));
             ctx.waitFor(mc -> mc.gui.screen() instanceof UiScreen scr && scr.uiId().equals("gt_mcv4"));

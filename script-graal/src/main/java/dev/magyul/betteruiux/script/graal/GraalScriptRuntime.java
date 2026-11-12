@@ -80,6 +80,7 @@ public final class GraalScriptRuntime implements ScriptRuntime {
                   walkTo: function (x, y, z, blocksPerSecond) { return call('walkTo', [x, y, z, blocksPerSecond == null ? 2 : blocksPerSecond]); },
                   setVelocity: function (x, y, z) { return call('setVelocity', [x, y, z]); },
                   stop: function () { return call('stop', []); },
+                  jump: function () { return call('jump', []); },
                   lookAt: function (x, y, z) { return call('lookAt', [x, y, z]); },
                   remove: function () { return call('remove', []); },
                   mergeNbt: function (snbt) { return call('mergeNbt', [String(snbt)]); },

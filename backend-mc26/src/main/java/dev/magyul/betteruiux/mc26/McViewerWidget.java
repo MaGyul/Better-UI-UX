@@ -128,6 +128,7 @@ final class McViewerWidget implements UiWidget {
      * 한 월드를 위젯 여러 개가 그려도 {@link McvWorld#advance} 가 시간 기준이라 두 번 진행되지 않는다.
      */
     private void advanceTicks(McvWorld world) {
+        world.setCollisionShapes(McViewerCollision.INSTANCE);
         int n = world.advance(System.nanoTime(), MAX_TICKS_PER_FRAME);
         if (n == 0) return;
         McViewerRegistry.ScriptEvents events = McViewerRegistry.events(el.document());

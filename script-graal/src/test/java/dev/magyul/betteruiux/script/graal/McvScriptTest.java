@@ -73,6 +73,26 @@ class McvScriptTest {
     }
 
     @Test
+    void physicsFieldAndJumpAreExposedToScripts() throws Exception {
+        rt.load("t.uijs", """
+                var cow;
+                function go() {
+                  var w = mcv.createWorld(8, 8, 8);
+                  w.fill(0, 0, 0, 7, 0, 7, 'stone');
+                  cow = w.spawnEntity(3, 3, 3, 'cow');
+                  cow.physics = true;
+                }
+                function after() { ui.log(String(cow.onGround) + '|' + cow.y); cow.jump(); }
+                """);
+        call("go");
+        var w = host.world(1);
+        w.advance(0, 100);
+        for (int i = 1; i <= 40; i++) w.advance(i * 50_000_000L, 100);
+        String out = call("after");
+        assertTrue(out.contains("true|1"), out);
+    }
+
+    @Test
     void entitiesAreUsedDirectlyWithoutMethodsOrFieldsObjects() throws Exception {
         rt.load("t.uijs", """
                 function go() {

@@ -130,4 +130,79 @@ class McvEntityMotionTest {
         w.setTickRate(0);
         assertEquals(1f, w.entityPartial(), 0f);
     }
+
+    // ---- 물리(중력·충돌) ----
+
+    private static McvWorld floorWorld() {
+        McvWorld w = fresh();
+        w.fill(0, 0, 0, 15, 0, 15, McvBlock.parse("stone", null));      // 윗면 y=1
+        return w;
+    }
+
+    @Test
+    void physicsEntityFallsAndLandsOnTheFloor() {
+        McvWorld w = floorWorld();
+        McvEntity e = w.spawnEntity(5, 6, 5, "cow");
+        w.setEntityField(e.id(), "physics", true);
+        assertFalse(e.onGround());
+        ticks(w, 60);
+        assertEquals(1.0, e.y(), 1e-6, "바닥 윗면에 선다");
+        assertTrue(e.onGround());
+    }
+
+    @Test
+    void withoutPhysicsEntitiesFloatAsBefore() {
+        McvWorld w = floorWorld();
+        McvEntity e = w.spawnEntity(5, 6, 5, "cow");
+        ticks(w, 40);
+        assertEquals(6.0, e.y(), 0);
+    }
+
+    @Test
+    void wallsStopWalkingAndKeepTheEntityOutside() {
+        McvWorld w = floorWorld();
+        w.fill(8, 1, 0, 8, 3, 15, McvBlock.parse("stone", null));      // x=8 의 벽
+        McvEntity e = w.spawnEntity(5, 1, 5, "cow");
+        w.setEntityField(e.id(), "physics", true);
+        w.moveEntityTo(e.id(), 12, 1, 5, 40);
+        ticks(w, 60);
+        assertTrue(e.x() < 8.0 - 0.3 + 1e-6, "충돌 상자(폭 0.6)가 벽 앞에서 멈춘다: x=" + e.x());
+        assertTrue(e.x() > 7.0, "벽 가까이까지는 간다: x=" + e.x());
+    }
+
+    @Test
+    void stepsUpOntoABlockButNotATallWall() {
+        McvWorld w = floorWorld();
+        w.setBlock(8, 1, 5, McvBlock.parse("stone_slab", null));        // 높이 0.5 → 오를 수 있다(공급자 없으면 꽉 찬 큐브라 막힌다)
+        w.setCollisionShapes(b -> b.id().endsWith("slab") ? new double[][] {{0, 0, 0, 1, 0.5, 1}} : new double[][] {{0, 0, 0, 1, 1, 1}});
+        McvEntity e = w.spawnEntity(5, 1, 5, "cow");
+        w.setEntityField(e.id(), "physics", true);
+        w.moveEntityTo(e.id(), 12, 1, 5, 40);
+        ticks(w, 50);
+        assertTrue(e.x() > 11.5, "슬랩을 넘어 도착한다: x=" + e.x());
+        assertEquals(1.0, e.y(), 1e-6, "넘은 뒤 다시 바닥으로 내려온다");
+
+        McvWorld w2 = floorWorld();
+        w2.setBlock(8, 1, 5, McvBlock.parse("stone", null));            // 높이 1 → 못 오른다
+        McvEntity e2 = w2.spawnEntity(5, 1, 5, "cow");
+        w2.setEntityField(e2.id(), "physics", true);
+        w2.moveEntityTo(e2.id(), 12, 1, 5, 40);
+        ticks(w2, 50);
+        assertTrue(e2.x() < 8.0, "높이 1 블록은 못 넘는다: x=" + e2.x());
+    }
+
+    @Test
+    void jumpOnlyWorksOnTheGround() {
+        McvWorld w = floorWorld();
+        McvEntity e = w.spawnEntity(5, 1, 5, "cow");
+        w.setEntityField(e.id(), "physics", true);
+        ticks(w, 3);
+        assertTrue(e.onGround());
+        w.jumpEntity(e.id());
+        ticks(w, 6);
+        assertTrue(e.y() > 1.5, "점프 후 올라간다: y=" + e.y());
+        w.jumpEntity(e.id());                                           // 공중에서는 무시
+        ticks(w, 40);
+        assertEquals(1.0, e.y(), 1e-6);
+    }
 }

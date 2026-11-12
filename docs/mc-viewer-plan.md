@@ -210,8 +210,15 @@ world.setTickRate(~);
 - 코어: `McvEntity.tick()` 이 월드 시계(`McvWorld.advance`)의 틱마다 이동 계획(`moveTo`/`walkTo`)과 속도(`setVelocity`)를 진행한다. 진행 방향으로 몸을 돌리고(틱당 최대 40°, `faceMovement=false` 로 끔), 직전 틱 값을 남겨 렌더가 `entityPartial()`(시계가 멈추면 1)로 위치·회전·머리를 보간한다.
 - 머리: `lookAt` 은 머리 yaw/pitch 만 바꾼다(`setRotation` 하면 머리가 다시 몸을 따른다).
 - 백엔드: `McViewerEntities` 가 보간한 값을 진짜 엔티티에 넣고, 지난 틱 이동 속도로 `walkAnimation.update` 를 월드 틱마다 돌려 걷는 애니메이션이 나온다.
-- 후속 2~3단계(물리, 바닐라 AI)는 아직. 팔 휘두르기(`swing`)는 바닐라가 엔티티 틱에서 진행시키는 상태라 이번에 넣지 않았다.
+- 2단계(물리)는 아래, 3단계(바닐라 AI)는 아직. 팔 휘두르기(`swing`)는 바닐라가 엔티티 틱에서 진행시키는 상태라 이번에 넣지 않았다.
 - 테스트: `McvEntityMotionTest`(8개), `McvScriptTest`, 게임 테스트(걸어간 소 vs 선 소, 차이 516픽셀).
+
+## 엔티티 물리 (완료, 엔티티 동작 2단계)
+- 옵트인 `entity.physics = true`. `McvPhysics`(core)가 바닐라 `Entity.move` 와 같은 순서(세로 → 가로)로 축마다 충돌 상자를 잘라 내고, 땅에서 가로로 막히면 0.6 까지 계단을 오른다. 중력은 바닐라 식 `(vy - 0.08) * 0.98`.
+- 충돌 모양은 `McvCollisionShapes`(core 인터페이스)로 주입한다: 백엔드 `McViewerCollision` 이 `BlockState.getCollisionShape`(빈 블록 getter, 상태별 캐시)를 넣고, 없으면(코어 단독) 공기가 아닌 블록은 꽉 찬 큐브.
+- `moveTo/walkTo` 는 물리 중에는 가로(x,z)만 쓰고 높이는 중력·충돌이 정한다. `jump()`, `onGround` 추가. 월드 아래 y=-64 에 바닥을 둔다.
+- 한계: 유체 부력/헤엄, 엔티티끼리 충돌, 넉백, 블록 안에 소환됐을 때 밀어내기 없음.
+- 테스트: `McvEntityMotionTest` 물리 5개(낙하·벽·슬랩 오르기 vs 1칸 벽·점프·물리 끔), 스크립트 테스트, 게임 테스트(착지한 소 vs 공중의 소, 차이 614픽셀).
 
 ## 완료 후 남은 과제 (후속, 우선순위 순)
 - 면 단위 컬링(큰 월드 성능), 월드 스냅샷을 프레임마다 복사하는 비용 줄이기

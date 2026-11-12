@@ -124,7 +124,7 @@ public final class McvEntity {
         vx = vy = vz = 0;
     }
 
-    /** 틱당 이동량(블록/틱). 이동 계획은 대체되고, 멈추려면 stop. */
+    /** 틱당 이동량(블록/틱). 이동 계획은 대체되고, 멈추려면 stop. 물리를 켜면 세로 성분은 무시된다(점프는 jump). */
     synchronized void setVelocity(double dx, double dy, double dz) {
         if (!(Math.abs(dx) <= MAX_VELOCITY && Math.abs(dy) <= MAX_VELOCITY && Math.abs(dz) <= MAX_VELOCITY)) {
             throw new IllegalArgumentException("속도는 틱당 -" + MAX_VELOCITY + " ~ " + MAX_VELOCITY + " 블록이어야 합니다");
@@ -149,40 +149,74 @@ public final class McvEntity {
     /** 지난 틱에 가로로 움직인 거리(블록/틱). */
     public float stepSpeed() { return stepSpeed; }
 
+    private double fallSpeed;                                        // 물리 켠 엔티티의 세로 속도(블록/틱)
+    private boolean onGround;
+
+    public synchronized boolean onGround() { return onGround; }
+
+    synchronized double fallSpeed() { return fallSpeed; }
+
+    /** 물리를 켠 엔티티가 땅에 서 있으면 위로 뛴다. */
+    synchronized void jump() {
+        if (onGround) {
+            fallSpeed = McvPhysics.JUMP;
+            onGround = false;
+        }
+    }
+
+    /** 물리 한 틱의 결과를 반영하고 중력을 더한다(바닐라: 이동 후 (속도 - 0.08) * 0.98). */
+    synchronized void applyPhysics(double nx, double ny, double nz, boolean ground, boolean hitY) {
+        x = nx;
+        y = ny;
+        z = nz;
+        if (y < McvPhysics.FLOOR) {                                   // 월드 아래로 끝없이 떨어지지 않게 바닥을 둔다
+            y = McvPhysics.FLOOR;
+            ground = true;
+            hitY = true;
+        }
+        onGround = ground;
+        if (hitY) fallSpeed = 0;
+        fallSpeed = (fallSpeed - McvPhysics.GRAVITY) * McvPhysics.DRAG;
+    }
+
     /** 한 틱 진행한다(월드의 시계가 부른다). 이전 틱 값을 남겨 렌더가 그 사이를 보간한다. */
-    synchronized void tick() {
+    synchronized void tick(McvWorld world) {
         prevX = x;
         prevY = y;
         prevZ = z;
         prevYaw = yaw;
         prevPitch = pitch;
         prevHeadYaw = headYaw;
+        boolean physics = Boolean.TRUE.equals(fields.get("physics"));
         double dx = 0, dy = 0, dz = 0;
         if (remaining > 0) {
             dx = (targetX - x) / remaining;
-            dy = (targetY - y) / remaining;
+            dy = physics ? 0 : (targetY - y) / remaining;               // 물리를 켜면 높이는 중력과 충돌이 정한다
             dz = (targetZ - z) / remaining;
-            if (--remaining == 0) {
-                x = targetX;
-                y = targetY;
-                z = targetZ;
-            } else {
-                x += dx;
-                y += dy;
-                z += dz;
+            if (--remaining == 0 && !physics) {
+                dx = targetX - x;
+                dy = targetY - y;
+                dz = targetZ - z;
             }
         } else if (vx != 0 || vy != 0 || vz != 0) {
             dx = vx;
-            dy = vy;
+            dy = physics ? 0 : vy;
             dz = vz;
+        }
+        if (physics) {
+            McvPhysics.step(this, world, dx, dz);
+        } else {
             x += dx;
             y += dy;
             z += dz;
+            onGround = false;
+            fallSpeed = 0;
         }
-        double flat = Math.sqrt(dx * dx + dz * dz);
+        double ax = x - prevX, az = z - prevZ;                          // 실제로 움직인 만큼(막히면 줄어든다)
+        double flat = Math.sqrt(ax * ax + az * az);
         stepSpeed = (float) flat;
         if (flat > 1e-4 && !Boolean.FALSE.equals(fields.get("faceMovement"))) {
-            float want = (float) Math.toDegrees(Math.atan2(-dx, dz));
+            float want = (float) Math.toDegrees(Math.atan2(-ax, az));
             float diff = ((want - yaw + 540f) % 360f) - 180f;
             yaw += Math.max(-TURN_PER_TICK, Math.min(TURN_PER_TICK, diff));
         }
@@ -235,6 +269,7 @@ public final class McvEntity {
             case "pitch" -> (double) pitch;
             case "type" -> type;
             case "moving" -> moving();
+            case "onGround" -> onGround();
             default -> fields.get(name);
         };
     }
